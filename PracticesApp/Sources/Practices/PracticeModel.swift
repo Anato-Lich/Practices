@@ -20,6 +20,7 @@ final class PracticeModel {
     private(set) var failure: String?
     private(set) var versions: [PracticeVersion] = []
     private(set) var runs: [RunRecord] = []
+    private(set) var sets: [ParamSet] = []
     /// A step of a chain chosen to look at; nil shows the final result.
     var selectedStep: Int?
 
@@ -42,7 +43,10 @@ final class PracticeModel {
             await refreshSignature()
         }
         runs = (try? RunsStore())?.runs(of: practice.ref) ?? []
+        sets = store.sets(of: practice)
     }
+
+    func reloadSets() async { sets = store.sets(of: practice) }
 
     private var paramsKey: String { "params:" + practice.ref }
     private func persistParams() { UserDefaults.standard.set(params, forKey: paramsKey) }

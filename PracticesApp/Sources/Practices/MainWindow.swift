@@ -12,6 +12,7 @@ struct MainWindow: View {
     enum SidebarItem: Hashable {
         case source(String)
         case practice(String)
+        case proposals
         case doctor
     }
 
@@ -51,6 +52,18 @@ struct MainWindow: View {
                 Section {
                     Label {
                         HStack {
+                            Text("Proposals")
+                            Spacer()
+                            if registry.pendingProposals > 0 {
+                                Text(verbatim: String(registry.pendingProposals)).foregroundStyle(.orange).font(.caption)
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: "arrow.triangle.pull")
+                    }
+                    .tag(SidebarItem.proposals)
+                    Label {
+                        HStack {
                             Text("Doctor")
                             Spacer()
                             if let count = registry.findings?.count, count > 0 {
@@ -76,6 +89,8 @@ struct MainWindow: View {
                     if let source = registry.source(id) { SourceView(source: source) } else { placeholder }
                 case .practice(let ref):
                     PracticeView(model: registry.model(for: ref)).id(ref)
+                case .proposals:
+                    ProposalsView()
                 case .doctor:
                     DoctorView()
                 case nil:
@@ -95,10 +110,12 @@ struct MainWindow: View {
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             registry.reload()
+            registry.reloadProposals()
             if registry.selection == nil, let first = registry.sources.first { registry.selection = .source(first.id) }
             guard !CommandLine.arguments.contains("--render-window") else { return }
             NSApp.setActivationPolicy(.regular)
             Task { await registry.checkAll() }
+            Task { await registry.scanCopies() }
         }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }

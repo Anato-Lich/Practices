@@ -5,6 +5,8 @@ import PracticesCore
 /// signature, the run's result or a chain's steps, versions with their timings.
 struct PracticeView: View {
     @State var model: PracticeModel
+    @State private var naming = false
+    @State private var setName = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -88,6 +90,23 @@ struct PracticeView: View {
                     }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
+            }
+            .overlay(alignment: .trailing) {
+                Button { naming = true } label: { Image(systemName: "bookmark") }
+                    .buttonStyle(.borderless)
+                    .padding(.trailing, 10)
+                    .help("Save these parameters as a set: new versions are checked on it")
+            }
+            .alert("Save parameter set", isPresented: $naming) {
+                TextField("Name", text: $setName)
+                Button("Save") {
+                    let name = setName, params = model.params, practice = model.practice
+                    Task { try? await PracticeStore().saveSet(ParamSet(name: name, params: params), for: practice); await model.reloadSets() }
+                    setName = ""
+                }
+                Button("Cancel", role: .cancel) { setName = "" }
+            } message: {
+                Text("Proposed changes are accepted by themselves only when they return the same rows on every saved set.")
             }
         }
     }
@@ -227,6 +246,21 @@ struct PracticeView: View {
                 if let first = model.versions.first {
                     Text("v1 saved \(first.date.formatted(date: .abbreviated, time: .shortened))")
                         .font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+            if !model.sets.isEmpty {
+                Section("Parameter sets") {
+                    ForEach(model.sets, id: \.name) { set in
+                        Button { model.params = set.params } label: {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(verbatim: set.name).font(.callout)
+                                Text(verbatim: set.params.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+                                    .font(.caption2.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("Fill the parameters from this set")
+                    }
                 }
             }
             if let schema = model.result?.schema, !schema.isEmpty {

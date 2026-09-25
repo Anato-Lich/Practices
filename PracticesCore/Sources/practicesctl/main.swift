@@ -35,6 +35,13 @@ let usage = """
                                     run it and print the result (a table, a tree or text)
       runs <practice>               its run history: version, time, rows
       search <text>                 fields, practices whose result has it, docs, code
+      sets <practice> [name k=v…]   parameter sets new versions are checked on; with a name, save one
+      copies [practice]             copies in ~/Projects found by their marker: current / outdated / modified
+      proposals [accept|reject <id>]   changes sent back from projects and their verdicts
+      propose <practice> <file> <why…> [k=v…]   check a changed file as a proposal (what MCP does)
+
+    agent:
+      mcp                           MCP server on stdin/stdout
 
       practice = <source>/<name> | chains/<name>
     """
@@ -409,6 +416,65 @@ case "search":
     for hit in results.docs { print("  " + pad((hit.source ?? "") + " · " + hit.title, 34) + hit.excerpt) }
     if !results.code.isEmpty { print("\nCODE") }
     for hit in results.code { print("  " + pad(hit.title, 34) + hit.excerpt) }
+
+case "mcp":
+    MCPServer().serve()
+
+case "sets":
+    guard positional.count > 1 else { print(usage); exit(2) }
+    let store = PracticeStore(), practice = Practice(ref: positional[1])
+    if positional.count > 2 {
+        var params: [String: String] = [:]
+        for a in positional.dropFirst(3) {
+            let kv = a.split(separator: "=", maxSplits: 1).map(String.init)
+            if kv.count == 2 { params[kv[0]] = kv[1] }
+        }
+        try await store.saveSet(ParamSet(name: positional[2], params: params), for: practice)
+        print("saved set \(positional[2])")
+    }
+    for set in store.sets(of: practice) {
+        print(pad(set.name, 24) + set.params.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+    }
+
+case "copies":
+    let copies = await Copies.scan().filter { c in positional.count < 2 || c.ref == positional[1] }
+    if json { printJSON(copies); break }
+    if copies.isEmpty { print("no marked copies in ~/Projects"); break }
+    for c in copies {
+        print(pad(c.state.rawValue, 10) + pad(c.ref + (c.version.map { "@v\($0)" } ?? ""), 36)
+              + pad("latest v\(c.latest)", 11) + home(c.path) + ":\(c.line)")
+    }
+
+case "proposals":
+    if positional.count > 2, ["accept", "reject"].contains(positional[1]) {
+        guard let p = ProposalStore().all().first(where: { $0.id.hasPrefix(positional[2]) }) else { print("no proposal \(positional[2])"); exit(1) }
+        let decided = positional[1] == "accept" ? try await ProposalReviewer().accept(p, by: "user") : try ProposalReviewer().reject(p)
+        print("\(decided.ref): \(decided.status.rawValue)" + (decided.acceptedVersion.map { " as v\($0)" } ?? ""))
+        break
+    }
+    let list = ProposalStore().all()
+    if json { printJSON(list); break }
+    if list.isEmpty { print("no proposals"); break }
+    for p in list {
+        print(pad(String(p.id.prefix(17)), 19) + pad(p.status.rawValue, 10) + pad(p.ref, 30) + pad(p.acceptedVersion.map { "→ v\($0)" } ?? "", 7)
+              + p.created.formatted(date: .abbreviated, time: .shortened) + "  " + home(p.origin))
+        print("          " + p.why.split(separator: "\n").first.map(String.init).map { String($0.prefix(100)) }!)
+        print("          " + p.verdict)
+    }
+
+case "propose":
+    guard positional.count > 3 else { print(usage); exit(2) }
+    let code = try String(contentsOfFile: positional[2], encoding: .utf8)
+    var params: [String: String] = [:]
+    var why: [String] = []
+    for a in positional.dropFirst(3) {
+        let kv = a.split(separator: "=", maxSplits: 1).map(String.init)
+        if kv.count == 2, !kv[0].contains(" ") { params[kv[0]] = kv[1] } else { why.append(a) }
+    }
+    let proposal = try await ProposalReviewer().submit(ref: positional[1], code: code, why: why.joined(separator: " "),
+                                                       params: params.isEmpty ? nil : params, origin: FileManager.default.currentDirectoryPath)
+    print("\(proposal.status.rawValue)" + (proposal.acceptedVersion.map { " as v\($0)" } ?? "") + " — \(proposal.verdict)")
+    for c in proposal.checks { print("  \(c.ok ? "✓" : "✗") " + pad(c.name, 24) + c.detail) }
 
 default:
     print(usage)

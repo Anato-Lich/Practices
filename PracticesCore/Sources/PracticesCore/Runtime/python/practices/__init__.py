@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import inspect
+import json
 import os
 import threading
 import time
@@ -29,8 +30,15 @@ _loop: asyncio.AbstractEventLoop | None = None
 _loop_lock = threading.Lock()
 
 
+#: `{ref: path}` — code to run instead of the registry's, for checking a proposal before it
+#: becomes a version (Practices sets PRACTICES_OVERRIDES).
+OVERRIDES: dict[str, str] = json.loads(os.environ.get("PRACTICES_OVERRIDES", "{}") or "{}")
+
+
 def path_of(ref: str) -> Path:
     """`source/name` → registry/sources/<source>/practices/<name>.py; `chains/name` → registry/chains/<name>.py."""
+    if ref in OVERRIDES:
+        return Path(OVERRIDES[ref])
     head, _, name = ref.partition("/")
     if not name:
         raise ValueError(f"practice reference is 'source/name', got {ref!r}")

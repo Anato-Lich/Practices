@@ -27,6 +27,7 @@ struct SourceView: View {
                         }
                         VStack(spacing: 16) {
                             keys
+                            copies
                             docs
                         }
                     }
@@ -160,6 +161,55 @@ struct SourceView: View {
             }
             Text("Values are never shown — not here, not to the agent.")
                 .font(.caption).foregroundStyle(.tertiary).padding(.top, 6)
+        }
+    }
+
+    private var copies: some View {
+        Card(title: "Copies in projects", trailing: nil) {
+            if let all = registry.copies {
+                let mine = all.filter { $0.ref.hasPrefix(source.id + "/") }
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(mine, id: \.self) { copy in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(verbatim: shortPath(copy.path)).font(.callout).lineLimit(1).truncationMode(.head)
+                                Text(verbatim: copy.ref.split(separator: "/").last.map(String.init) ?? "").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(copyState(copy)).font(.caption).foregroundStyle(copyColor(copy))
+                        }
+                    }
+                    if mine.isEmpty {
+                        Text("No marked copies in ~/Projects yet. `get_practice` hands code out with the marker line.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+    }
+
+    private func shortPath(_ path: String) -> String {
+        let root = NSHomeDirectory() + "/Projects/"
+        return path.hasPrefix(root) ? String(path.dropFirst(root.count)) : path
+    }
+
+    private func copyState(_ copy: PracticeCopy) -> String {
+        switch copy.state {
+        case .current: "v\(copy.version ?? 0)"
+        case .outdated: String(localized: "v\(copy.version ?? 0) → v\(copy.latest) available")
+        case .modified: String(localized: "changed, not sent")
+        case .unknown: String(localized: "unknown version")
+        }
+    }
+
+    private func copyColor(_ copy: PracticeCopy) -> Color {
+        switch copy.state {
+        case .current: .green
+        case .outdated: .orange
+        case .modified: .blue
+        case .unknown: .secondary
         }
     }
 

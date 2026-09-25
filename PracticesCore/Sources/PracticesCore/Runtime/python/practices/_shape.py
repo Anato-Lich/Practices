@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import datetime as dt
 import decimal
 import json
@@ -128,7 +129,10 @@ def summary(value: Any, preview_rows: int = MAX_ROWS) -> dict[str, Any]:
     else:
         text = value if isinstance(value, str) else json.dumps(jsonable(value), ensure_ascii=False)
         out.update(shape="text", text=text[:200_000], total=1)
-    out["bytes"] = len(json.dumps(jsonable(value), ensure_ascii=False, default=str).encode())
+    full = json.dumps(jsonable(value), ensure_ascii=False, default=str, sort_keys=True)
+    out["bytes"] = len(full.encode())
+    # Fingerprint of the whole result, not the preview: "same rows" between two versions.
+    out["digest"] = hashlib.sha256(full.encode()).hexdigest()
     return out
 
 

@@ -36,6 +36,8 @@ public struct PracticeResult: Codable, Sendable {
     public let text: String?
     public let total: Int?
     public let bytes: Int?
+    /// SHA-256 of the whole result as canonical JSON: equal digests, equal rows.
+    public let digest: String?
     public let schema: [Field]?
     public let steps: [Step]
     var secrets: [SecretUpdate]?
@@ -48,7 +50,7 @@ public struct PracticeResult: Codable, Sendable {
     public var secretsUpdated: [String] = []
 
     enum CodingKeys: String, CodingKey {
-        case ok, error, traceback, ms, shape, columns, rows, tree, text, total, bytes, schema, steps, secrets
+        case ok, error, traceback, ms, shape, columns, rows, tree, text, total, bytes, digest, schema, steps, secrets
     }
 }
 
@@ -90,7 +92,11 @@ public struct PracticeRunner: Sendable {
 
     /// `envs` picks the environment per source (a project's choice, DECISIONS 19); sources
     /// not named run in their first environment.
-    public func run(_ practice: Practice, params: [String: String], envs: [String: String] = [:]) async throws -> PracticeResult {
+    ///
+    /// `overrides` runs other code in place of a practice's file (a proposal being checked);
+    /// such runs are not recorded and teach no fields.
+    public func run(_ practice: Practice, params: [String: String], envs: [String: String] = [:],
+                    overrides: [String: URL] = [:], record shouldRecord: Bool = true) async throws -> PracticeResult {
         let python = try await PythonRuntime.ensure()
         let sourceIDs = store.sources(for: practice)
         let refs = sourceIDs.map { SourceRef(source: $0, env: envs[$0]) }
@@ -109,6 +115,10 @@ public struct PracticeRunner: Sendable {
         environment["PYTHONPATH"] = PythonRuntime.directory.path
         environment["PYTHONUNBUFFERED"] = "1"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        if !overrides.isEmpty {
+            let map = overrides.mapValues(\.path)
+            environment["PRACTICES_OVERRIDES"] = String(decoding: try JSONEncoder().encode(map), as: UTF8.self)
+        }
 
         let (stdout, stderr) = try await Self.execute(
             python.path, ["-m", "practices_runner", "run", practice.ref, paramsFile.path, outFile.path],
@@ -133,6 +143,7 @@ public struct PracticeRunner: Sendable {
         result.stdout = scrub(stdout, values: secretValues)
         result.stderr = scrub(stderr, values: secretValues)
         result.envs = Dictionary(uniqueKeysWithValues: resolved.sources.map { ($0.source.id, $0.env) })
+        guard overrides.isEmpty, shouldRecord else { return result }
         // A run of unsaved code belongs to no version.
         result.version = await store.isDraft(practice) ? nil : try? await store.versions(of: practice).count
         record(practice, params: params, result: result)

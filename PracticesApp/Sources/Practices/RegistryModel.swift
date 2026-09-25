@@ -25,6 +25,9 @@ final class RegistryModel {
     private(set) var checking: Set<String> = []
     private(set) var lastCheck: [String: Date] = [:]
     private(set) var findings: [DoctorFinding]?
+    private(set) var proposals: [Proposal] = []
+    /// Marked copies of practices in ~/Projects; nil until the first scan.
+    private(set) var copies: [PracticeCopy]?
     private(set) var doctorRunning = false
     var error: String?
 
@@ -44,6 +47,25 @@ final class RegistryModel {
     }
 
     func source(_ id: String) -> Source? { sources.first { $0.id == id } }
+
+    func reloadProposals() { proposals = ProposalStore().all() }
+
+    var pendingProposals: Int { proposals.filter { $0.status == .pending }.count }
+
+    func decide(_ proposal: Proposal, accept: Bool) async {
+        do {
+            if accept { _ = try await ProposalReviewer().accept(proposal, by: "user") }
+            else { _ = try ProposalReviewer().reject(proposal) }
+        } catch {
+            self.error = String(describing: error)
+        }
+        reloadProposals()
+        reload()
+    }
+
+    func scanCopies() async {
+        copies = await Copies.scan()
+    }
 
     func model(for ref: String) -> PracticeModel {
         if let model = practiceModels[ref] { return model }

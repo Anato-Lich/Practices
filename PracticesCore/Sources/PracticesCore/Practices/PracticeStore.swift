@@ -1,4 +1,5 @@
 import Foundation
+import Yams
 
 /// A practice: `registry/sources/<source>/practices/<name>.py`, or a chain:
 /// `registry/chains/<name>.py`. Its reference is `source/name` or `chains/name`.
@@ -10,6 +11,13 @@ public struct Practice: Identifiable, Hashable, Sendable, Codable {
     public var name: String { String(ref.split(separator: "/", maxSplits: 1).last ?? "") }
 
     public init(ref: String) { self.ref = ref }
+}
+
+/// Parameters a practice is checked on: its own examples, or the ones an agent sent.
+public struct ParamSet: Codable, Hashable, Sendable {
+    public var name: String
+    public var params: [String: String]
+    public init(name: String, params: [String: String]) { self.name = name; self.params = params }
 }
 
 public struct PracticeVersion: Hashable, Sendable, Codable {
@@ -72,13 +80,33 @@ public struct PracticeStore: Sendable {
     public func versions(of practice: Practice) async throws -> [PracticeVersion] {
         let path = url(of: practice).path.replacingOccurrences(of: registry.root.path + "/", with: "")
         guard FileManager.default.fileExists(atPath: registry.root.appendingPathComponent(".git").path) else { return [] }
-        let log = try await registry.git(["log", "--follow", "--format=%H%x09%ct%x09%s", "--", path])
+        // A registry without commits yet has no history, not an error.
+        guard let log = try? await registry.git(["log", "--follow", "--format=%H%x09%ct%x09%s", "--", path]) else { return [] }
         let lines = log.split(separator: "\n").reversed()
         return lines.enumerated().compactMap { i, line in
             let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)
             guard parts.count == 3, let ts = TimeInterval(parts[1]) else { return nil }
             return PracticeVersion(number: i + 1, commit: parts[0], date: Date(timeIntervalSince1970: ts), message: parts[2])
         }
+    }
+
+    // MARK: Saved parameter sets
+
+    /// `<name>.sets.yaml` beside the practice: named parameter sets new versions are checked on.
+    func setsURL(of practice: Practice) -> URL {
+        url(of: practice).deletingPathExtension().appendingPathExtension("sets.yaml")
+    }
+
+    public func sets(of practice: Practice) -> [ParamSet] {
+        guard let text = try? String(contentsOf: setsURL(of: practice), encoding: .utf8) else { return [] }
+        return (try? YAMLDecoder().decode([ParamSet].self, from: text)) ?? []
+    }
+
+    public func saveSet(_ set: ParamSet, for practice: Practice) async throws {
+        var all = sets(of: practice).filter { $0.name != set.name }
+        all.append(set)
+        try Registry.yaml(all).write(to: setsURL(of: practice), atomically: true, encoding: .utf8)
+        try await registry.commit("\(practice.ref): parameter set \(set.name)")
     }
 
     /// Writes the code without committing: a draft that runs can use before it is saved as a

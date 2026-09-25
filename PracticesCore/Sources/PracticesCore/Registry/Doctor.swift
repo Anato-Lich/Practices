@@ -35,7 +35,7 @@ public enum Doctor {
     static let maxTextSize = 1024 * 1024
 
     /// One walk: `.env` files, and text files small enough to hold a pasted secret.
-    static func collect(root: String) -> (env: [String], text: [String]) {
+    public static func collect(root: String) -> (env: [String], text: [String]) {
         var env: [String] = [], text: [String] = []
         let fm = FileManager.default
         guard let walker = fm.enumerator(at: URL(fileURLWithPath: root),
