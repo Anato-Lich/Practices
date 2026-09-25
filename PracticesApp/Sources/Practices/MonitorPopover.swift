@@ -50,6 +50,12 @@ struct MonitorPopover: View {
             Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }
                 .buttonStyle(.borderless)
                 .help("Refresh")
+            Button {
+                NSApp.activate()
+                openWindow(id: MainWindow.id)
+            } label: { Image(systemName: "macwindow") }
+                .buttonStyle(.borderless)
+                .help("Open Practices")
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
     }

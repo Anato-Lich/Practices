@@ -93,6 +93,7 @@ public enum Checks {
         case .cannotConnectToHost: "connection refused"
         case .cannotFindHost, .dnsLookupFailed: "host not found"
         case .notConnectedToInternet: "offline"
+        case .appTransportSecurityRequiresSecureConnection: "blocked by App Transport Security"
         case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate: "TLS failed"
         default: "request failed (\(code.rawValue))"
         }

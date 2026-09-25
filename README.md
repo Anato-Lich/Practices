@@ -3,7 +3,7 @@
 **One place for the data sources a developer works with, and a watch on the containers
 and ports of every local project.** A personal macOS app: a menu-bar agent plus a window.
 
-- **Sources and practices** *(stages 2–4, not built yet)* — every database and API is a
+- **Sources and practices** *(stage 2 in progress: sources, secrets, Doctor; practices in 3–4)* — every database and API is a
   source with its credentials, documentation and notes. Under each source live
   *practices*: named cells of code ("fetch device data") with a Run button, a readable
   result (table, JSON tree, text), timings and version history. Practices are copied into
@@ -50,6 +50,17 @@ practicesctl containers     containers, failed ones first
 practicesctl conflicts      ports compose files in ~/Projects want that something holds
 practicesctl watch          container incidents as they happen
 practicesctl logs <name>    last 200 log lines
+```
+
+Registry (`~/.practices`):
+
+```
+practicesctl sources | source <id> | check [id…]
+practicesctl secrets set <id> <KEY> [--env e]      # value from stdin
+practicesctl import connectors [path]
+practicesctl env [ref…]                            # variable names, never values
+practicesctl run [ref…] -- <command…>              # or refs from the nearest practices.yaml
+practicesctl doctor
 ```
 
 `--json` on any of them prints machine-readable output.

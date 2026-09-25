@@ -12,6 +12,8 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - path: Sources/Practices
+        excludes:
+          - "Info.plist"
     dependencies:
       - package: PracticesCore
         product: PracticesCore
@@ -27,7 +29,11 @@ targets:
         # Not sandboxed: the monitor runs lsof and docker and signals other processes.
         ENABLE_APP_SANDBOX: "NO"
         ENABLE_HARDENED_RUNTIME: "NO"
+        # Both, like Tandem: the generated keys below are merged into this file, which exists
+        # only to carry NSAppTransportSecurity. Health checks and practices talk plain HTTP to
+        # internal services (ClickHouse on :8123), which ATS would refuse (-1022).
         GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_FILE: Sources/Practices/Info.plist
         # Menu-bar agent for now (stage 1); the main window arrives with sources in stage 2.
         INFOPLIST_KEY_LSUIElement: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: "Practices"

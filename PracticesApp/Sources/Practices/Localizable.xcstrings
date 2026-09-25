@@ -2,12 +2,82 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
+    "A registry secret is written in a file. Move it out and delete the copy.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Секрет из реестра записан в файле. Уберите его оттуда."
+          }
+        }
+      }
+    },
+    "All targets answer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все цели отвечают"
+          }
+        }
+      }
+    },
     "Attention": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Внимание"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отмена"
+          }
+        }
+      }
+    },
+    "Change value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменить значение"
+          }
+        }
+      }
+    },
+    "Check": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить"
+          }
+        }
+      }
+    },
+    "Check all": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить всё"
+          }
+        }
+      }
+    },
+    "Check preconditions and targets of every source": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить предусловия и цели всех источников"
           }
         }
       }
@@ -22,12 +92,32 @@
         }
       }
     },
+    "Compares .env files and plain text in ~/Projects with the registry. Reports names and paths, never values.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сравнивает .env-файлы и текст в ~/Projects с реестром. Сообщает имена и пути, никогда — значения."
+          }
+        }
+      }
+    },
     "Containers": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Контейнеры"
+          }
+        }
+      }
+    },
+    "Copies of the registry": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии реестра"
           }
         }
       }
@@ -92,6 +182,16 @@
         }
       }
     },
+    "Differs from the registry": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расходится с реестром"
+          }
+        }
+      }
+    },
     "Dismiss": {
       "localizations": {
         "ru": {
@@ -122,6 +222,46 @@
         }
       }
     },
+    "Doctor": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doctor"
+          }
+        }
+      }
+    },
+    "Documentation": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Документация"
+          }
+        }
+      }
+    },
+    "Every key matches the registry: `practicesctl run` can replace this file.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все ключи совпадают с реестром: файл можно заменить на `practicesctl run`."
+          }
+        }
+      }
+    },
+    "Fields": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поля"
+          }
+        }
+      }
+    },
     "Follow": {
       "localizations": {
         "ru": {
@@ -132,12 +272,52 @@
         }
       }
     },
+    "Guards": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Защита"
+          }
+        }
+      }
+    },
     "Health check failing": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Не проходит healthcheck"
+          }
+        }
+      }
+    },
+    "Import the Connectors sources with `practicesctl import connectors`.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортируйте источники Connectors: `practicesctl import connectors`."
+          }
+        }
+      }
+    },
+    "Key": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ"
+          }
+        }
+      }
+    },
+    "Keys": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключи"
           }
         }
       }
@@ -212,12 +392,132 @@
         }
       }
     },
+    "New value (the current one stays hidden)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новое значение (текущее не показывается)"
+          }
+        }
+      }
+    },
+    "No description": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет описания"
+          }
+        }
+      }
+    },
+    "No documents": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Документов нет"
+          }
+        }
+      }
+    },
+    "No notes": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заметок нет"
+          }
+        }
+      }
+    },
     "No project is listening on a port": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Ни один проект не слушает порт"
+          }
+        }
+      }
+    },
+    "No sources yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Источников пока нет"
+          }
+        }
+      }
+    },
+    "No targets": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Целей нет"
+          }
+        }
+      }
+    },
+    "Not checked yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ещё не проверялся"
+          }
+        }
+      }
+    },
+    "Not reachable": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Недоступен"
+          }
+        }
+      }
+    },
+    "Notes": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заметки"
+          }
+        }
+      }
+    },
+    "Nothing to report": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Замечаний нет"
+          }
+        }
+      }
+    },
+    "One secret in several projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Один секрет в нескольких проектах"
+          }
+        }
+      }
+    },
+    "Open Practices": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть Practices"
           }
         }
       }
@@ -282,12 +582,32 @@
         }
       }
     },
+    "Reading ~/Projects…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Читаю ~/Projects…"
+          }
+        }
+      }
+    },
     "Refresh": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Обновить"
+          }
+        }
+      }
+    },
+    "Remove value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить значение"
           }
         }
       }
@@ -302,12 +622,52 @@
         }
       }
     },
+    "Run": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запустить"
+          }
+        }
+      }
+    },
+    "Run again": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запустить снова"
+          }
+        }
+      }
+    },
     "Running remapped on %@": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Сейчас запущен на %@"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить"
+          }
+        }
+      }
+    },
+    "Secrets in plain text": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Секреты открытым текстом"
           }
         }
       }
@@ -322,12 +682,42 @@
         }
       }
     },
+    "Show in Finder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать в Finder"
+          }
+        }
+      }
+    },
     "Show project in Finder": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Показать проект в Finder"
+          }
+        }
+      }
+    },
+    "Some targets do not answer": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Часть целей не отвечает"
+          }
+        }
+      }
+    },
+    "Sources": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Источники"
           }
         }
       }
@@ -382,12 +772,82 @@
         }
       }
     },
+    "Targets": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цели"
+          }
+        }
+      }
+    },
+    "The key exists in the registry with another value. One of them is stale.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ есть в реестре с другим значением. Одно из них устарело."
+          }
+        }
+      }
+    },
+    "The same value under different names — a source the registry does not have yet.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Одно значение под разными именами — источник, которого ещё нет в реестре."
+          }
+        }
+      }
+    },
+    "Value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Значение"
+          }
+        }
+      }
+    },
+    "Values are never shown — not here, not to the agent.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Значения не показываются нигде: ни здесь, ни агенту."
+          }
+        }
+      }
+    },
     "macOS AirPlay Receiver listens here.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Здесь слушает приёмник AirPlay macOS."
+          }
+        }
+      }
+    },
+    "not set": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не задано"
+          }
+        }
+      }
+    },
+    "set": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "задано"
           }
         }
       }

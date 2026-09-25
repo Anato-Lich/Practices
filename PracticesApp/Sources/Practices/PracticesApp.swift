@@ -6,6 +6,8 @@ import PracticesCore
 struct PracticesApp: App {
 
     @State private var model = MonitorModel()
+    @State private var registry = RegistryModel()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     init() {
         #if DEBUG
@@ -23,8 +25,16 @@ struct PracticesApp: App {
             MenuBarLabel()
                 .environment(model)
                 .task { model.start() }
+                .modifier(OpensMainWindow())
         }
         .menuBarExtraStyle(.window)
+
+        Window("Practices", id: MainWindow.id) {
+            MainWindow()
+                .environment(registry)
+                .environment(model)
+        }
+        .defaultSize(width: 1200, height: 780)
 
         WindowGroup("Logs", id: LogsView.windowID, for: String.self) { $containerID in
             if let containerID {
@@ -51,6 +61,30 @@ struct MenuBarLabel: View {
                 .opacity(0.5)
         } else {
             Image(systemName: "shippingbox")
+        }
+    }
+}
+
+extension Notification.Name {
+    static let openMainWindow = Notification.Name("dev.practices.openMainWindow")
+}
+
+/// Opening the app again (Finder, Spotlight, Launchpad) while it sits in the menu bar shows
+/// the main window, as any app would.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        NotificationCenter.default.post(name: .openMainWindow, object: nil)
+        return false
+    }
+}
+
+/// `openWindow` needs a view inside a scene; the menu-bar label is the one that always exists.
+struct OpensMainWindow: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+    func body(content: Content) -> some View {
+        content.onReceive(NotificationCenter.default.publisher(for: .openMainWindow)) { _ in
+            NSApp.activate()
+            openWindow(id: MainWindow.id)
         }
     }
 }
