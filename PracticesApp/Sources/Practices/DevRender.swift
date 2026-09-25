@@ -8,6 +8,23 @@ import AppKit
 enum DevRender {
     static func runIfRequested() {
         let args = CommandLine.arguments
+        // `--check-to <file>`: run every source check and write the results as JSON, then exit.
+        // Launched with `open`, the app is its own responsible process — the way to see what a
+        // check does outside the terminal's network context.
+        if let i = args.firstIndex(of: "--check-to"), i + 1 < args.count {
+            let path = args[i + 1]
+            Task { @MainActor in
+                let registry = RegistryModel()
+                registry.reload()
+                await registry.checkAll()
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let all = registry.checks.values.flatMap { $0 }
+                try? encoder.encode(all).write(to: URL(fileURLWithPath: path))
+                exit(0)
+            }
+            return
+        }
         let window = args.firstIndex(of: "--render-window")
         guard let i = args.firstIndex(of: "--render-popover") ?? window, i + 1 < args.count else { return }
         let path = args[i + 1]

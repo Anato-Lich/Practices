@@ -1,0 +1,12 @@
+# The shared environment practices run in (~/.practices/runtime). Installed and synced by
+# Practices itself; edit here, not there — it is overwritten when the app updates it.
+[project]
+name = "practices-runtime"
+version = "1"
+requires-python = ">=3.12"
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "httpx>=0.27",
+    "aiokafka>=0.11",
+    "clickhouse-connect>=0.8",
+]

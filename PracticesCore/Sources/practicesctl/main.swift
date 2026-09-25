@@ -27,6 +27,15 @@ let usage = """
       doctor                        .env files and plain text in ~/Projects against the registry
 
       ref = <source>[@<env>]
+
+    practices:
+      practices [source]            practices and chains
+      sig <practice>                parameters of a practice's run()
+      try <practice> [k=v…] [--env source=env…] [--rows N]
+                                    run it and print the result (a table, a tree or text)
+      runs <practice>               its run history: version, time, rows
+
+      practice = <source>/<name> | chains/<name>
     """
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -288,6 +297,94 @@ case "doctor":
         case .duplicate:
             print("DUPLICATE \(home(f.path))\n          all \(f.keys.count) keys match \(f.related[0]) — replaceable by `practicesctl run`")
         }
+    }
+
+case "practices":
+    let store = PracticeStore()
+    let list = positional.count > 1 ? store.list(source: positional[1]) : store.all()
+    if json { printJSON(list.map(\.ref)); break }
+    let runs = try? RunsStore()
+    for p in list {
+        let last = runs?.runs(of: p.ref, limit: 1).first
+        let tail = last.map { "  last: \($0.ok ? "ok" : "failed") \($0.millis) ms" + ($0.rows.map { ", \($0) rows" } ?? "") } ?? ""
+        print(pad(p.ref, 34) + tail)
+    }
+
+case "sig":
+    guard positional.count > 1 else { print(usage); exit(2) }
+    let sig = try await PracticeRunner().signature(of: Practice(ref: positional[1]))
+    if json { printJSON(sig); break }
+    guard sig.ok else { print(sig.error ?? "failed"); exit(1) }
+    if let doc = sig.doc, !doc.isEmpty { print(doc + "\n") }
+    for p in sig.params ?? [] {
+        print("  " + pad(p.name, 18) + pad(p.annotation ?? "", 22) + (p.required ? "required" : "= \(p.default ?? "")"))
+    }
+
+case "try":
+    guard positional.count > 1 else { print(usage); exit(2) }
+    let practice = Practice(ref: positional[1])
+    var params: [String: String] = [:]
+    var envs: [String: String] = [:]
+    var maxRows = 20
+    var i = 2
+    let rest = Array(CommandLine.arguments.dropFirst())
+    while i < rest.count {
+        let a = rest[i]
+        if a == "--env", i + 1 < rest.count {
+            let kv = rest[i + 1].split(separator: "=", maxSplits: 1).map(String.init)
+            if kv.count == 2 { envs[kv[0]] = kv[1] }
+            i += 2; continue
+        }
+        if a == "--rows", i + 1 < rest.count { maxRows = Int(rest[i + 1]) ?? maxRows; i += 2; continue }
+        if a == "--json" { i += 1; continue }
+        let kv = a.split(separator: "=", maxSplits: 1).map(String.init)
+        if kv.count == 2 { params[kv[0]] = kv[1] }
+        i += 1
+    }
+    let result = try await PracticeRunner().run(practice, params: params, envs: envs)
+    if json { printJSON(result); break }
+    let envText = result.envs.sorted { $0.key < $1.key }.map { "\($0.key)@\($0.value)" }.joined(separator: " ")
+    print("\(practice.ref)" + (result.version.map { " v\($0)" } ?? "") + "  ·  \(envText)  ·  \(result.ms) ms"
+          + (result.total.map { "  ·  \($0) rows" } ?? "") + (result.bytes.map { "  ·  \($0 / 1024) KB" } ?? ""))
+    for step in result.steps {
+        print("  step " + pad(step.ref, 30) + pad("\(step.ms) ms", 10) + (step.ok ? (step.total.map { "\($0) rows" } ?? "") : "failed: \(step.error ?? "")"))
+    }
+    if !result.secretsUpdated.isEmpty { print("  stored rotated: " + result.secretsUpdated.joined(separator: ", ")) }
+    if !result.stdout.isEmpty { print("\n-- stdout\n" + result.stdout) }
+    guard result.ok else {
+        print("\nfailed: \(result.error ?? "")\n" + (result.traceback ?? "") + (result.stderr.isEmpty ? "" : "\n-- stderr\n" + result.stderr))
+        exit(1)
+    }
+    print("")
+    switch result.shape {
+    case "table":
+        let columns = result.columns ?? []
+        let rows = (result.rows ?? []).prefix(maxRows).map { $0.map { String($0.cellText.prefix(40)) } }
+        let widths = columns.indices.map { c in min(40, max(columns[c].count, rows.map { c < $0.count ? $0[c].count : 0 }.max() ?? 0)) }
+        print(columns.enumerated().map { pad($0.element, widths[$0.offset] + 2) }.joined())
+        for row in rows { print(row.enumerated().map { pad($0.element, widths[$0.offset] + 2) }.joined()) }
+        if let total = result.total, total > rows.count { print("… \(total - rows.count) more") }
+    case "tree":
+        if let tree = result.tree {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+            print(String(decoding: try encoder.encode(tree), as: UTF8.self).split(separator: "\n").prefix(60).joined(separator: "\n"))
+        }
+    case "text": print(result.text ?? "")
+    default: print("(no result)")
+    }
+    if let schema = result.schema, !schema.isEmpty {
+        print("\nfields: " + schema.prefix(30).map { "\($0.path):\($0.type)" }.joined(separator: "  "))
+    }
+
+case "runs":
+    guard positional.count > 1, let runs = try? RunsStore() else { print(usage); exit(2) }
+    let list = runs.runs(of: positional[1])
+    if json { printJSON(list); break }
+    for r in list {
+        print(r.started.formatted(date: .abbreviated, time: .shortened) + "  " + pad(r.version.map { "v\($0)" } ?? "", 5)
+              + pad(r.ok ? "ok" : "failed", 8) + pad("\(r.millis) ms", 10) + pad(r.rows.map { "\($0) rows" } ?? "", 12)
+              + r.env + (r.error.map { "  " + $0.prefix(80) } ?? ""))
     }
 
 default:

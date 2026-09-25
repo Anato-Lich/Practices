@@ -47,7 +47,7 @@ final class MonitorModel {
     }
 
     func start() {
-        guard !started, !CommandLine.arguments.contains("--render-popover") else { return }
+        guard !started, !CommandLine.arguments.contains("--render-popover"), !CommandLine.arguments.contains("--check-to") else { return }
         started = true
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
