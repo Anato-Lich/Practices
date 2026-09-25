@@ -13,6 +13,20 @@ let usage = """
                     (--all: also projects that would collide with each other)
       watch         print container incidents as they happen (Ctrl-C to stop)
       logs <name>   last 200 log lines of a container
+
+    registry (~/.practices):
+      sources                       sources, their environments and key status
+      source <id>                   one source: targets, keys, guards, notes, docs, fields
+      check [id…]                   preconditions and targets of sources (all by default)
+      secrets set <id> <KEY> [--env e]    value read from stdin, never from arguments
+      secrets unset <id> <KEY> [--env e]
+      import connectors [path]      the six sources of ~/Projects/Connectors and its .env
+      env [ref…]                    names of the variables `run` would set (no values)
+      run [ref…] -- <command…>      run a command with the sources' values in its environment;
+                                    without refs, the nearest practices.yaml decides
+      doctor                        .env files and plain text in ~/Projects against the registry
+
+      ref = <source>[@<env>]
     """
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -113,6 +127,168 @@ case "watch":
 case "logs":
     guard positional.count > 1 else { print(usage); exit(2) }
     do { print(try await Docker.logs(positional[1])) } catch { print(error); exit(1) }
+
+case "sources":
+    let registry = Registry(), store = SecretStore()
+    let sources = (try? registry.sources()) ?? []
+    if json { printJSON(sources); break }
+    if sources.isEmpty { print("registry is empty — try `practicesctl import connectors`"); break }
+    for source in sources {
+        let status = (try? store.status(source: source)) ?? [:]
+        let envs = source.envs.map { env in "\(env) \(status[env]?.count ?? 0)/\(source.keys.count)" }
+        print(pad(source.id, 14) + pad(source.name, 26) + pad(source.kind, 12) + envs.joined(separator: "  "))
+    }
+
+case "source":
+    guard positional.count > 1 else { print(usage); exit(2) }
+    let registry = Registry(), store = SecretStore()
+    guard let source = try? registry.source(positional[1]) else { print("no source \(positional[1])"); exit(1) }
+    if json { printJSON(source); break }
+    print("\(source.name)  [\(source.kind)]  \(source.tags.joined(separator: ", "))")
+    if let d = source.description { print(d) }
+    let status = (try? store.status(source: source)) ?? [:]
+    print("\nkeys" + source.envs.map { "  " + $0 }.joined())
+    for key in source.keys {
+        let marks = source.envs.map { status[$0]?.contains(key.name) == true ? "  set" : "  —  " }
+        print("  " + pad(key.name + (key.secret ? " *" : ""), 30) + marks.joined())
+    }
+    if !source.targets.isEmpty {
+        print("\ntargets")
+        for t in source.targets { print("  " + pad(t.id, 12) + (t.label ?? "")) }
+    }
+    if !source.guards.isEmpty { print("\nguards"); source.guards.forEach { print("  · " + $0) } }
+    if let notes = registry.notes(of: source.id), !notes.isEmpty { print("\nnotes\n" + notes) }
+    let docs = registry.docs(of: source.id)
+    if !docs.isEmpty { print("docs"); docs.forEach { print("  [\($0.kind.rawValue)] \($0.title)" + ($0.section.map { " § \($0)" } ?? "")) } }
+    let fields = registry.fields(of: source.id)
+    if !fields.isEmpty { print("\nfields: \(fields.count), described \(fields.filter { $0.meaning != nil }.count)") }
+
+case "check":
+    let registry = Registry(), store = SecretStore()
+    var targets: [(Source, String)] = []
+    let refs = positional.dropFirst().map(SourceRef.init(parsing:))
+    let all = (try? registry.sources()) ?? []
+    for source in all where refs.isEmpty || refs.contains(where: { $0.source == source.id }) {
+        let wanted = refs.first { $0.source == source.id }?.env
+        for env in source.envs where wanted == nil || wanted == env { targets.append((source, env)) }
+    }
+    var results: [CheckResult] = []
+    await withTaskGroup(of: [CheckResult].self) { group in
+        for (source, env) in targets {
+            group.addTask {
+                let values = (try? store.values(source: source.id, env: env)) ?? [:]
+                var out = await Checks.check(source, env: env, values: values)
+                for failure in await Checks.unmet(source, env: env, values: values) {
+                    out.insert(CheckResult(source: source.id, env: env, target: "requires", ok: false, millis: nil, message: failure), at: 0)
+                }
+                return out
+            }
+        }
+        for await r in group { results += r }
+    }
+    results.sort { ($0.source, $0.env) < ($1.source, $1.env) }
+    if json { printJSON(results); break }
+    for r in results {
+        let mark = r.ok ? "●" : "✗"
+        print("\(mark) " + pad("\(r.source)@\(r.env)", 20) + pad(r.target, 12)
+              + pad(r.millis.map { "\($0) ms" } ?? "", 9) + (r.message ?? ""))
+    }
+
+case "secrets":
+    let store = SecretStore(), registry = Registry()
+    guard positional.count >= 4, ["set", "unset"].contains(positional[1]) else { print(usage); exit(2) }
+    let id = positional[2], key = positional[3]
+    guard let source = try? registry.source(id) else { print("no source \(id)"); exit(1) }
+    let env = args.firstIndex(of: "--env").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? source.defaultEnv
+    guard source.envs.contains(env) else { print("\(id) has environments " + source.envs.joined(separator: ", ")); exit(1) }
+    if positional[1] == "unset" {
+        try store.remove(key: key, source: id, env: env)
+        print("\(id)@\(env) \(key): unset")
+        break
+    }
+    // From stdin, so the value stays out of shell history and `ps` (PLAN, threat model).
+    var value: String?
+    if isatty(0) != 0 {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        value = readpassphrase("\(key) for \(id)@\(env): ", &buffer, buffer.count, 0).map { String(cString: $0) }
+    } else {
+        value = readLine(strippingNewline: true)
+    }
+    guard let value, !value.isEmpty else { print("empty value, nothing stored"); exit(1) }
+    try store.set(value, key: key, source: id, env: env)
+    if !source.keys.contains(where: { $0.name == key }) {
+        var updated = source
+        updated.keys.append(Source.Key(name: key))
+        try registry.save(updated)
+        try await registry.commit("\(id): declare \(key)")
+    }
+    print("\(id)@\(env) \(key): set")
+
+case "import":
+    guard positional.count > 1, positional[1] == "connectors" else { print(usage); exit(2) }
+    let path = positional.count > 2 ? positional[2] : NSHomeDirectory() + "/Projects/Connectors"
+    let summary = try await ConnectorsImport.run(connectors: URL(fileURLWithPath: path))
+    print("sources: " + summary.sources.joined(separator: ", "))
+    print("values imported: \(summary.valuesImported)")
+    if !summary.unassigned.isEmpty { print("keys no source claims: " + summary.unassigned.joined(separator: ", ")) }
+    print("registry: \(PracticesHome.registry.path)")
+
+case "env", "run":
+    let separator = args.firstIndex(of: "--")
+    let before = separator.map { Array(args[..<$0]) } ?? args
+    let refArgs = before.dropFirst().filter { !$0.hasPrefix("--") }
+    var refs = refArgs.map(SourceRef.init(parsing:))
+    if refs.isEmpty {
+        guard let found = ProjectManifest.find(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)) else {
+            print("no sources given and no \(ProjectManifest.fileName) here or above"); exit(2)
+        }
+        refs = found.manifest.sources
+        FileHandle.standardError.write(Data("practices: \(found.url.path)\n".utf8))
+    }
+    let resolved: RunEnvironment.Resolved
+    do { resolved = try RunEnvironment.resolve(refs) } catch { print("practices: \(error)"); exit(1) }
+    for (ref, keys) in resolved.missing.sorted(by: { $0.key < $1.key }) {
+        FileHandle.standardError.write(Data("practices: \(ref) has no value for \(keys.joined(separator: ", "))\n".utf8))
+    }
+    if positional.first == "env" {
+        for key in resolved.values.keys.sorted() { print(key) }
+        break
+    }
+    guard let separator, separator + 1 < args.count else { print("usage: practicesctl run [ref…] -- <command…>"); exit(2) }
+    // Preconditions first: a sentence now instead of a timeout later.
+    var unmet: [String] = []
+    for (source, env) in resolved.sources {
+        let values = (try? SecretStore().values(source: source.id, env: env)) ?? [:]
+        unmet += await Checks.unmet(source, env: env, values: values)
+    }
+    if !unmet.isEmpty {
+        unmet.forEach { FileHandle.standardError.write(Data("practices: \($0)\n".utf8)) }
+        exit(1)
+    }
+    for (key, value) in resolved.values { setenv(key, value, 1) }
+    let command = Array(args[(separator + 1)...])
+    let cArgs = command.map { strdup($0) } + [nil]
+    execvp(command[0], cArgs)
+    print("practices: cannot run \(command[0]): \(String(cString: strerror(errno)))")
+    exit(127)
+
+case "doctor":
+    let findings = try await Doctor.run()
+    if json { printJSON(findings); break }
+    if findings.isEmpty { print("nothing to report"); break }
+    for f in findings {
+        switch f.kind {
+        case .leak:
+            print("LEAK      \(home(f.path))\n          registry secrets in plain text: \(f.keys.joined(separator: ", "))")
+        case .drift:
+            print("DRIFT     \(home(f.path))\n          differs from \(f.related[0]): \(f.keys.joined(separator: ", "))")
+        case .shared:
+            print("SHARED    \(f.keys.joined(separator: ", ")) — same value in:\n          "
+                  + ([f.path] + f.related).map(home).joined(separator: "\n          "))
+        case .duplicate:
+            print("DUPLICATE \(home(f.path))\n          all \(f.keys.count) keys match \(f.related[0]) — replaceable by `practicesctl run`")
+        }
+    }
 
 default:
     print(usage)

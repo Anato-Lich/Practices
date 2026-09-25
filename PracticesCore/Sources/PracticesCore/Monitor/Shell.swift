@@ -49,8 +49,10 @@ public enum Shell {
 
     /// Runs `tool` to completion and returns stdout. `allowedStatuses` covers tools that
     /// report "nothing found" through the exit code (lsof exits 1 when nothing listens).
+    /// `input` is written to the tool's stdin — the way to hand it a value that must not appear
+    /// in its arguments (visible in `ps`) or on disk.
     public static func run(
-        _ tool: String, _ arguments: [String], allowedStatuses: Set<Int32> = [0]
+        _ tool: String, _ arguments: [String], allowedStatuses: Set<Int32> = [0], input: Data? = nil
     ) async throws -> String {
         guard let path = locate(tool) else { throw NotFound(tool: tool) }
         return try await withCheckedThrowingContinuation { continuation in
@@ -61,7 +63,8 @@ public enum Shell {
             let out = Pipe(), err = Pipe()
             process.standardOutput = out
             process.standardError = err
-            process.standardInput = FileHandle.nullDevice
+            let stdin = input.map { _ in Pipe() }
+            process.standardInput = stdin ?? FileHandle.nullDevice
 
             // Drain both pipes while the process runs; a full pipe buffer would block it.
             let collector = OutputCollector()
@@ -81,7 +84,16 @@ public enum Shell {
                         tool: tool, status: p.terminationStatus, stderr: stderr))
                 }
             }
-            do { try process.run() } catch { continuation.resume(throwing: error) }
+            do {
+                try process.run()
+                if let stdin, let input {
+                    // Written off the caller's thread: a large input would block on a full pipe.
+                    DispatchQueue.global().async {
+                        stdin.fileHandleForWriting.write(input)
+                        try? stdin.fileHandleForWriting.close()
+                    }
+                }
+            } catch { continuation.resume(throwing: error) }
         }
     }
 }

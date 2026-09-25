@@ -8,9 +8,13 @@ let package = Package(
         .library(name: "PracticesCore", targets: ["PracticesCore"]),
         .executable(name: "practicesctl", targets: ["practicesctl"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.0.0"),
+    ],
     targets: [
         .target(
             name: "PracticesCore",
+            dependencies: ["Yams"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
