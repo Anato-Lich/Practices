@@ -1,0 +1,37 @@
+name: Practices
+options:
+  bundleIdPrefix: dev.practices
+  createIntermediateGroups: true
+packages:
+  PracticesCore:
+    path: ../PracticesCore
+targets:
+  Practices:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Sources/Practices
+    dependencies:
+      - package: PracticesCore
+        product: PracticesCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.practices.app
+        PRODUCT_NAME: Practices
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        # Not sandboxed: the monitor runs lsof and docker and signals other processes.
+        ENABLE_APP_SANDBOX: "NO"
+        ENABLE_HARDENED_RUNTIME: "NO"
+        GENERATE_INFOPLIST_FILE: "YES"
+        # Menu-bar agent for now (stage 1); the main window arrives with sources in stage 2.
+        INFOPLIST_KEY_LSUIElement: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: "Practices"
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_EMIT_LOC_STRINGS: "YES"

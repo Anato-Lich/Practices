@@ -1,0 +1,17 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+# XcodeGen output (regenerate with `xcodegen generate`)
+PracticesApp/Practices.xcodeproj/
+# macOS
+.DS_Store
+dist/
+# Never: credentials of any kind
+.env
+.env.*
+secrets.json
