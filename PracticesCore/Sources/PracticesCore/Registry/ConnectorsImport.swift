@@ -188,8 +188,8 @@ public enum ConnectorsImport {
             FieldDoc(path: "extra.nin", type: "int", meaning: "счётчик извещений", from: ["X-Keeper/cabinet-analysis/README.md"]),
         ],
         "xkeeper-pg": [
-            FieldDoc(path: "devices.create_dt", type: "timestamptz", meaning: "начало бэкфилла устройства", from: ["Connectors README"]),
-            FieldDoc(path: "devices.server_id", type: "int", meaning: "выбирает хост XKDB: 0 — первый, иначе второй", from: ["SOURCES.md"]),
+            FieldDoc(path: "create_dt", type: "timestamptz", meaning: "начало бэкфилла устройства", from: ["Connectors README"]),
+            FieldDoc(path: "server_id", type: "int", meaning: "выбирает хост XKDB: 0 — первый, иначе второй", from: ["SOURCES.md"]),
         ],
     ]
 }

@@ -9,25 +9,43 @@ struct MainWindow: View {
 
     @Environment(RegistryModel.self) private var registry
     @Environment(MonitorModel.self) private var monitor
-    @State private var selection: SidebarItem? = nil
-
     enum SidebarItem: Hashable {
         case source(String)
+        case practice(String)
         case doctor
     }
 
     var body: some View {
+        @Bindable var registry = registry
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: $registry.selection) {
                 Section("Sources") {
                     ForEach(registry.sources) { source in
-                        HStack(spacing: 8) {
-                            HealthDot(health: registry.health(of: source.id))
-                            Text(verbatim: source.name).lineLimit(1)
-                            Spacer()
-                            if registry.checking.contains(source.id) { ProgressView().controlSize(.mini) }
+                        let practices = registry.practices[source.id] ?? []
+                        if practices.isEmpty {
+                            sourceRow(source)
+                        } else {
+                            DisclosureGroup {
+                                ForEach(practices) { p in
+                                    Label { Text(verbatim: p.name).lineLimit(1) } icon: {
+                                        Image(systemName: "chevron.left.forwardslash.chevron.right").foregroundStyle(.secondary)
+                                    }
+                                    .tag(SidebarItem.practice(p.ref))
+                                }
+                            } label: {
+                                sourceRow(source)
+                            }
                         }
-                        .tag(SidebarItem.source(source.id))
+                    }
+                }
+                if !registry.chains.isEmpty {
+                    Section("Chains") {
+                        ForEach(registry.chains) { chain in
+                            Label { Text(verbatim: chain.name).lineLimit(1) } icon: {
+                                Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(.secondary)
+                            }
+                            .tag(SidebarItem.practice(chain.ref))
+                        }
                     }
                 }
                 Section {
@@ -47,15 +65,25 @@ struct MainWindow: View {
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 230)
         } detail: {
-            switch selection {
-            case .source(let id):
-                if let source = registry.source(id) { SourceView(source: source) } else { placeholder }
-            case .doctor:
-                DoctorView()
-            case nil:
-                placeholder
+            if registry.searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
+                SearchView(query: registry.searchText) { item in
+                    registry.searchText = ""
+                    registry.selection = item
+                }
+            } else {
+                switch registry.selection {
+                case .source(let id):
+                    if let source = registry.source(id) { SourceView(source: source) } else { placeholder }
+                case .practice(let ref):
+                    PracticeView(model: registry.model(for: ref)).id(ref)
+                case .doctor:
+                    DoctorView()
+                case nil:
+                    placeholder
+                }
             }
         }
+        .searchable(text: $registry.searchText, placement: .sidebar, prompt: Text("Fields, practices, docs"))
         .toolbar {
             ToolbarItem {
                 Button { Task { await registry.checkAll() } } label: {
@@ -67,12 +95,22 @@ struct MainWindow: View {
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             registry.reload()
-            if selection == nil, let first = registry.sources.first { selection = .source(first.id) }
+            if registry.selection == nil, let first = registry.sources.first { registry.selection = .source(first.id) }
             guard !CommandLine.arguments.contains("--render-window") else { return }
             NSApp.setActivationPolicy(.regular)
             Task { await registry.checkAll() }
         }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
+    }
+
+    private func sourceRow(_ source: Source) -> some View {
+        HStack(spacing: 8) {
+            HealthDot(health: registry.health(of: source.id))
+            Text(verbatim: source.name).lineLimit(1)
+            Spacer()
+            if registry.checking.contains(source.id) { ProgressView().controlSize(.mini) }
+        }
+        .tag(SidebarItem.source(source.id))
     }
 
     private var placeholder: some View {

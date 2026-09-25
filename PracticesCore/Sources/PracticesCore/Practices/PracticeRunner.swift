@@ -52,6 +52,16 @@ public struct PracticeResult: Codable, Sendable {
     }
 }
 
+/// A step as kept in the runs history: enough to find the step practice by a field of its
+/// output (DECISIONS 24), no data.
+public struct StepRecord: Codable, Hashable, Sendable {
+    public let ref: String
+    public let ok: Bool
+    public let ms: Int
+    public let rows: Int?
+    public let schema: [PracticeResult.Field]?
+}
+
 public struct PracticeSignature: Codable, Sendable {
     public struct Param: Codable, Hashable, Sendable {
         public let name: String
@@ -123,7 +133,8 @@ public struct PracticeRunner: Sendable {
         result.stdout = scrub(stdout, values: secretValues)
         result.stderr = scrub(stderr, values: secretValues)
         result.envs = Dictionary(uniqueKeysWithValues: resolved.sources.map { ($0.source.id, $0.env) })
-        result.version = try? await store.versions(of: practice).count
+        // A run of unsaved code belongs to no version.
+        result.version = await store.isDraft(practice) ? nil : try? await store.versions(of: practice).count
         record(practice, params: params, result: result)
         await FieldsLearner.learn(from: result, practice: practice, registry: store.registry)
         return result
@@ -171,9 +182,7 @@ public struct PracticeRunner: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let schema = result.schema.flatMap { try? encoder.encode($0) }.map { String(decoding: $0, as: UTF8.self) }
-        let steps = result.steps.map { step in
-            ["ref": step.ref, "ok": step.ok ? "1" : "0", "ms": String(step.ms), "rows": step.total.map(String.init) ?? ""]
-        }
+        let steps = result.steps.map { StepRecord(ref: $0.ref, ok: $0.ok, ms: $0.ms, rows: $0.total, schema: $0.schema) }
         let stepsJSON = (try? encoder.encode(steps)).map { String(decoding: $0, as: UTF8.self) }
         let paramsJSON = (try? encoder.encode(params)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         let env = result.envs.sorted { $0.key < $1.key }.map { "\($0.key)@\($0.value)" }.joined(separator: " ")

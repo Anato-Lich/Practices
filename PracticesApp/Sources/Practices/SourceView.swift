@@ -21,6 +21,7 @@ struct SourceView: View {
                     GridRow {
                         VStack(spacing: 16) {
                             targets
+                            practices
                             if !source.guards.isEmpty { guards }
                             notes
                         }
@@ -94,6 +95,32 @@ struct SourceView: View {
                     }
                 }
                 if source.targets.isEmpty { Text("No targets").foregroundStyle(.secondary).font(.callout) }
+            }
+        }
+    }
+
+    private var practices: some View {
+        Card(title: "Practices", trailing: nil) {
+            let list = registry.practices[source.id] ?? []
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(list) { practice in
+                    let last = registry.lastRun(of: practice.ref)
+                    Button { registry.selection = .practice(practice.ref) } label: {
+                        HStack {
+                            Text(verbatim: practice.name).font(.callout)
+                            Spacer()
+                            if let last {
+                                Text(verbatim: (last.version.map { "v\($0) · " } ?? "") + "\(last.millis) ms")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(last.ok ? Color.secondary : Color.red)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if list.isEmpty { Text("No practices yet").foregroundStyle(.secondary).font(.callout) }
             }
         }
     }

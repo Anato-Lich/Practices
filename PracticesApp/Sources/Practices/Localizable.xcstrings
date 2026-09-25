@@ -2,6 +2,16 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
+    "%lld runs": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld прогонов"
+          }
+        }
+      }
+    },
     "A registry secret is written in a file. Move it out and delete the copy.": {
       "localizations": {
         "ru": {
@@ -38,6 +48,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Отмена"
+          }
+        }
+      }
+    },
+    "Chains": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Связки"
           }
         }
       }
@@ -88,6 +108,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Очистить"
+          }
+        }
+      }
+    },
+    "Click a step to see its output.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите на шаг, чтобы увидеть его вывод."
+          }
+        }
+      }
+    },
+    "Code of practices": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Код практик"
           }
         }
       }
@@ -182,6 +222,16 @@
         }
       }
     },
+    "Described from: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Описание из: %@"
+          }
+        }
+      }
+    },
     "Differs from the registry": {
       "localizations": {
         "ru": {
@@ -252,12 +302,42 @@
         }
       }
     },
+    "Field": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поле"
+          }
+        }
+      }
+    },
     "Fields": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Поля"
+          }
+        }
+      }
+    },
+    "Fields in the result": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поля в результате"
+          }
+        }
+      }
+    },
+    "Fields, practices, docs": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поля, практики, документация"
           }
         }
       }
@@ -298,6 +378,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Импортируйте источники Connectors: `practicesctl import connectors`."
+          }
+        }
+      }
+    },
+    "In the result of": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В результате"
           }
         }
       }
@@ -432,12 +522,42 @@
         }
       }
     },
+    "No practices yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Практик пока нет"
+          }
+        }
+      }
+    },
     "No project is listening on a port": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Ни один проект не слушает порт"
+          }
+        }
+      }
+    },
+    "No result": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет результата"
+          }
+        }
+      }
+    },
+    "No runs yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прогонов пока нет"
           }
         }
       }
@@ -482,12 +602,42 @@
         }
       }
     },
+    "Not run yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ещё не запускалась"
+          }
+        }
+      }
+    },
     "Notes": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Заметки"
+          }
+        }
+      }
+    },
+    "Nothing found for “%@”": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего не найдено по «%@»"
+          }
+        }
+      }
+    },
+    "Nothing printed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего не напечатано"
           }
         }
       }
@@ -567,7 +717,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Practices"
+            "value": "Практики"
           }
         }
       }
@@ -622,12 +772,32 @@
         }
       }
     },
+    "Rows with the field / rows looked at, in the latest run": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Строк с полем / просмотрено строк, в последнем прогоне"
+          }
+        }
+      }
+    },
     "Run": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Запустить"
+          }
+        }
+      }
+    },
+    "Run (⌘↩)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выполнить (⌘↩)"
           }
         }
       }
@@ -652,12 +822,52 @@
         }
       }
     },
+    "Running…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выполняется…"
+          }
+        }
+      }
+    },
     "Save": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Сохранить"
+          }
+        }
+      }
+    },
+    "Save as a new version (⌘S)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить как новую версию (⌘S)"
+          }
+        }
+      }
+    },
+    "Save version": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить версию"
+          }
+        }
+      }
+    },
+    "Search": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск"
           }
         }
       }
@@ -698,6 +908,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Показать проект в Finder"
+          }
+        }
+      }
+    },
+    "Showing a step's output. Click it again for the final result.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показан вывод шага. Нажмите ещё раз, чтобы вернуться к итогу."
           }
         }
       }
@@ -762,6 +982,26 @@
         }
       }
     },
+    "Stopped": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановлено"
+          }
+        }
+      }
+    },
+    "Table": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Таблица"
+          }
+        }
+      }
+    },
     "Taken by %@": {
       "localizations": {
         "ru": {
@@ -778,6 +1018,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Цели"
+          }
+        }
+      }
+    },
+    "Text": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст"
           }
         }
       }
@@ -802,6 +1052,16 @@
         }
       }
     },
+    "Tree": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дерево"
+          }
+        }
+      }
+    },
     "Value": {
       "localizations": {
         "ru": {
@@ -818,6 +1078,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "Значения не показываются нигде: ни здесь, ни агенту."
+          }
+        }
+      }
+    },
+    "Versions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Версии"
+          }
+        }
+      }
+    },
+    "done": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "готово"
+          }
+        }
+      }
+    },
+    "draft": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "черновик"
+          }
+        }
+      }
+    },
+    "failed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ошибка"
+          }
+        }
+      }
+    },
+    "input: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вход: %@"
           }
         }
       }
@@ -848,6 +1158,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "задано"
+          }
+        }
+      }
+    },
+    "stored rotated %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "сохранены обновлённые %@"
+          }
+        }
+      }
+    },
+    "v1 saved %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "v1 сохранена %@"
+          }
+        }
+      }
+    },
+    "via %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "через %@"
+          }
+        }
+      }
+    },
+    "⌘↩ runs it with the values of its sources.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘↩ запускает её с кредами её источников."
           }
         }
       }

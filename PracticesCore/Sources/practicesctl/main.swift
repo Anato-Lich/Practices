@@ -34,6 +34,7 @@ let usage = """
       try <practice> [k=v…] [--env source=env…] [--rows N]
                                     run it and print the result (a table, a tree or text)
       runs <practice>               its run history: version, time, rows
+      search <text>                 fields, practices whose result has it, docs, code
 
       practice = <source>/<name> | chains/<name>
     """
@@ -386,6 +387,28 @@ case "runs":
               + pad(r.ok ? "ok" : "failed", 8) + pad("\(r.millis) ms", 10) + pad(r.rows.map { "\($0) rows" } ?? "", 12)
               + r.env + (r.error.map { "  " + $0.prefix(80) } ?? ""))
     }
+
+case "search":
+    guard positional.count > 1 else { print(usage); exit(2) }
+    let results = Search.run(positional.dropFirst().joined(separator: " "))
+    if json { printJSON(results); break }
+    if results.isEmpty { print("nothing found"); break }
+    if !results.fields.isEmpty { print("FIELDS") }
+    for hit in results.fields {
+        var line = "  " + pad("\(hit.source) · \(hit.field.path)", 40) + pad(hit.field.type ?? "", 8)
+        line += hit.field.meaning ?? "(no description)"
+        print(line)
+        if let values = hit.field.values { print("      " + values.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: " · ")) }
+    }
+    if !results.results.isEmpty { print("\nIN RESULTS") }
+    for hit in results.results {
+        print("  " + pad(hit.practice, 34) + pad(hit.path, 22) + "\(hit.present)/\(hit.seen) rows"
+              + (hit.viaStep.map { "  via \($0)" } ?? ""))
+    }
+    if !results.docs.isEmpty { print("\nDOCS") }
+    for hit in results.docs { print("  " + pad((hit.source ?? "") + " · " + hit.title, 34) + hit.excerpt) }
+    if !results.code.isEmpty { print("\nCODE") }
+    for hit in results.code { print("  " + pad(hit.title, 34) + hit.excerpt) }
 
 default:
     print(usage)

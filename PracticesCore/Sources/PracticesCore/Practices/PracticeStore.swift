@@ -81,6 +81,21 @@ public struct PracticeStore: Sendable {
         }
     }
 
+    /// Writes the code without committing: a draft that runs can use before it is saved as a
+    /// version.
+    public func writeDraft(_ code: String, for practice: Practice) throws {
+        let file = url(of: practice)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try code.write(to: file, atomically: true, encoding: .utf8)
+    }
+
+    /// True when the file differs from its last version (or has none yet).
+    public func isDraft(_ practice: Practice) async -> Bool {
+        let path = url(of: practice).path.replacingOccurrences(of: registry.root.path + "/", with: "")
+        guard let status = try? await registry.git(["status", "--porcelain", "--", path]) else { return true }
+        return !status.isEmpty
+    }
+
     /// The code of one version.
     public func code(of practice: Practice, at version: PracticeVersion) async throws -> String {
         let path = url(of: practice).path.replacingOccurrences(of: registry.root.path + "/", with: "")

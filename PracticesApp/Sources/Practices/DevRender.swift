@@ -36,6 +36,16 @@ enum DevRender {
                 registry.reload()
                 await registry.checkAll()
                 if args.contains("--doctor") { await registry.runDoctor() }
+                if let j = args.firstIndex(of: "--practice"), j + 1 < args.count {
+                    let ref = args[j + 1]
+                    registry.selection = .practice(ref)
+                    let practice = registry.model(for: ref)
+                    try? await Task.sleep(for: .seconds(1))
+                    practice.run()
+                    while practice.running { try? await Task.sleep(for: .milliseconds(200)) }
+                    if let k = args.firstIndex(of: "--step"), k + 1 < args.count { practice.selectedStep = Int(args[k + 1]) }
+                }
+                if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
                 content = AnyView(MainWindow().environment(registry).environment(model)
                     .frame(width: 1200, height: 780))
             } else {

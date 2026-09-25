@@ -10,6 +10,14 @@ import PracticesCore
 final class RegistryModel {
 
     private(set) var sources: [Source] = []
+    /// source id → its practices; chains apart.
+    private(set) var practices: [String: [Practice]] = [:]
+    private(set) var chains: [Practice] = []
+    /// What the window shows; views set it to open a source or a practice.
+    var selection: MainWindow.SidebarItem?
+    var searchText = ""
+    /// Open practices keep their state (code being edited, last result) while switching.
+    private var practiceModels: [String: PracticeModel] = [:]
     /// source id → env → keys that have a value.
     private(set) var keyStatus: [String: [String: Set<String>]] = [:]
     /// source id → results of the last check, preconditions first.
@@ -27,12 +35,26 @@ final class RegistryModel {
         do {
             sources = try registry.sources()
             keyStatus = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, (try? store.status(source: $0)) ?? [:]) })
+            let practiceStore = PracticeStore(registry: registry)
+            practices = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, practiceStore.list(source: $0.id)) })
+            chains = practiceStore.chains()
         } catch {
             self.error = String(describing: error)
         }
     }
 
     func source(_ id: String) -> Source? { sources.first { $0.id == id } }
+
+    func model(for ref: String) -> PracticeModel {
+        if let model = practiceModels[ref] { return model }
+        let model = PracticeModel(practice: Practice(ref: ref))
+        practiceModels[ref] = model
+        return model
+    }
+
+    func lastRun(of ref: String) -> RunRecord? {
+        (try? RunsStore())?.runs(of: ref, limit: 1).first
+    }
 
     /// Green when every target answers, orange when some do, red when a precondition fails or
     /// nothing answers, grey before the first check.
