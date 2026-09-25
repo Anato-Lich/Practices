@@ -69,6 +69,10 @@ Practices and the agent:
 practicesctl practices [source] | sig <ref> | try <ref> [k=v…] | runs <ref>
 practicesctl search <text>
 practicesctl sets <ref> [name k=v…] | copies [ref] | proposals [accept|reject <id>]
+practicesctl connect <src@env>… --to <file> [--project dir] [--as VAR=KEY]   # write a project's env file
+practicesctl sync [--check]                        # rewrite project env files that went stale
+practicesctl init [dir] [--write]                  # adopt an existing project from its .env files
+practicesctl names [source]                        # names each key goes by across projects
 practicesctl mcp                                   # MCP server (stdio)
 claude mcp add --scope user practices -- ~/.practices/bin/practicesctl mcp
 ```

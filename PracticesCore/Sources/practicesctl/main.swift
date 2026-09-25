@@ -29,6 +29,11 @@ let usage = """
       doctor                        .env files and plain text in ~/Projects against the registry
       init [dir] [--write]          suggest the project's practices.yaml from its .env files
                                     (sources, environments, aliases for its own variable names)
+      connect <ref…> --to <file> [--project dir] [--as VAR=KEY…] [--only KEY,KEY]
+                                    write a source's values into a project's env file and keep it
+                                    in practices.yaml; refuses files git would commit (--force)
+      sync [--check] [--force]      rewrite project env files that differ from the registry
+      names [source]                names each key goes by in project env files (rescans ~/Projects)
 
       ref = <source>[@<env>]
 
@@ -64,6 +69,13 @@ func printJSON<T: Encodable>(_ value: T) {
 
 func pad(_ s: String, _ width: Int) -> String {
     s.count >= width ? s : s + String(repeating: " ", count: width - s.count)
+}
+
+func summary(_ lines: [EnvFiles.Line]) -> String {
+    let counts = Dictionary(grouping: lines, by: \.state).mapValues(\.count)
+    return [EnvFiles.State.same, .changed, .new, .missingValue].compactMap { state in
+        counts[state].map { "\($0) \(state == .missingValue ? "without value" : state.rawValue)" }
+    }.joined(separator: ", ")
 }
 
 func home(_ path: String?) -> String {
@@ -345,15 +357,88 @@ case "init":
     for m in setup.matches.sorted(by: { ($0.source, $0.variable) < ($1.source, $1.variable) }) {
         print("  " + pad(m.variable, 32) + pad(m.variable == m.key ? "" : "← \(m.key)", 28) + "\(m.source)@\(m.env)")
     }
-    let yaml = try Registry.yaml(setup.manifest)
+    var suggested = setup.manifest
+    suggested.files = setup.files(relativeTo: dir)
+    let yaml = try Registry.yaml(suggested)
     print("\n\(ProjectManifest.fileName):\n" + yaml)
     if args.contains("--write") {
         let target = dir.appendingPathComponent(ProjectManifest.fileName)
         guard !FileManager.default.fileExists(atPath: target.path) else { print("\(home(target.path)) exists — not overwritten"); exit(1) }
-        try yaml.write(to: target, atomically: true, encoding: .utf8)
-        print("written: \(home(target.path))")
+        try suggested.save(to: dir)
+        print("written: \(home(target.path)) — `practicesctl sync` keeps its files current from now on")
     } else {
         print("(--write to create it; the .env files stay as they are)")
+    }
+
+case "connect":
+    guard let toIndex = args.firstIndex(of: "--to"), toIndex + 1 < args.count else { print(usage); exit(2) }
+    let project = URL(fileURLWithPath: args.firstIndex(of: "--project").map { args[$0 + 1] } ?? FileManager.default.currentDirectoryPath).standardizedFileURL
+    var refs: [SourceRef] = [], aliases: [String: String] = [:], only: [String]?
+    var i = 1
+    let rest = Array(CommandLine.arguments.dropFirst())
+    while i < rest.count {
+        let a = rest[i]
+        if ["--to", "--project"].contains(a) { i += 2; continue }
+        if a == "--as", i + 1 < rest.count {
+            let kv = rest[i + 1].split(separator: "=", maxSplits: 1).map(String.init)
+            if kv.count == 2 { aliases[kv[0]] = kv[1] }
+            i += 2; continue
+        }
+        if a == "--only", i + 1 < rest.count { only = rest[i + 1].split(separator: ",").map(String.init); i += 2; continue }
+        if a.hasPrefix("--") { i += 1; continue }
+        refs.append(SourceRef(parsing: a)); i += 1
+    }
+    guard !refs.isEmpty else { print("which sources? e.g. clickhouse@dev"); exit(2) }
+    let file = ManagedFile(path: args[toIndex + 1], sources: refs, env: aliases, only: only)
+    // Before a project gets yet another name for a value, show the names it already has.
+    let registry = Registry()
+    for ref in refs {
+        guard let source = try? registry.source(ref.source) else { continue }
+        for key in source.keys where only?.contains(key.name) ?? true {
+            let variables = aliases.filter { $0.value == key.name }.map(\.key)
+            for variable in variables.isEmpty ? [key.name] : variables {
+                let others = Names.others(for: key.name, source: source.id, variable: variable, registry: registry)
+                guard !others.isEmpty else { continue }
+                print("note: \(key.name) is already known in projects as "
+                      + others.prefix(4).map { "\($0.name) (\($0.files.count))" }.joined(separator: ", ")
+                      + " — \(variable) would be one more name; `--as <existing>=\(key.name)` reuses one")
+            }
+        }
+    }
+    do {
+        let lines = try await ProjectFiles.connect(file, project: project, force: args.contains("--force"))
+        print("\(home(project.appendingPathComponent(file.path).path)): " + summary(lines))
+        for l in lines where l.state != .same {
+            print("  " + pad(l.variable, 32) + pad(l.variable == l.key ? "" : "← \(l.key)", 28) + pad("\(l.source)@\(l.env)", 18) + l.state.rawValue)
+        }
+        print("\(home(project.appendingPathComponent(ProjectManifest.fileName).path)) updated")
+    } catch { print("practices: \(error)"); exit(1) }
+
+case "sync":
+    let statuses = ProjectFiles.status()
+    if statuses.isEmpty { print("no project has managed files yet (practicesctl connect / init --write)"); break }
+    for s in statuses {
+        let mark = s.stale ? "stale" : "ok"
+        print(pad(mark, 7) + home(s.project.appendingPathComponent(s.file.path).path) + "  " + summary(s.lines))
+    }
+    if args.contains("--check") { break }
+    do {
+        let done = try await ProjectFiles.sync(statuses, force: args.contains("--force"))
+        print(done.isEmpty ? "\nnothing to update" : "\nupdated \(done.count) file(s)")
+    } catch { print("practices: \(error)"); exit(1) }
+
+case "names":
+    let table = try await Names.refresh()
+    let ids = positional.count > 1 ? [positional[1]] : table.keys.sorted()
+    if json { printJSON(table); break }
+    for id in ids {
+        guard let keys = table[id], !keys.isEmpty else { continue }
+        print(id)
+        for key in keys.keys.sorted() {
+            let names = keys[key]!
+            let marker = names.count > 1 ? "  ⚠ \(names.count) names" : ""
+            print("  " + pad(key, 28) + names.map { "\($0.name)×\($0.files.count)" }.joined(separator: "  ") + marker)
+        }
     }
 
 case "doctor":
@@ -478,7 +563,11 @@ case "search":
     let results = Search.run(positional.dropFirst().joined(separator: " "))
     if json { printJSON(results); break }
     if results.isEmpty { print("nothing found"); break }
-    if !results.fields.isEmpty { print("FIELDS") }
+    if !results.names.isEmpty { print("VARIABLE NAMES") }
+    for hit in results.names {
+        print("  " + pad(hit.name.name, 30) + pad("→ \(hit.source) · \(hit.key)", 40) + hit.name.files.joined(separator: ", "))
+    }
+    if !results.fields.isEmpty { print("\nFIELDS") }
     for hit in results.fields {
         var line = "  " + pad("\(hit.source) · \(hit.field.path)", 40) + pad(hit.field.type ?? "", 8)
         line += hit.field.meaning ?? "(no description)"

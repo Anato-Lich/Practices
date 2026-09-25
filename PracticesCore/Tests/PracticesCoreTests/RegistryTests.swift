@@ -116,3 +116,77 @@ struct TempHome {
         #expect(!findings.contains { $0.path.hasSuffix(".env.example") })
     }
 }
+
+@Suite struct EnvFilesTests {
+    @Test func renderKeepsTheRestAndReplacesInPlace() {
+        let text = "# app\nDEBUG=1\nexport CH_URL=http://old\nCH_URL=dup\n"
+        let out = EnvFiles.render(text, values: ["CH_URL": "http://new", "CH_PASSWORD": "p w#1"], order: ["CH_URL", "CH_PASSWORD"])
+        #expect(out == """
+            # app
+            DEBUG=1
+            export CH_URL=http://new
+            CH_URL=http://new
+
+            \(EnvFiles.blockStart)
+            CH_PASSWORD="p w#1"
+            \(EnvFiles.blockEnd)
+
+            """)
+        // A second write rebuilds the block instead of stacking another one.
+        let again = EnvFiles.render(out, values: ["CH_URL": "http://new", "CH_PASSWORD": "x"], order: ["CH_URL", "CH_PASSWORD"])
+        #expect(again.components(separatedBy: EnvFiles.blockStart).count == 2)
+        #expect(again.contains("CH_PASSWORD=x"))
+    }
+
+    @Test func planAndWriteWithAliases() async throws {
+        let home = TempHome()
+        try home.registry.save(Source(id: "ch", name: "ch", kind: "clickhouse", envs: ["prod", "dev"],
+                                      keys: [.init(name: "CH_URL"), .init(name: "CH_PASSWORD")]))
+        try home.store.setAll(["CH_URL": "http://dev", "CH_PASSWORD": "secret-dev"], source: "ch", env: "dev")
+        let project = home.url.appendingPathComponent("proj")
+        try home.write("BFF_CH_PASSWORD=old\nOTHER=keep\n", "proj/.env")
+        let file = ManagedFile(path: ".env", sources: [SourceRef(source: "ch", env: "dev")], env: ["BFF_CH_PASSWORD": "CH_PASSWORD"])
+        let plan = try EnvFiles.plan(file, project: project, registry: home.registry, store: home.store)
+        #expect(Set(plan.map { "\($0.variable):\($0.state.rawValue)" }) == ["CH_URL:new", "BFF_CH_PASSWORD:changed"])
+        try await EnvFiles.write(file, project: project, registry: home.registry, store: home.store)
+        let written = try String(contentsOf: project.appendingPathComponent(".env"), encoding: .utf8)
+        #expect(written.hasPrefix("BFF_CH_PASSWORD=secret-dev\nOTHER=keep\n"))
+        #expect(written.contains("CH_URL=http://dev"))
+        #expect(!written.contains("CH_PASSWORD=secret-dev\n\(EnvFiles.blockEnd)"))   // alias replaces the registry name
+        let after = try EnvFiles.plan(file, project: project, registry: home.registry, store: home.store)
+        #expect(after.allSatisfy { $0.state == .same })
+    }
+
+    @Test func refusesAFileGitWouldCommit() async throws {
+        let home = TempHome()
+        try home.registry.save(Source(id: "s", name: "s", kind: "x", keys: [.init(name: "API_TOKEN")]))
+        try home.store.set("value1", key: "API_TOKEN", source: "s", env: "prod")
+        let project = home.url.appendingPathComponent("repo")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        _ = try await Shell.run("git", ["-C", project.path, "init", "-q"])
+        // Not `.env`: a global gitignore (this machine has one) may already ignore that.
+        let file = ManagedFile(path: "app.secrets", sources: [SourceRef(source: "s")])
+        await #expect(throws: EnvFiles.Refused.self) {
+            try await EnvFiles.write(file, project: project, registry: home.registry, store: home.store)
+        }
+        try "app.secrets\n".write(to: project.appendingPathComponent(".gitignore"), atomically: true, encoding: .utf8)
+        try await EnvFiles.write(file, project: project, registry: home.registry, store: home.store)
+        let attrs = try FileManager.default.attributesOfItem(atPath: project.appendingPathComponent("app.secrets").path)
+        #expect((attrs[.posixPermissions] as? Int) == 0o600)
+    }
+}
+
+@Suite struct NamesTests {
+    @Test func namesAreFoundByValueAcrossProjects() throws {
+        let home = TempHome()
+        try home.registry.save(Source(id: "pg", name: "pg", kind: "postgres", keys: [.init(name: "XK_PG_PASSWORD")]))
+        try home.store.set("very-secret-pw", key: "XK_PG_PASSWORD", source: "pg", env: "prod")
+        try home.write("SRC_PG_PASSWORD=very-secret-pw\n", "projects/a/.env")
+        try home.write("DB_PASS=very-secret-pw\nOTHER=x\n", "projects/b/.env.local")
+        try home.write("SRC_PG_PASSWORD=very-secret-pw\n", "projects/c/.env")
+        let table = try Names.scan(root: home.url.appendingPathComponent("projects").path, registry: home.registry, store: home.store)
+        let names = table["pg"]?["XK_PG_PASSWORD"] ?? []
+        #expect(names.map(\.name) == ["SRC_PG_PASSWORD", "DB_PASS"])
+        #expect(names[0].files == ["a/.env", "c/.env"])
+    }
+}

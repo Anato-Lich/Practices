@@ -28,6 +28,27 @@ public struct ProjectSetup: Sendable {
         return ProjectManifest(sources: chosen.keys.sorted().map { SourceRef(source: $0, env: chosen[$0]) }, env: aliases)
     }
 
+    /// One managed file per .env file that had matches: its own sources, environments and
+    /// aliases (a `.deploy.env` may be prod while `.env` is dev).
+    public func files(relativeTo dir: URL) -> [ManagedFile] {
+        Dictionary(grouping: matches, by: \.file).keys.sorted().map { path in
+            let ms = matches.filter { $0.file == path }
+            var bySource: [String: [String: Int]] = [:]
+            for m in ms { bySource[m.source, default: [:]][m.env, default: 0] += 1 }
+            let chosen = bySource.mapValues { $0.max { $0.value < $1.value }!.key }
+            var aliases: [String: String] = [:]
+            var keys: [String] = []
+            for m in ms where chosen[m.source] == m.env {
+                if m.variable != m.key { aliases[m.variable] = m.key }
+                keys.append(m.key)
+            }
+            let relative = path.hasPrefix(dir.path + "/") ? String(path.dropFirst(dir.path.count + 1)) : path
+            // Only the keys the file already had: adopting a file must not add the rest of a source to it.
+            return ManagedFile(path: relative, sources: chosen.keys.sorted().map { SourceRef(source: $0, env: chosen[$0]) },
+                               env: aliases, only: Array(Set(keys)).sorted())
+        }
+    }
+
     public static func analyze(_ dir: URL, registry: Registry = Registry(), store: SecretStore = SecretStore()) throws -> ProjectSetup {
         var setup = ProjectSetup()
         let sources = try registry.sources()
@@ -44,16 +65,17 @@ public struct ProjectSetup: Sendable {
         }
         let files = Doctor.collect(root: dir.path).env.filter { !$0.contains("/.claude/") }
         setup.envFiles = files
-        var seen = Set<String>()
         for file in files {
             guard let text = try? String(contentsOfFile: file, encoding: .utf8) else { continue }
+            // Repeats are dropped per file: over a whole tree one name lives in many files.
+            var seen = Set<String>()
             for (variable, value) in ConnectorsImport.parseDotenv(text) where !value.isEmpty && seen.insert(variable).inserted {
                 let places = byValue[value] ?? []
                 // Same name first; otherwise the value's owner, when there is exactly one.
                 if let same = places.first(where: { $0.key == variable }) ?? (places.count == 1 ? places.first : nil) {
                     setup.matches.append(.init(variable: variable, key: same.key, source: same.source, env: same.env, file: file))
                 } else {
-                    setup.unmatched.append(variable)
+                    if !setup.unmatched.contains(variable) { setup.unmatched.append(variable) }
                 }
             }
         }

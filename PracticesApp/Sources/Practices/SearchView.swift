@@ -77,6 +77,21 @@ struct SearchView: View {
 
     var body: some View {
         List {
+            if !results.names.isEmpty {
+                Section("Variable names in projects") {
+                    ForEach(results.names, id: \.self) { hit in
+                        Button { open(.source(hit.source)) } label: {
+                            HStack {
+                                Text(verbatim: hit.name.name).font(.callout.monospaced())
+                                Text(verbatim: "→ \(hit.source) · \(hit.key)").font(.caption.monospaced()).foregroundStyle(.secondary)
+                                Spacer()
+                                Text(verbatim: hit.name.files.joined(separator: ", ")).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
             if !results.fields.isEmpty {
                 Section("Field") {
                     ForEach(results.fields, id: \.self) { hit in

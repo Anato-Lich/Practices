@@ -45,6 +45,8 @@ enum DevRender {
                     while practice.running { try? await Task.sleep(for: .milliseconds(200)) }
                     if let k = args.firstIndex(of: "--step"), k + 1 < args.count { practice.selectedStep = Int(args[k + 1]) }
                 }
+                if let j = args.firstIndex(of: "--source"), j + 1 < args.count { registry.selection = .source(args[j + 1]) }
+                if args.contains("--projects") { await registry.refreshFiles(); registry.selection = .projects }
                 if args.contains("--proposals") { registry.reloadProposals(); registry.selection = .proposals }
                 if let j = args.firstIndex(of: "--search"), j + 1 < args.count {
                     registry.searchText = args[j + 1]

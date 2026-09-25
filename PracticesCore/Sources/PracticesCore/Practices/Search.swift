@@ -25,14 +25,22 @@ public struct SearchResults: Sendable, Codable {
         public let excerpt: String
     }
 
+    public struct NameHit: Hashable, Sendable, Codable {
+        public let source: String
+        public let key: String
+        public let name: KnownName
+    }
+
     public var fields: [FieldHit] = []
+    /// Registry keys a project variable name stands for (`SRC_PG_PASSWORD` → XK_PG_PASSWORD).
+    public var names: [NameHit] = []
     public var results: [ResultHit] = []
     public var docs: [TextHit] = []
     public var code: [TextHit] = []
 
     public init() {}
 
-    public var isEmpty: Bool { fields.isEmpty && results.isEmpty && docs.isEmpty && code.isEmpty }
+    public var isEmpty: Bool { names.isEmpty && fields.isEmpty && results.isEmpty && docs.isEmpty && code.isEmpty }
 }
 
 public enum Search {
@@ -51,6 +59,16 @@ public enum Search {
             }
         }
         out.fields.sort { rank($0.field.path, q) < rank($1.field.path, q) }
+
+        // Project variable names and registry keys.
+        for id in registry.sourceIDs() {
+            for (key, names) in Names.load(id, registry: registry) {
+                for name in names where name.name.lowercased().contains(q) || (key.lowercased().contains(q) && name.name != key) {
+                    out.names.append(.init(source: id, key: key, name: name))
+                }
+            }
+        }
+        out.names.sort { ($0.source, $0.key, $0.name.name) < ($1.source, $1.key, $1.name.name) }
 
         // Practices whose latest result schema has the field (steps included for chains).
         let decoder = JSONDecoder()

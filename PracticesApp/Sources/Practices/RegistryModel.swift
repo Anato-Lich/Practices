@@ -35,6 +35,9 @@ final class RegistryModel {
     private(set) var lastCheck: [String: Date] = [:]
     private(set) var findings: [DoctorFinding]?
     private(set) var proposals: [Proposal] = []
+    /// Managed env files in projects; nil until first read.
+    private(set) var fileStatuses: [ProjectFiles.FileStatus]?
+    var staleFiles: Int { (fileStatuses ?? []).filter(\.stale).count }
     /// Marked copies of practices in ~/Projects; nil until the first scan.
     private(set) var copies: [PracticeCopy]?
     private(set) var doctorRunning = false
@@ -60,6 +63,16 @@ final class RegistryModel {
     func source(_ id: String) -> Source? { sources.first { $0.id == id } }
 
     func reloadProposals() { proposals = ProposalStore().all() }
+
+    func refreshFiles() async {
+        fileStatuses = await Task.detached { ProjectFiles.status() }.value
+    }
+
+    func syncFiles() async {
+        do { _ = try await ProjectFiles.sync(fileStatuses ?? ProjectFiles.status()) }
+        catch { self.error = String(describing: error) }
+        await refreshFiles()
+    }
 
     var pendingProposals: Int { proposals.filter { $0.status == .pending }.count }
 
@@ -126,6 +139,8 @@ final class RegistryModel {
         do {
             try store.set(value, key: key, source: id, env: env)
             reload()
+            // A changed value makes project files that carry it stale: show that right away.
+            Task { await refreshFiles() }
         } catch {
             self.error = String(describing: error)
         }

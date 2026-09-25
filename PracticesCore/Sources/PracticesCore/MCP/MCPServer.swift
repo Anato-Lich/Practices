@@ -191,6 +191,8 @@ public final class MCPServer: @unchecked Sendable {
         card["notes"] = registry.notes(of: id) ?? ""
         card["docs"] = try encodable(registry.docs(of: id))
         card["fields"] = try encodable(registry.fields(of: id))
+        card["names_in_projects"] = try encodable(Names.load(id, registry: registry))
+        card["names_note"] = "Other names a key's value has in project env files. When wiring a project, reuse one of these instead of inventing a new name."
         return card
     }
 
@@ -273,6 +275,10 @@ public final class MCPServer: @unchecked Sendable {
             "variables": resolved.values.keys.sorted(),
             "missing": resolved.missing,
             "run_with": "practicesctl run \(list.map(\.description).joined(separator: " ")) -- <command>",
+            "write_file": "practicesctl connect \(list.map(\.description).joined(separator: " ")) --to .env [--as PROJECT_NAME=REGISTRY_KEY]",
+            "names_in_projects": Dictionary(uniqueKeysWithValues: list.map { ref in
+                (ref.source, Names.load(ref.source, registry: registry).mapValues { $0.map(\.name) })
+            }),
         ] as [String: Any]
     }
 

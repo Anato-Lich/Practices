@@ -13,6 +13,7 @@ struct MainWindow: View {
         case source(String)
         case practice(String)
         case proposals
+        case projects
         case doctor
     }
 
@@ -64,6 +65,19 @@ struct MainWindow: View {
                     .tag(SidebarItem.proposals)
                     Label {
                         HStack {
+                            Text("Projects")
+                            Spacer()
+                            if registry.staleFiles > 0 {
+                                Text(verbatim: String(registry.staleFiles)).foregroundStyle(.orange).font(.caption)
+                                    .help("Files that differ from the registry")
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: "doc.badge.gearshape")
+                    }
+                    .tag(SidebarItem.projects)
+                    Label {
+                        HStack {
                             Text("Doctor")
                             Spacer()
                             if let count = registry.findings?.count, count > 0 {
@@ -91,6 +105,8 @@ struct MainWindow: View {
                     PracticeView(model: registry.model(for: ref)).id(ref)
                 case .proposals:
                     ProposalsView()
+                case .projects:
+                    ProjectsView()
                 case .doctor:
                     DoctorView()
                 case nil:
@@ -131,6 +147,9 @@ struct MainWindow: View {
             NSApp.setActivationPolicy(.regular)
             Task { await registry.checkAll() }
             Task { await registry.scanCopies() }
+            Task { await registry.refreshFiles() }
+            // Names of keys in project env files change as projects do; ~2 s, in the background.
+            Task.detached { _ = try? await Names.refresh() }
         }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }

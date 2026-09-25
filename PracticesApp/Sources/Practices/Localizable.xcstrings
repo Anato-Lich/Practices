@@ -12,12 +12,32 @@
         }
       }
     },
+    "%@ — %lld file(s)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — файлов: %lld"
+          }
+        }
+      }
+    },
     "%lld runs": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld прогонов"
+          }
+        }
+      }
+    },
+    "A new name for a value already known as %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новое имя для значения, которое уже известно как %@."
           }
         }
       }
@@ -152,6 +172,16 @@
         }
       }
     },
+    "Choose a folder…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбрать папку…"
+          }
+        }
+      }
+    },
     "Clear": {
       "localizations": {
         "ru": {
@@ -188,6 +218,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сравнивает .env-файлы и текст в ~/Projects с реестром. Сообщает имена и пути, никогда — значения."
+          }
+        }
+      }
+    },
+    "Connect %@ to a project": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключить %@ к проекту"
+          }
+        }
+      }
+    },
+    "Connect a source to a project from its card (“Connect to project…”), or adopt an existing project with `practicesctl init --write`.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключите источник к проекту с его карточки («Подключить к проекту…») или возьмите готовый проект под управление: `practicesctl init --write`."
+          }
+        }
+      }
+    },
+    "Connect to project…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключить к проекту…"
           }
         }
       }
@@ -382,12 +442,32 @@
         }
       }
     },
+    "Environment": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Окружение"
+          }
+        }
+      }
+    },
     "Every key matches the registry: `practicesctl run` can replace this file.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Все ключи совпадают с реестром: файл можно заменить на `practicesctl run`."
+          }
+        }
+      }
+    },
+    "Existing": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Существующие"
           }
         }
       }
@@ -428,6 +508,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Поля, практики, документация"
+          }
+        }
+      }
+    },
+    "File": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Файл"
+          }
+        }
+      }
+    },
+    "Files that differ from the registry": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Файлы, которые расходятся с реестром"
           }
         }
       }
@@ -622,6 +722,16 @@
         }
       }
     },
+    "Names this value already has in projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имена, которые это значение уже носит в проектах"
+          }
+        }
+      }
+    },
     "New practice from %@()": {
       "localizations": {
         "ru": {
@@ -642,6 +752,16 @@
         }
       }
     },
+    "No connected files yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключённых файлов пока нет"
+          }
+        }
+      }
+    },
     "No description": {
       "localizations": {
         "ru": {
@@ -658,6 +778,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Документов нет"
+          }
+        }
+      }
+    },
+    "No folder chosen": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Папка не выбрана"
           }
         }
       }
@@ -758,6 +888,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Целей нет"
+          }
+        }
+      }
+    },
+    "No value in the registry: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет значения в реестре: %@"
           }
         }
       }
@@ -952,6 +1092,16 @@
         }
       }
     },
+    "Projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проекты"
+          }
+        }
+      }
+    },
     "Projects appear here once they have a practices.yaml (`practicesctl init --write` in the project).": {
       "localizations": {
         "ru": {
@@ -1038,6 +1188,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Перезапускается по кругу"
+          }
+        }
+      }
+    },
+    "Rewrite the files that differ from the registry": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перезаписать файлы, которые расходятся с реестром"
           }
         }
       }
@@ -1312,6 +1472,16 @@
         }
       }
     },
+    "Sync all": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизировать всё"
+          }
+        }
+      }
+    },
     "Table": {
       "localizations": {
         "ru": {
@@ -1412,6 +1582,26 @@
         }
       }
     },
+    "Values go into the file; its other lines stay as they are. Git-tracked files do not get secrets.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Значения пишутся в файл, остальные его строки не трогаются. В файлы под git секреты не пишутся."
+          }
+        }
+      }
+    },
+    "Variable names in projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имена переменных в проектах"
+          }
+        }
+      }
+    },
     "Verdict": {
       "localizations": {
         "ru": {
@@ -1462,12 +1652,42 @@
         }
       }
     },
+    "Write": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать"
+          }
+        }
+      }
+    },
+    "Write this source's values into a project's env file": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать значения источника в env-файл проекта"
+          }
+        }
+      }
+    },
     "accepted": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "принято"
+          }
+        }
+      }
+    },
+    "added": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "добавится"
           }
         }
       }
@@ -1488,6 +1708,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "изменена, не отправлена"
+          }
+        }
+      }
+    },
+    "changes": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "изменится"
           }
         }
       }
@@ -1522,6 +1752,16 @@
         }
       }
     },
+    "in projects also: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "в проектах также: %@"
+          }
+        }
+      }
+    },
     "input: %@": {
       "localizations": {
         "ru": {
@@ -1542,6 +1782,16 @@
         }
       }
     },
+    "no value": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет значения"
+          }
+        }
+      }
+    },
     "not set": {
       "localizations": {
         "ru": {
@@ -1558,6 +1808,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "отклонено"
+          }
+        }
+      }
+    },
+    "same": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "то же"
           }
         }
       }

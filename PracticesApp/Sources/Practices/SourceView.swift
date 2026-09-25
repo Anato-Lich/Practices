@@ -6,6 +6,7 @@ struct SourceView: View {
     @Environment(RegistryModel.self) private var registry
     let source: Source
     @State private var editing: KeyEdit?
+    @State private var connecting = false
 
     struct KeyEdit: Identifiable {
         let key: String
@@ -46,9 +47,14 @@ struct SourceView: View {
                 .disabled(registry.checking.contains(source.id))
             }
             ToolbarItem {
+                Button { connecting = true } label: { Label("Connect to project…", systemImage: "arrow.right.doc.on.clipboard") }
+                    .help("Write this source's values into a project's env file")
+            }
+            ToolbarItem {
                 Button { registry.revealSource(source.id) } label: { Label("Show in Finder", systemImage: "folder") }
             }
         }
+        .sheet(isPresented: $connecting) { ConnectSheet(source: source) }
         .sheet(item: $editing) { edit in
             SecretSheet(source: source, key: edit.key, env: edit.env)
         }
@@ -134,6 +140,7 @@ struct SourceView: View {
     private var keys: some View {
         Card(title: "Keys", trailing: nil) {
             let status = registry.keyStatus[source.id] ?? [:]
+            let names = Names.load(source.id)
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 GridRow {
                     Text("Key").foregroundStyle(.secondary)
@@ -142,9 +149,17 @@ struct SourceView: View {
                 .font(.caption)
                 ForEach(source.keys, id: \.name) { key in
                     GridRow {
-                        HStack(spacing: 4) {
-                            Text(verbatim: key.name).font(.callout.monospaced()).lineLimit(1)
-                            if key.secret { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.tertiary) }
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Text(verbatim: key.name).font(.callout.monospaced()).lineLimit(1)
+                                if key.secret { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.tertiary) }
+                            }
+                            let others = (names[key.name] ?? []).map(\.name).filter { $0 != key.name }
+                            if !others.isEmpty {
+                                Text("in projects also: \(others.joined(separator: ", "))")
+                                    .font(.caption2.monospaced()).foregroundStyle(others.count > 1 ? .orange : .secondary)
+                                    .lineLimit(2)
+                            }
                         }
                         ForEach(source.envs, id: \.self) { env in
                             let set = status[env]?.contains(key.name) == true
