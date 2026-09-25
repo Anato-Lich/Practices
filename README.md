@@ -9,7 +9,7 @@ and ports of every local project.** A personal macOS app: a menu-bar agent plus 
   result (table, JSON tree, text), timings and version history. Practices are copied into
   projects; an MCP server lets the agent working in a project read them and send
   improvements back.
-- **Monitor** *(stage 1, in progress)* — who holds which port, which container quietly
+- **Monitor** *(stage 1)* — who holds which port, which container quietly
   died, and stop / kill / logs for the ones a terminal will not stop. Works with OrbStack
   or Docker Desktop through the `docker` CLI and its active context.
 
@@ -27,7 +27,8 @@ Plan and stages: [`PLAN.md`](PLAN.md). Choices and their alternatives:
 ## Build
 
 ```sh
-./run.sh                                  # xcodegen + xcodebuild + open
+./run.sh                                  # xcodegen + xcodebuild + open (Debug)
+./install.sh                              # Release build into /Applications
 tools/build-dev.sh                        # Command Line Tools only, when xcodebuild is unavailable
 cd PracticesCore && swift run practicesctl ports
 ```
@@ -46,6 +47,7 @@ swift test -Xswiftc -F -Xswiftc $F -Xlinker -F -Xlinker $F -Xlinker -rpath -Xlin
 ```
 practicesctl ports          occupied TCP ports and who holds them
 practicesctl containers     containers, failed ones first
+practicesctl conflicts      ports compose files in ~/Projects want that something holds
 practicesctl watch          container incidents as they happen
 practicesctl logs <name>    last 200 log lines
 ```

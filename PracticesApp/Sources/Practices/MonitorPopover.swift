@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 import PracticesCore
 
 struct MonitorPopover: View {
@@ -15,6 +16,7 @@ struct MonitorPopover: View {
                     if let snapshot = model.snapshot {
                         if snapshot.containers == nil { dockerDown(snapshot) }
                         attention(snapshot)
+                        conflicts
                         ports(snapshot)
                         containers(snapshot)
                     } else {
@@ -59,6 +61,7 @@ struct MonitorPopover: View {
                     .onTapGesture { model.lastError = nil }
             }
             Spacer()
+            LaunchAtLoginToggle()
             Button("Quit") { NSApp.terminate(nil) }.buttonStyle(.borderless)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -113,6 +116,24 @@ struct MonitorPopover: View {
     private var uniqueIncidents: [ContainerIncident] {
         var seen = Set<String>()
         return model.incidents.filter { seen.insert($0.containerID).inserted }
+    }
+
+    // MARK: Conflicts
+
+    @ViewBuilder
+    private var conflicts: some View {
+        let conflicts = model.conflicts
+        if !conflicts.isEmpty {
+            Section {
+                VStack(spacing: 6) {
+                    ForEach(conflicts) { ConflictRow(conflict: $0) }
+                }
+            } header: {
+                SectionHeader(title: "Port conflicts") {
+                    Text(verbatim: String(conflicts.count)).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     // MARK: Ports
@@ -377,5 +398,107 @@ struct ContainerRow: View {
         if container.isUnhealthy || container.state == "restarting" || container.state == "dead" { return .red }
         if let code = container.exitCode, !IncidentDetector.quietExitCodes.contains(code) { return .orange }
         return container.isRunning ? .green : .secondary
+    }
+}
+
+/// A compose service whose port is taken: one line, the way around it on click.
+struct ConflictRow: View {
+    @Environment(MonitorModel.self) private var model
+    let conflict: PortConflict
+    @State private var expanded = false
+
+    var body: some View {
+        let claim = conflict.claim
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text(verbatim: String(claim.hostPort))
+                    .font(.callout.monospacedDigit().weight(.medium))
+                    .frame(width: 48, alignment: .leading)
+                Text(verbatim: claim.service).font(.callout).lineLimit(1)
+                Text(verbatim: claim.project).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(verbatim: "← " + holderText).font(.caption).foregroundStyle(.orange).lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
+
+            if expanded { details(claim) }
+        }
+    }
+
+    private func details(_ claim: PortClaim) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Taken by \(holderText)").foregroundStyle(.orange)
+            if !conflict.runningOn.isEmpty {
+                Text("Running remapped on \(conflict.runningOn.map(String.init).joined(separator: ", "))")
+                    .foregroundStyle(.secondary)
+            }
+            if conflict.isAirPlay {
+                HStack(spacing: 4) {
+                    Text("macOS AirPlay Receiver listens here.").foregroundStyle(.secondary)
+                    Button("Settings…") { model.openAirPlaySettings() }.buttonStyle(.link)
+                }
+            } else {
+                HStack(spacing: 4) {
+                    Text("OrbStack, no port needed:").foregroundStyle(.secondary)
+                    if claim.looksLikeHTTP {
+                        Button { model.openURL(claim.orbURL) } label: {
+                            Text(verbatim: claim.orbAddress).lineLimit(1).truncationMode(.middle)
+                        }
+                        .buttonStyle(.link)
+                        .help("Open in browser")
+                    } else {
+                        Text(verbatim: claim.orbAddress).lineLimit(1).truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                    Button { model.copy(claim.looksLikeHTTP ? claim.orbURL : claim.orbAddress) } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless).help("Copy")
+                }
+            }
+            Text(verbatim: claim.files.map { ($0 as NSString).lastPathComponent }.joined(separator: " + "))
+                .foregroundStyle(.tertiary)
+        }
+        .font(.caption)
+        .padding(.leading, 56)
+    }
+
+    private var holderText: String {
+        conflict.holders.map { holder in
+            let name: String
+            if case .container(let c) = holder.owner { name = c.composeService ?? c.name } else { name = holder.ownerName }
+            return holder.project.map { "\(name) · \($0)" } ?? name
+        }.joined(separator: ", ")
+    }
+}
+
+extension PortClaim {
+    var orbAddress: String { "\(service).\(project).orb.local:\(containerPort)" }
+
+    /// Database and broker ports speak their own protocols; a browser link there is noise.
+    var looksLikeHTTP: Bool {
+        ![5432, 3306, 6379, 27017, 9000, 9092, 9093, 2181, 5672, 1433, 11211].contains(containerPort)
+    }
+}
+
+/// Registers the app as a login item through SMAppService (like Tandem).
+struct LaunchAtLoginToggle: View {
+    @State private var enabled = SMAppService.mainApp.status == .enabled
+
+    var body: some View {
+        Toggle("Launch at login", isOn: $enabled)
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .onChange(of: enabled) { _, on in
+                do {
+                    if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                } catch {
+                    enabled = SMAppService.mainApp.status == .enabled
+                }
+            }
     }
 }

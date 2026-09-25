@@ -9,6 +9,8 @@ let usage = """
 
       ports         occupied TCP ports and who holds them
       containers    containers, failed ones first
+      conflicts     ports compose files in ~/Projects want that something else holds
+                    (--all: also projects that would collide with each other)
       watch         print container incidents as they happen (Ctrl-C to stop)
       logs <name>   last 200 log lines of a container
     """
@@ -67,6 +69,34 @@ case "containers":
         let mark = failed.contains(c.id) ? "✗" : c.isRunning ? "●" : "○"
         let ports = c.ports.map { "\($0.hostPort)→\($0.containerPort)" }.joined(separator: " ")
         print("\(mark) " + pad(c.name, 36) + pad(c.status, 34) + pad(c.composeProject ?? "", 20) + ports)
+    }
+
+case "conflicts":
+    async let scanTask = ComposeScanner.scan()
+    let snapshot = await Monitor.snapshot()
+    let scan = await scanTask
+    let conflicts = PortConflicts.conflicts(claims: scan.claims, snapshot: snapshot)
+    if json { printJSON(conflicts); break }
+    print("\(scan.claims.count) published ports in compose files, \(conflicts.count) taken by someone else\n")
+    for c in conflicts {
+        let holders = c.holders.map { h in "\(h.ownerName)" + (h.project.map { " (\($0))" } ?? "") }
+        print(pad(String(c.claim.hostPort), 7) + pad("\(c.claim.project) / \(c.claim.service)", 44)
+              + "taken by " + holders.joined(separator: ", "))
+        if !c.runningOn.isEmpty {
+            print(String(repeating: " ", count: 7) + "runs remapped on " + c.runningOn.map(String.init).joined(separator: ", "))
+        }
+        print(String(repeating: " ", count: 7) + "OrbStack: " + c.claim.orbURL)
+    }
+    if args.contains("--all") {
+        let collisions = PortConflicts.collisions(claims: scan.claims)
+        if !collisions.isEmpty { print("\nwould collide if started together:") }
+        for c in collisions {
+            print(pad(String(c.hostPort), 7) + c.claims.map { "\($0.project)/\($0.service)" }.joined(separator: "  ·  "))
+        }
+        if !scan.unresolved.isEmpty { print("\nnot resolved:") }
+        for (file, reason) in scan.unresolved.sorted(by: { $0.key < $1.key }) {
+            print("  " + home(file) + "\n      " + reason)
+        }
     }
 
 case "watch":

@@ -13,10 +13,23 @@ final class MonitorModel {
     /// Incidents from the event stream, newest first. Cleared by the user, not by time.
     private(set) var incidents: [ContainerIncident] = []
     private(set) var busy: Set<String> = []
+    private(set) var composeScan: ComposeScan?
+
+    /// Ports compose files want that something else holds, against the latest snapshot.
+    var conflicts: [PortConflict] {
+        guard let scan = composeScan, let snapshot else { return [] }
+        return PortConflicts.conflicts(claims: scan.claims, snapshot: snapshot)
+    }
     var lastError: String?
 
     var popoverVisible = false {
-        didSet { if popoverVisible && !oldValue { Task { await refresh() } } }
+        didSet {
+            guard popoverVisible && !oldValue else { return }
+            Task {
+                await refresh()
+                if (composeScan?.date.timeIntervalSinceNow ?? -.infinity) < -60 { await rescanCompose() }
+            }
+        }
     }
 
     private var expectStop: AsyncStream<String>.Continuation?
@@ -49,6 +62,13 @@ final class MonitorModel {
             }
         }
         Task {
+            // Compose files change rarely; a full pass is ~2 s of short docker processes.
+            while !Task.isCancelled {
+                await rescanCompose()
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
+        Task {
             var last = Date.distantPast
             while !Task.isCancelled {
                 let interval: TimeInterval = popoverVisible ? 3 : 60
@@ -63,6 +83,18 @@ final class MonitorModel {
 
     func refresh() async {
         snapshot = await Monitor.snapshot()
+    }
+
+    func rescanCompose() async {
+        composeScan = await ComposeScanner.scan()
+    }
+
+    func openURL(_ string: String) {
+        if let url = URL(string: string) { NSWorkspace.shared.open(url) }
+    }
+
+    func openAirPlaySettings() {
+        openURL("x-apple.systempreferences:com.apple.AirDrop-Handoff-Settings.extension")
     }
 
     func clearIncidents() { incidents.removeAll() }

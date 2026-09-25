@@ -32,6 +32,16 @@
         }
       }
     },
+    "Copy": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопировать"
+          }
+        }
+      }
+    },
     "Copy %@": {
       "localizations": {
         "ru": {
@@ -162,6 +172,16 @@
         }
       }
     },
+    "Launch at login": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запускать при входе"
+          }
+        }
+      }
+    },
     "Logs": {
       "localizations": {
         "ru": {
@@ -208,6 +228,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Открыть в браузере"
+          }
+        }
+      }
+    },
+    "OrbStack, no port needed:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В OrbStack без порта:"
+          }
+        }
+      }
+    },
+    "Port conflicts": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Конфликты портов"
           }
         }
       }
@@ -262,6 +302,26 @@
         }
       }
     },
+    "Running remapped on %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас запущен на %@"
+          }
+        }
+      }
+    },
+    "Settings…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки…"
+          }
+        }
+      }
+    },
     "Show project in Finder": {
       "localizations": {
         "ru": {
@@ -308,6 +368,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Остановить процесс"
+          }
+        }
+      }
+    },
+    "Taken by %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Занят: %@"
+          }
+        }
+      }
+    },
+    "macOS AirPlay Receiver listens here.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Здесь слушает приёмник AirPlay macOS."
           }
         }
       }

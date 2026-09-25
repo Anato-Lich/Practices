@@ -93,3 +93,48 @@ import Foundation
         #expect(entries[1].project == "analytics")
     }
 }
+
+@Suite struct ComposeTests {
+    @Test func fileClassification() {
+        #expect(ComposeScanner.isComposeFile("docker-compose.dev.yml"))
+        #expect(ComposeScanner.isComposeFile("compose.yaml"))
+        #expect(!ComposeScanner.isComposeFile("docker-compose.md"))
+        #expect(ComposeScanner.isServerFile("docker-compose.prod.yml"))
+        #expect(ComposeScanner.isServerFile("docker-compose.stage.yml"))
+        #expect(!ComposeScanner.isServerFile("docker-compose.dev.yml"))
+        #expect(ComposeScanner.isOverlay("docker-compose.ports.yml"))
+        #expect(ComposeScanner.bases(for: "/p/a/docker-compose.ports.yml",
+                                     among: ["/p/a/docker-compose.yml", "/p/a/docker-compose.dev.yml", "/p/a/docker-compose.ports.yml"])
+                == ["/p/a/docker-compose.dev.yml", "/p/a/docker-compose.yml"])
+    }
+
+    @Test func configPorts() throws {
+        let json = #"{"name":"imu-sphere","services":{"frontend":{"ports":[{"target":5173,"published":"5173","protocol":"tcp"}]},"worker":{},"range":{"ports":[{"target":9000,"published":"9000-9001"},{"target":53,"published":"53","protocol":"udp"}]}}}"#
+        let claims = try ComposeScanner.parse(configJSON: Data(json.utf8), files: ["f"])
+        #expect(Set(claims.map(\.hostPort)) == [5173, 9000, 9001])
+        let frontend = claims.first { $0.service == "frontend" }!
+        #expect(frontend.orbURL == "http://frontend.imu-sphere.orb.local:5173")
+    }
+
+    @Test func conflictIgnoresOwnContainer() {
+        let own = Container(id: "1", name: "db-1", image: "pg", state: "running", status: "Up",
+                            ports: [PublishedPort(hostAddress: "0.0.0.0", hostPort: 5433, containerPort: 5432, proto: "tcp")],
+                            composeProject: "imu", composeService: "postgres", workingDir: nil)
+        let frontend = Container(id: "2", name: "fe-1", image: "node", state: "running", status: "Up",
+                                 ports: [PublishedPort(hostAddress: "0.0.0.0", hostPort: 5175, containerPort: 5173, proto: "tcp")],
+                                 composeProject: "imu", composeService: "frontend", workingDir: nil)
+        let snapshot = MonitorSnapshot(
+            date: Date(), dockerContext: "orbstack", containers: [own, frontend], dockerError: nil,
+            ports: Monitor.merge(sockets: [ListeningSocket(port: 5173, address: "[::1]", pid: 7, command: "node")],
+                                 containers: [own, frontend], cwds: [7: "/u/Projects/SphereTele"], root: "/u/Projects"))
+        let claims = [
+            PortClaim(project: "imu", service: "postgres", hostPort: 5433, containerPort: 5432, hostIP: nil, files: []),
+            PortClaim(project: "imu", service: "frontend", hostPort: 5173, containerPort: 5173, hostIP: nil, files: []),
+        ]
+        let conflicts = PortConflicts.conflicts(claims: claims, snapshot: snapshot)
+        #expect(conflicts.count == 1)
+        #expect(conflicts[0].claim.service == "frontend")
+        #expect(conflicts[0].holders.first?.project == "SphereTele")
+        #expect(conflicts[0].runningOn == [5175])
+    }
+}

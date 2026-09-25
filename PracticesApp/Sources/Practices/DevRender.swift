@@ -13,6 +13,7 @@ enum DevRender {
         Task { @MainActor in
             let model = MonitorModel()
             await model.refresh()
+            await model.rescanCompose()
             let view = MonitorPopover()
                 .environment(model)
                 .background(Color(nsColor: .windowBackgroundColor))
