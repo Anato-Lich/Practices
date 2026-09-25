@@ -26,8 +26,12 @@ final class PracticeModel {
 
     private var runTask: Task<Void, Never>?
 
-    init(practice: Practice) {
+    /// Where the project context (environments per source) comes from.
+    weak var registry: RegistryModel?
+
+    init(practice: Practice, registry: RegistryModel? = nil) {
         self.practice = practice
+        self.registry = registry
         load()
     }
 
@@ -80,7 +84,7 @@ final class PracticeModel {
                     try store.writeDraft(code, for: practice)
                     if signature == nil || !(signature?.ok ?? false) { await refreshSignature() }
                 }
-                result = try await PracticeRunner().run(practice, params: params)
+                result = try await PracticeRunner().run(practice, params: params, envs: registry?.contextEnvs ?? [:])
             } catch is CancellationError {
                 failure = String(localized: "Stopped")
             } catch {

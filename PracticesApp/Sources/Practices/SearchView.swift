@@ -4,10 +4,76 @@ import PracticesCore
 
 /// Search by meaning (mock-up board 6): the field, practices whose result has it, documents,
 /// code of practices.
+extension CodeHit: @retroactive Identifiable {
+    public var id: String { "\(path):\(line)" }
+}
+
+private func short(_ path: String) -> String {
+    let root = NSHomeDirectory() + "/Projects/"
+    return path.hasPrefix(root) ? String(path.dropFirst(root.count)) : path
+}
+
+/// Which source the new practice belongs to and its name; the draft opens in the editor.
+struct DraftSheet: View {
+    @Environment(RegistryModel.self) private var registry
+    @Environment(\.dismiss) private var dismiss
+    let hit: CodeHit
+    var created: (String) -> Void
+    @State private var source = ""
+    @State private var name = ""
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New practice from \(hit.function ?? "")()").font(.headline)
+            Text(verbatim: short(hit.path) + ":\(hit.line)").font(.caption).foregroundStyle(.secondary)
+            Picker("Source", selection: $source) {
+                ForEach(registry.sources) { Text(verbatim: $0.name).tag($0.id) }
+            }
+            TextField("Name", text: $name).textFieldStyle(.roundedBorder)
+            Text("The draft gets the file's imports, the constants it uses and `run = \(hit.function ?? "")`. Inline what it needs from its project, then save a version with ⌘S.")
+                .font(.caption).foregroundStyle(.secondary)
+            if let error { Text(verbatim: error).font(.caption).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Create draft") { create() }.keyboardShortcut(.defaultAction).disabled(source.isEmpty || name.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .onAppear {
+            source = registry.sources.first?.id ?? ""
+            name = (hit.function ?? "practice").trimmingCharacters(in: CharacterSet(charactersIn: "_")).replacingOccurrences(of: "_", with: "-")
+        }
+    }
+
+    private func create() {
+        let ref = "\(source)/\(name)"
+        let practice = Practice(ref: ref)
+        let store = PracticeStore()
+        guard !FileManager.default.fileExists(atPath: store.url(of: practice).path) else { error = String(localized: "\(ref) already exists"); return }
+        guard let function = hit.function, let code = ProjectCode.draft(from: hit.path, function: function, ref: ref) else {
+            error = String(localized: "Could not read the function"); return
+        }
+        do {
+            try store.writeDraft(code, for: practice)
+            dismiss()
+            created(ref)
+        } catch {
+            self.error = String(describing: error)
+        }
+    }
+}
+
 struct SearchView: View {
     let query: String
     var open: (MainWindow.SidebarItem) -> Void
+    @Environment(RegistryModel.self) private var registry
     @State private var results = SearchResults()
+    @State private var projectHits: [CodeHit]?
+    @State private var projectFiles = 0
+    @State private var drafting: CodeHit?
 
     var body: some View {
         List {
@@ -85,14 +151,45 @@ struct SearchView: View {
                     }
                 }
             }
-            if results.isEmpty {
-                Text("Nothing found for “\(query)”").foregroundStyle(.secondary)
+            Section {
+                if let hits = projectHits {
+                    ForEach(hits, id: \.self) { hit in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(verbatim: hit.function.map { "\($0)()" } ?? (hit.path as NSString).lastPathComponent)
+                                    .font(.callout.monospaced())
+                                Text(verbatim: short(hit.path) + ":\(hit.line)").font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                            }
+                            Spacer()
+                            if hit.function != nil && hit.path.hasSuffix(".py") {
+                                Button("Make a practice") { drafting = hit }.controlSize(.small)
+                            }
+                            Button { NSWorkspace.shared.open(URL(fileURLWithPath: hit.path)) } label: { Image(systemName: "arrow.up.forward.square") }
+                                .buttonStyle(.borderless).help("Open the file")
+                        }
+                    }
+                    if hits.isEmpty { Text("No project code mentions it").foregroundStyle(.secondary) }
+                } else {
+                    HStack { ProgressView().controlSize(.small); Text("Reading ~/Projects…").foregroundStyle(.secondary) }
+                }
+            } header: {
+                Text(projectHits == nil ? "In project code" : "In project code · \(projectFiles) files · not practices yet")
             }
         }
         .navigationTitle("Search")
         .task(id: query) {
             let q = query
+            projectHits = nil
             results = await Task.detached { Search.run(q) }.value
+            let (hits, files) = await ProjectCode.search(q, limit: 60)
+            projectHits = hits
+            projectFiles = files
+        }
+        .sheet(item: $drafting) { hit in
+            DraftSheet(hit: hit) { ref in
+                registry.reload()
+                open(.practice(ref))
+            }
         }
     }
 }

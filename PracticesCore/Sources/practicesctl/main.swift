@@ -20,11 +20,15 @@ let usage = """
       check [id…]                   preconditions and targets of sources (all by default)
       secrets set <id> <KEY> [--env e]    value read from stdin, never from arguments
       secrets unset <id> <KEY> [--env e]
+      secrets import <id>@<env> [--from <.env>] KEY=THEIR_KEY | KEY:=value | KEY=env:<other env> …
+                                    fill an environment (adding it if new); values are never printed
       import connectors [path]      the six sources of ~/Projects/Connectors and its .env
       env [ref…]                    names of the variables `run` would set (no values)
       run [ref…] -- <command…>      run a command with the sources' values in its environment;
                                     without refs, the nearest practices.yaml decides
       doctor                        .env files and plain text in ~/Projects against the registry
+      init [dir] [--write]          suggest the project's practices.yaml from its .env files
+                                    (sources, environments, aliases for its own variable names)
 
       ref = <source>[@<env>]
 
@@ -35,6 +39,7 @@ let usage = """
                                     run it and print the result (a table, a tree or text)
       runs <practice>               its run history: version, time, rows
       search <text>                 fields, practices whose result has it, docs, code
+      draft <source/name> <file.py> <function>   a new practice from a function in a project (draft, not saved)
       sets <practice> [name k=v…]   parameter sets new versions are checked on; with a name, save one
       copies [practice]             copies in ~/Projects found by their marker: current / outdated / modified
       proposals [accept|reject <id>]   changes sent back from projects and their verdicts
@@ -213,6 +218,45 @@ case "check":
 
 case "secrets":
     let store = SecretStore(), registry = Registry()
+    if positional.count >= 3, positional[1] == "import" {
+        let ref = SourceRef(parsing: positional[2])
+        guard var source = try? registry.source(ref.source), let env = ref.env else { print("give <source>@<env>"); exit(2) }
+        var dotenv: [String: String] = [:]
+        if let i = args.firstIndex(of: "--from"), i + 1 < args.count {
+            let text = try String(contentsOfFile: args[i + 1], encoding: .utf8)
+            for (k, v) in ConnectorsImport.parseDotenv(text) { dotenv[k] = v }
+        }
+        let fromPath = args.firstIndex(of: "--from").map { args[$0 + 1] }
+        var values: [String: String] = [:]
+        var problems: [String] = []
+        for spec in positional.dropFirst(3) where spec != fromPath {
+            if let r = spec.range(of: ":=") {
+                values[String(spec[..<r.lowerBound])] = String(spec[r.upperBound...])
+            } else if let eq = spec.firstIndex(of: "=") {
+                let key = String(spec[..<eq]), from = String(spec[spec.index(after: eq)...])
+                if from.hasPrefix("env:") {
+                    let other = String(from.dropFirst(4))
+                    if let v = try store.values(source: source.id, env: other)[key] { values[key] = v } else { problems.append("\(key): no value in \(other)") }
+                } else if let v = dotenv[from], !v.isEmpty {
+                    values[key] = v
+                } else {
+                    problems.append("\(key): \(from) not in the file")
+                }
+            }
+        }
+        if !source.envs.contains(env) {
+            source.envs.append(env)
+            try registry.save(source)
+            try await registry.commit("\(source.id): environment \(env)")
+        }
+        try store.setAll(values, source: source.id, env: env)
+        let status = try store.status(source: source)[env] ?? []
+        print("\(source.id)@\(env): \(values.count) values stored, \(status.count)/\(source.keys.count) keys set")
+        let missing = source.keys.map(\.name).filter { !status.contains($0) }
+        if !missing.isEmpty { print("not set: " + missing.joined(separator: ", ")) }
+        problems.forEach { print("skipped " + $0) }
+        break
+    }
     guard positional.count >= 4, ["set", "unset"].contains(positional[1]) else { print(usage); exit(2) }
     let id = positional[2], key = positional[3]
     guard let source = try? registry.source(id) else { print("no source \(id)"); exit(1) }
@@ -255,15 +299,17 @@ case "env", "run":
     let before = separator.map { Array(args[..<$0]) } ?? args
     let refArgs = before.dropFirst().filter { !$0.hasPrefix("--") }
     var refs = refArgs.map(SourceRef.init(parsing:))
+    var aliases: [String: String] = [:]
     if refs.isEmpty {
         guard let found = ProjectManifest.find(from: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)) else {
             print("no sources given and no \(ProjectManifest.fileName) here or above"); exit(2)
         }
         refs = found.manifest.sources
+        aliases = found.manifest.env
         FileHandle.standardError.write(Data("practices: \(found.url.path)\n".utf8))
     }
     let resolved: RunEnvironment.Resolved
-    do { resolved = try RunEnvironment.resolve(refs) } catch { print("practices: \(error)"); exit(1) }
+    do { resolved = try RunEnvironment.resolve(refs, aliases: aliases) } catch { print("practices: \(error)"); exit(1) }
     for (ref, keys) in resolved.missing.sorted(by: { $0.key < $1.key }) {
         FileHandle.standardError.write(Data("practices: \(ref) has no value for \(keys.joined(separator: ", "))\n".utf8))
     }
@@ -288,6 +334,27 @@ case "env", "run":
     execvp(command[0], cArgs)
     print("practices: cannot run \(command[0]): \(String(cString: strerror(errno)))")
     exit(127)
+
+case "init":
+    let dir = URL(fileURLWithPath: positional.count > 1 ? positional[1] : FileManager.default.currentDirectoryPath).standardizedFileURL
+    let setup = try ProjectSetup.analyze(dir)
+    guard !setup.matches.isEmpty else {
+        print("no value in \(setup.envFiles.count) .env file(s) under \(home(dir.path)) matches the registry"); break
+    }
+    print("from \(setup.envFiles.count) .env file(s): \(setup.matches.count) variables match the registry, \(setup.unmatched.count) do not\n")
+    for m in setup.matches.sorted(by: { ($0.source, $0.variable) < ($1.source, $1.variable) }) {
+        print("  " + pad(m.variable, 32) + pad(m.variable == m.key ? "" : "← \(m.key)", 28) + "\(m.source)@\(m.env)")
+    }
+    let yaml = try Registry.yaml(setup.manifest)
+    print("\n\(ProjectManifest.fileName):\n" + yaml)
+    if args.contains("--write") {
+        let target = dir.appendingPathComponent(ProjectManifest.fileName)
+        guard !FileManager.default.fileExists(atPath: target.path) else { print("\(home(target.path)) exists — not overwritten"); exit(1) }
+        try yaml.write(to: target, atomically: true, encoding: .utf8)
+        print("written: \(home(target.path))")
+    } else {
+        print("(--write to create it; the .env files stay as they are)")
+    }
 
 case "doctor":
     let findings = try await Doctor.run()
@@ -395,6 +462,17 @@ case "runs":
               + r.env + (r.error.map { "  " + $0.prefix(80) } ?? ""))
     }
 
+case "draft":
+    guard positional.count > 3 else { print(usage); exit(2) }
+    let ref = positional[1], file = positional[2], function = positional[3]
+    guard let code = ProjectCode.draft(from: file, function: function, ref: ref) else { print("no function \(function) in \(file)"); exit(1) }
+    let practice = Practice(ref: ref)
+    let store = PracticeStore()
+    guard !FileManager.default.fileExists(atPath: store.url(of: practice).path) else { print("\(ref) exists"); exit(1) }
+    if args.contains("--print") { print(code); break }
+    try store.writeDraft(code, for: practice)
+    print("draft written: \(store.url(of: practice).path)\nedit it, then save a version from the window (⌘S)")
+
 case "search":
     guard positional.count > 1 else { print(usage); exit(2) }
     let results = Search.run(positional.dropFirst().joined(separator: " "))
@@ -416,6 +494,12 @@ case "search":
     for hit in results.docs { print("  " + pad((hit.source ?? "") + " · " + hit.title, 34) + hit.excerpt) }
     if !results.code.isEmpty { print("\nCODE") }
     for hit in results.code { print("  " + pad(hit.title, 34) + hit.excerpt) }
+    let (projectHits, files) = await ProjectCode.search(positional.dropFirst().joined(separator: " "))
+    if !projectHits.isEmpty { print("\nIN PROJECT CODE (\(files) files, not practices yet)") }
+    for hit in projectHits.prefix(12) {
+        print("  " + pad(hit.function.map { "\($0)()" } ?? "", 30) + home(hit.path) + ":\(hit.line)")
+    }
+    if projectHits.count > 12 { print("  … \(projectHits.count - 12) more") }
 
 case "mcp":
     MCPServer().serve()

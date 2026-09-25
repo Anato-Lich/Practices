@@ -76,7 +76,7 @@ public struct Registry: Sendable {
     }
 
     /// YAML a person reads: Cyrillic as is, not `\u041F…` escapes.
-    static func yaml<T: Encodable>(_ value: T) throws -> String {
+    public static func yaml<T: Encodable>(_ value: T) throws -> String {
         let encoder = YAMLEncoder()
         encoder.options.allowUnicode = true
         encoder.options.width = -1

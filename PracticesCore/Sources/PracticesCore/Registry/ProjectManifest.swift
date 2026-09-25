@@ -7,10 +7,49 @@ import Yams
 ///     sources:
 ///       - xkeeper-pg@prod
 ///       - kafka@dev
+///
+/// A project that names a variable its own way keeps its name through an alias:
+///
+///     env:
+///       BFF_CLICKHOUSE_PASSWORD: CH_PASSWORD_READONLY   # project name: registry key
 public struct ProjectManifest: Codable, Hashable, Sendable {
     public var sources: [SourceRef]
+    /// Project variable → registry key; set in addition to the registry's own names.
+    public var env: [String: String]
 
-    public init(sources: [SourceRef]) { self.sources = sources }
+    public init(sources: [SourceRef], env: [String: String] = [:]) { self.sources = sources; self.env = env }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sources = try c.decodeIfPresent([SourceRef].self, forKey: .sources) ?? []
+        env = try c.decodeIfPresent([String: String].self, forKey: .env) ?? [:]
+    }
+
+    /// Projects under the root that have a manifest.
+    public static func all(root: String = Monitor.projectsRoot()) -> [(dir: URL, manifest: ProjectManifest)] {
+        var out: [(URL, ProjectManifest)] = []
+        let fm = FileManager.default
+        func walk(_ dir: URL, depth: Int) {
+            guard depth <= 4, let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
+            if names.contains(fileName),
+               let text = try? String(contentsOf: dir.appendingPathComponent(fileName), encoding: .utf8),
+               let manifest = try? YAMLDecoder().decode(ProjectManifest.self, from: text) {
+                out.append((dir, manifest))
+            }
+            for name in names where !name.hasPrefix(".") && !Doctor.skippedDirs.contains(name) {
+                var isDir: ObjCBool = false
+                let url = dir.appendingPathComponent(name)
+                if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue { walk(url, depth: depth + 1) }
+            }
+        }
+        walk(URL(fileURLWithPath: root), depth: 0)
+        return out.sorted { $0.0.path < $1.0.path }
+    }
+
+    /// Environment per source, for running practices in this project's context.
+    public var envs: [String: String] {
+        Dictionary(sources.compactMap { ref in ref.env.map { (ref.source, $0) } }, uniquingKeysWith: { a, _ in a })
+    }
 
     public static let fileName = "practices.yaml"
 

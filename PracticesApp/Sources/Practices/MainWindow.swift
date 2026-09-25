@@ -100,6 +100,21 @@ struct MainWindow: View {
         }
         .searchable(text: $registry.searchText, placement: .sidebar, prompt: Text("Fields, practices, docs"))
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Picker(selection: $registry.projectPath) {
+                    Text("No project · first environments").tag(String?.none)
+                    ForEach(registry.projects, id: \.dir.path) { project in
+                        Text(verbatim: project.dir.path.replacingOccurrences(of: NSHomeDirectory() + "/Projects/", with: "")
+                             + " · " + project.manifest.sources.map(\.description).joined(separator: ", "))
+                            .tag(String?.some(project.dir.path))
+                    }
+                } label: {
+                    Label("Project", systemImage: "folder.badge.gearshape")
+                }
+                .help(registry.projects.isEmpty
+                      ? "Projects appear here once they have a practices.yaml (`practicesctl init --write` in the project)."
+                      : "Practices run with the environments this project chose")
+            }
             ToolbarItem {
                 Button { Task { await registry.checkAll() } } label: {
                     Label("Check all", systemImage: "checkmark.circle")

@@ -16,6 +16,15 @@ final class RegistryModel {
     /// What the window shows; views set it to open a source or a practice.
     var selection: MainWindow.SidebarItem?
     var searchText = ""
+    /// Projects with a practices.yaml; the chosen one decides environments of runs.
+    private(set) var projects: [(dir: URL, manifest: ProjectManifest)] = []
+    var projectPath: String? = UserDefaults.standard.string(forKey: "projectContext") {
+        didSet { UserDefaults.standard.set(projectPath, forKey: "projectContext") }
+    }
+    /// Environment per source for runs started from the window.
+    var contextEnvs: [String: String] {
+        projects.first { $0.dir.path == projectPath }?.manifest.envs ?? [:]
+    }
     /// Open practices keep their state (code being edited, last result) while switching.
     private var practiceModels: [String: PracticeModel] = [:]
     /// source id → env → keys that have a value.
@@ -41,6 +50,8 @@ final class RegistryModel {
             let practiceStore = PracticeStore(registry: registry)
             practices = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, practiceStore.list(source: $0.id)) })
             chains = practiceStore.chains()
+            projects = ProjectManifest.all()
+            if let path = projectPath, !projects.contains(where: { $0.dir.path == path }) { projectPath = nil }
         } catch {
             self.error = String(describing: error)
         }
@@ -69,7 +80,7 @@ final class RegistryModel {
 
     func model(for ref: String) -> PracticeModel {
         if let model = practiceModels[ref] { return model }
-        let model = PracticeModel(practice: Practice(ref: ref))
+        let model = PracticeModel(practice: Practice(ref: ref), registry: self)
         practiceModels[ref] = model
         return model
     }

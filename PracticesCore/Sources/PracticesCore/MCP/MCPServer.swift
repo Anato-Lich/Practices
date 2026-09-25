@@ -128,7 +128,13 @@ public final class MCPServer: @unchecked Sendable {
         case "get_source": return try getSource(try Self.string(args, "id"))
         case "list_practices": return try await listPractices(args["source"] as? String)
         case "get_practice": return try await getPractice(try Self.string(args, "ref"), version: args["version"] as? Int)
-        case "search": return try encodable(Search.run(try Self.string(args, "query"), registry: registry, store: store))
+        case "search":
+            let query = try Self.string(args, "query")
+            var out = try encodable(Search.run(query, registry: registry, store: store)) as? [String: Any] ?? [:]
+            let (hits, files) = await ProjectCode.search(query, limit: 20)
+            out["project_code"] = try encodable(hits)
+            out["project_code_files"] = files
+            return out
         case "run_practice":
             return try await runPractice(try Self.string(args, "ref"), params: Self.params(args["params"]),
                                          envs: Self.params(args["envs"]), rows: args["rows"] as? Int ?? 20)

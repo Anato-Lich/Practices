@@ -8,6 +8,9 @@ struct PracticesApp: App {
     @State private var model = MonitorModel()
     @State private var registry = RegistryModel()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    /// A copy started to render screens or run checks (`--render-*`, `--check-to`) stays out of
+    /// the menu bar: it would sit next to the real one for as long as it lives.
+    @State private var inMenuBar = !CommandLine.arguments.contains { $0.hasPrefix("--render-") || $0 == "--check-to" }
 
     init() {
         #if DEBUG
@@ -16,7 +19,7 @@ struct PracticesApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $inMenuBar) {
             MonitorPopover()
                 .environment(model)
         } label: {

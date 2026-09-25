@@ -2,6 +2,16 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
+    "%@ already exists": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ уже есть"
+          }
+        }
+      }
+    },
     "%lld runs": {
       "localizations": {
         "ru": {
@@ -18,6 +28,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Секрет из реестра записан в файле. Уберите его оттуда."
+          }
+        }
+      }
+    },
+    "Accept as new version": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять как новую версию"
+          }
+        }
+      }
+    },
+    "Agents send changed practices here with `propose_update`. Those that pass every rule are accepted by themselves.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Агенты присылают сюда изменённые практики через `propose_update`. Те, что проходят все правила, принимаются сами."
           }
         }
       }
@@ -62,6 +92,16 @@
         }
       }
     },
+    "Change": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изменение"
+          }
+        }
+      }
+    },
     "Change value": {
       "localizations": {
         "ru": {
@@ -98,6 +138,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Проверить предусловия и цели всех источников"
+          }
+        }
+      }
+    },
+    "Checks": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверки"
           }
         }
       }
@@ -152,6 +202,16 @@
         }
       }
     },
+    "Copies in projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копии в проектах"
+          }
+        }
+      }
+    },
     "Copies of the registry": {
       "localizations": {
         "ru": {
@@ -192,6 +252,16 @@
         }
       }
     },
+    "Could not read the function": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось прочитать функцию"
+          }
+        }
+      }
+    },
     "Could not stop process %lld": {
       "localizations": {
         "ru": {
@@ -218,6 +288,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Упал с кодом %lld"
+          }
+        }
+      }
+    },
+    "Create draft": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать черновик"
+          }
+        }
+      }
+    },
+    "Decided": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Решённые"
           }
         }
       }
@@ -342,6 +432,16 @@
         }
       }
     },
+    "Fill the parameters from this set": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заполнить параметры из набора"
+          }
+        }
+      }
+    },
     "Follow": {
       "localizations": {
         "ru": {
@@ -378,6 +478,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Импортируйте источники Connectors: `practicesctl import connectors`."
+          }
+        }
+      }
+    },
+    "In project code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В коде проектов"
+          }
+        }
+      }
+    },
+    "In project code · %lld files · not practices yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В коде проектов · файлов: %lld · ещё не практики"
           }
         }
       }
@@ -472,12 +592,42 @@
         }
       }
     },
+    "Make a practice": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать практикой"
+          }
+        }
+      }
+    },
     "More than one owner on this port": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "У порта больше одного владельца"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Название"
+          }
+        }
+      }
+    },
+    "New practice from %@()": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новая практика из %@()"
           }
         }
       }
@@ -512,6 +662,16 @@
         }
       }
     },
+    "No marked copies in ~/Projects yet. `get_practice` hands code out with the marker line.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В ~/Projects пока нет помеченных копий. `get_practice` выдаёт код со строкой-меткой."
+          }
+        }
+      }
+    },
     "No notes": {
       "localizations": {
         "ru": {
@@ -532,12 +692,32 @@
         }
       }
     },
+    "No project code mentions it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В коде проектов не встречается"
+          }
+        }
+      }
+    },
     "No project is listening on a port": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Ни один проект не слушает порт"
+          }
+        }
+      }
+    },
+    "No project · first environments": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без проекта · первые окружения"
           }
         }
       }
@@ -682,12 +862,42 @@
         }
       }
     },
+    "Open the file": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть файл"
+          }
+        }
+      }
+    },
     "OrbStack, no port needed:": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "В OrbStack без порта:"
+          }
+        }
+      }
+    },
+    "Parameter sets": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Наборы параметров"
+          }
+        }
+      }
+    },
+    "Parameters the agent tried": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Параметры, на которых проверял агент"
           }
         }
       }
@@ -722,6 +932,56 @@
         }
       }
     },
+    "Practices run with the environments this project chose": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Практики запускаются с окружениями, которые выбрал проект"
+          }
+        }
+      }
+    },
+    "Project": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проект"
+          }
+        }
+      }
+    },
+    "Projects appear here once they have a practices.yaml (`practicesctl init --write` in the project).": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проекты появятся здесь, когда у них будет practices.yaml (`practicesctl init --write` в папке проекта)."
+          }
+        }
+      }
+    },
+    "Proposals": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложения"
+          }
+        }
+      }
+    },
+    "Proposed changes are accepted by themselves only when they return the same rows on every saved set.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предложенные правки принимаются сами, только если на каждом сохранённом наборе возвращают те же строки."
+          }
+        }
+      }
+    },
     "Quit": {
       "localizations": {
         "ru": {
@@ -752,6 +1012,16 @@
         }
       }
     },
+    "Reject": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отклонить"
+          }
+        }
+      }
+    },
     "Remove value": {
       "localizations": {
         "ru": {
@@ -778,6 +1048,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Строк с полем / просмотрено строк, в последнем прогоне"
+          }
+        }
+      }
+    },
+    "Rules for accepting by itself": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Правила автопринятия"
           }
         }
       }
@@ -832,6 +1112,16 @@
         }
       }
     },
+    "Same fields and the same rows on every saved parameter set, not slower by more than 5% (or 50 ms), the source not marked write-allowed. Accepted changes are versions: any can be restored.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Те же поля и те же строки на каждом сохранённом наборе, не медленнее больше чем на 5 % (или 50 мс), источник не помечен «запись разрешена». Принятые правки — версии, любую можно вернуть."
+          }
+        }
+      }
+    },
     "Save": {
       "localizations": {
         "ru": {
@@ -848,6 +1138,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сохранить как новую версию (⌘S)"
+          }
+        }
+      }
+    },
+    "Save parameter set": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить набор параметров"
+          }
+        }
+      }
+    },
+    "Save these parameters as a set: new versions are checked on it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить параметры как набор: на нём проверяются новые версии"
           }
         }
       }
@@ -928,6 +1238,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Часть целей не отвечает"
+          }
+        }
+      }
+    },
+    "Source": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Источник"
           }
         }
       }
@@ -1032,6 +1352,16 @@
         }
       }
     },
+    "The draft gets the file's imports, the constants it uses and `run = %@`. Inline what it needs from its project, then save a version with ⌘S.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В черновик попадут импорты файла, используемые константы и `run = %@`. Перенесите то, что функции нужно из проекта, и сохраните версию ⌘S."
+          }
+        }
+      }
+    },
     "The key exists in the registry with another value. One of them is stale.": {
       "localizations": {
         "ru": {
@@ -1082,12 +1412,82 @@
         }
       }
     },
+    "Verdict": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Решение"
+          }
+        }
+      }
+    },
     "Versions": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Версии"
+          }
+        }
+      }
+    },
+    "Waiting for you": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ждут вас"
+          }
+        }
+      }
+    },
+    "What and why": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Что и почему"
+          }
+        }
+      }
+    },
+    "Why it waits for you": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Почему ждёт вас"
+          }
+        }
+      }
+    },
+    "accepted": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "принято"
+          }
+        }
+      }
+    },
+    "auto-accepted": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "принято само"
+          }
+        }
+      }
+    },
+    "changed, not sent": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "изменена, не отправлена"
           }
         }
       }
@@ -1152,6 +1552,16 @@
         }
       }
     },
+    "rejected": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "отклонено"
+          }
+        }
+      }
+    },
     "set": {
       "localizations": {
         "ru": {
@@ -1172,6 +1582,26 @@
         }
       }
     },
+    "unknown version": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "неизвестная версия"
+          }
+        }
+      }
+    },
+    "v%lld → v%lld available": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "v%lld → есть v%lld"
+          }
+        }
+      }
+    },
     "v1 saved %@": {
       "localizations": {
         "ru": {
@@ -1188,6 +1618,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "через %@"
+          }
+        }
+      }
+    },
+    "waiting": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ждёт"
           }
         }
       }

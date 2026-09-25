@@ -164,7 +164,8 @@ public enum RunEnvironment {
         public let missing: [String: [String]]
     }
 
-    public static func resolve(_ refs: [SourceRef], registry: Registry = Registry(),
+    /// `aliases` (project variable → registry key) add the project's own names for values.
+    public static func resolve(_ refs: [SourceRef], aliases: [String: String] = [:], registry: Registry = Registry(),
                                store: SecretStore = SecretStore()) throws -> Resolved {
         var values: [String: String] = [:]
         var owner: [String: String] = [:]
@@ -189,6 +190,10 @@ public enum RunEnvironment {
                 owner[key] = "\(source.id)@\(env)"
             }
             sources.append((source, env))
+        }
+        for (projectName, key) in aliases {
+            if let value = values[key] { values[projectName] = value }
+            else { missing["alias \(projectName)", default: []].append(key) }
         }
         return Resolved(values: values, sources: sources, missing: missing)
     }
