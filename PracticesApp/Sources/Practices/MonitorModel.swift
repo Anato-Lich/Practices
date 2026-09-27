@@ -55,6 +55,7 @@ final class MonitorModel {
         expectStop = continuation
         Task {
             for await incident in DockerEvents.incidents(expectStop: stream) {
+                Self.log(incident)
                 incidents.insert(incident, at: 0)
                 if incidents.count > 50 { incidents.removeLast() }
                 notify(incident)
@@ -83,6 +84,39 @@ final class MonitorModel {
 
     func refresh() async {
         snapshot = await Monitor.snapshot()
+        expireRecovered()
+    }
+
+    /// How long a container must run again (and not be unhealthy) before its incident clears
+    /// by itself: the badge is for what needs attention, not a history of everything.
+    static let recoveryWindow: TimeInterval = 600
+
+    private func expireRecovered() {
+        guard let containers = snapshot?.containers else { return }
+        let now = Date()
+        incidents.removeAll { incident in
+            guard now.timeIntervalSince(incident.date) > Self.recoveryWindow,
+                  let c = containers.first(where: { $0.id == incident.containerID || $0.name == incident.name }) else { return false }
+            return c.isRunning && !c.isUnhealthy && c.state != "restarting"
+        }
+    }
+
+    /// Every incident also goes to ~/.practices/incidents.jsonl, so one can be looked up after
+    /// the fact (Docker keeps only a short event history).
+    static func log(_ incident: ContainerIncident) {
+        let url = PracticesHome.url.appendingPathComponent("incidents.jsonl")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard var line = try? encoder.encode(incident) else { return }
+        line.append(0x0A)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(line)
+            try? handle.close()
+        } else {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? line.write(to: url)
+        }
     }
 
     func rescanCompose() async {

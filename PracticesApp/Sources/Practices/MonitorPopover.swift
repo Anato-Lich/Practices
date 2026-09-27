@@ -3,9 +3,15 @@ import AppKit
 import ServiceManagement
 import PracticesCore
 
+struct ContentHeight: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 struct MonitorPopover: View {
     @Environment(MonitorModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+    @State private var contentHeight: CGFloat = 300
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,8 +30,14 @@ struct MonitorPopover: View {
                     }
                 }
                 .padding(12)
+                .background(GeometryReader { geo in
+                    Color.clear.preference(key: ContentHeight.self, value: geo.size.height)
+                })
             }
-            .frame(maxHeight: 620)
+            // A ScrollView has no height of its own: in the menu-bar window it collapsed to
+            // nothing. It takes its content's height, up to 620 pt, then scrolls.
+            .frame(height: min(max(contentHeight, 60), 620))
+            .onPreferenceChange(ContentHeight.self) { contentHeight = $0 }
             Divider()
             footer
         }

@@ -21,6 +21,8 @@ APP=build/Build/Products/Release/Practices.app
 [ -d "$APP" ] || { echo "Release build not found"; exit 1; }
 # Quit the running copy first; an app replaced under itself keeps the old binary mapped.
 osascript -e 'tell application id "dev.practices.app" to quit' >/dev/null 2>&1 || true
+# Wait for it to be gone: opening while it quits fails with -600.
+for _ in {1..50}; do pgrep -xq Practices || break; sleep 0.1; done
 rm -rf /Applications/Practices.app
 ditto "$APP" /Applications/Practices.app
 open /Applications/Practices.app
