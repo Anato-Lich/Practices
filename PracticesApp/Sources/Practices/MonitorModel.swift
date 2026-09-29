@@ -25,10 +25,7 @@ final class MonitorModel {
     var popoverVisible = false {
         didSet {
             guard popoverVisible && !oldValue else { return }
-            Task {
-                await refresh()
-                if (composeScan?.date.timeIntervalSinceNow ?? -.infinity) < -60 { await rescanCompose() }
-            }
+            Task { await refresh() }
         }
     }
 

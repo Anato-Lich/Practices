@@ -14,6 +14,7 @@ struct MainWindow: View {
         case practice(String)
         case proposals
         case projects
+        case conflicts
         case doctor
     }
 
@@ -78,6 +79,18 @@ struct MainWindow: View {
                     .tag(SidebarItem.projects)
                     Label {
                         HStack {
+                            Text("Port conflicts")
+                            Spacer()
+                            if !monitor.conflicts.isEmpty {
+                                Text(verbatim: String(monitor.conflicts.count)).foregroundStyle(.orange).font(.caption)
+                            }
+                        }
+                    } icon: {
+                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                    }
+                    .tag(SidebarItem.conflicts)
+                    Label {
+                        HStack {
                             Text("Doctor")
                             Spacer()
                             if let count = registry.findings?.count, count > 0 {
@@ -107,6 +120,8 @@ struct MainWindow: View {
                     ProposalsView()
                 case .projects:
                     ProjectsView()
+                case .conflicts:
+                    ConflictsView()
                 case .doctor:
                     DoctorView()
                 case nil:

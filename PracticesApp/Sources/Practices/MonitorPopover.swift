@@ -22,7 +22,6 @@ struct MonitorPopover: View {
                     if let snapshot = model.snapshot {
                         if snapshot.containers == nil { dockerDown(snapshot) }
                         attention(snapshot)
-                        conflicts
                         ports(snapshot)
                         containers(snapshot)
                     } else {
@@ -134,24 +133,6 @@ struct MonitorPopover: View {
     private var uniqueIncidents: [ContainerIncident] {
         var seen = Set<String>()
         return model.incidents.filter { seen.insert($0.containerID).inserted }
-    }
-
-    // MARK: Conflicts
-
-    @ViewBuilder
-    private var conflicts: some View {
-        let conflicts = model.conflicts
-        if !conflicts.isEmpty {
-            Section {
-                VStack(spacing: 6) {
-                    ForEach(conflicts) { ConflictRow(conflict: $0) }
-                }
-            } header: {
-                SectionHeader(title: "Port conflicts") {
-                    Text(verbatim: String(conflicts.count)).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-        }
     }
 
     // MARK: Ports

@@ -52,6 +52,16 @@
         }
       }
     },
+    "A service that wants a taken port fails on `docker compose up`. Under OrbStack it answers at service.project.orb.local without publishing the port.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сервис, которому нужен занятый порт, не поднимется на `docker compose up`. В OrbStack он доступен как service.project.orb.local без публикации порта."
+          }
+        }
+      }
+    },
     "Accept as new version": {
       "localizations": {
         "ru": {
@@ -462,6 +472,16 @@
         }
       }
     },
+    "Every port the compose files in ~/Projects publish is free or held by its own service.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все порты, которые публикуют compose-файлы в ~/Projects, свободны или заняты своим же сервисом."
+          }
+        }
+      }
+    },
     "Existing": {
       "localizations": {
         "ru": {
@@ -812,6 +832,16 @@
         }
       }
     },
+    "No port conflicts": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Конфликтов портов нет"
+          }
+        }
+      }
+    },
     "No practices yet": {
       "localizations": {
         "ru": {
@@ -1142,6 +1172,16 @@
         }
       }
     },
+    "Reading compose files in ~/Projects…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Читаю compose-файлы в ~/Projects…"
+          }
+        }
+      }
+    },
     "Reading ~/Projects…": {
       "localizations": {
         "ru": {
@@ -1178,6 +1218,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Удалить значение"
+          }
+        }
+      }
+    },
+    "Rescan": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пересканировать"
           }
         }
       }
