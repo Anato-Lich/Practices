@@ -52,6 +52,7 @@ final class RegistryModel {
             keyStatus = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, (try? store.status(source: $0)) ?? [:]) })
             let practiceStore = PracticeStore(registry: registry)
             practices = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, practiceStore.list(source: $0.id)) })
+            loadChecks()
             chains = practiceStore.chains()
             projects = ProjectManifest.all()
             if let path = projectPath, !projects.contains(where: { $0.dir.path == path }) { projectPath = nil }
@@ -113,6 +114,30 @@ final class RegistryModel {
 
     enum Health { case unknown, up, partial, down }
 
+    /// Last results survive restarts: sources are checked only when asked, and the window
+    /// shows what the last attempt found and when (DECISIONS 56).
+    private struct SavedCheck: Codable { let date: Date; let results: [CheckResult] }
+    private static var checksURL: URL { PracticesHome.url.appendingPathComponent("checks.json") }
+
+    private func loadChecks() {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = try? Data(contentsOf: Self.checksURL),
+              let saved = try? decoder.decode([String: SavedCheck].self, from: data) else { return }
+        for (id, check) in saved where checks[id] == nil {
+            checks[id] = check.results
+            lastCheck[id] = check.date
+        }
+    }
+
+    private func saveChecks() {
+        var saved: [String: SavedCheck] = [:]
+        for (id, results) in checks { if let date = lastCheck[id] { saved[id] = SavedCheck(date: date, results: results) } }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(saved).write(to: Self.checksURL, options: .atomic)
+    }
+
     func check(_ id: String) async {
         guard let source = source(id) else { return }
         checking.insert(id)
@@ -127,6 +152,7 @@ final class RegistryModel {
         checks[id] = results
         lastCheck[id] = Date()
         checking.remove(id)
+        saveChecks()
     }
 
     func checkAll() async {

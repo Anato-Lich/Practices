@@ -150,7 +150,7 @@ struct MainWindow: View {
                 Button { Task { await registry.checkAll() } } label: {
                     Label("Check all", systemImage: "checkmark.circle")
                 }
-                .help("Check preconditions and targets of every source")
+                .help("Check preconditions and targets of every source — nothing is checked without asking")
             }
         }
         .frame(minWidth: 900, minHeight: 600)
@@ -160,7 +160,6 @@ struct MainWindow: View {
             if registry.selection == nil, let first = registry.sources.first { registry.selection = .source(first.id) }
             guard !CommandLine.arguments.contains("--render-window") else { return }
             NSApp.setActivationPolicy(.regular)
-            Task { await registry.checkAll() }
             Task { await registry.scanCopies() }
             Task { await registry.refreshFiles() }
             // Names of keys in project env files change as projects do; ~2 s, in the background.
@@ -172,6 +171,8 @@ struct MainWindow: View {
     private func sourceRow(_ source: Source) -> some View {
         HStack(spacing: 8) {
             HealthDot(health: registry.health(of: source.id))
+                .help(registry.lastCheck[source.id].map { String(localized: "Last check \($0.formatted(date: .abbreviated, time: .shortened))") }
+                      ?? String(localized: "Not checked yet"))
             Text(verbatim: source.name).lineLimit(1)
             Spacer()
             if registry.checking.contains(source.id) { ProgressView().controlSize(.mini) }

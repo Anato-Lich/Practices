@@ -34,7 +34,6 @@ enum DevRender {
             let content: AnyView
             if window != nil {
                 registry.reload()
-                await registry.checkAll()
                 if args.contains("--doctor") { await registry.runDoctor() }
                 if let j = args.firstIndex(of: "--practice"), j + 1 < args.count {
                     let ref = args[j + 1]

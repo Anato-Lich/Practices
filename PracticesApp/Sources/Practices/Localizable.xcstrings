@@ -172,6 +172,16 @@
         }
       }
     },
+    "Check preconditions and targets of every source — nothing is checked without asking": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить предусловия и цели всех источников — без запроса ничего не проверяется"
+          }
+        }
+      }
+    },
     "Checks": {
       "localizations": {
         "ru": {
@@ -678,6 +688,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Убит: не хватило памяти"
+          }
+        }
+      }
+    },
+    "Last check %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Последняя проверка %@"
           }
         }
       }
@@ -1772,6 +1792,16 @@
         }
       }
     },
+    "checked %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проверено %@"
+          }
+        }
+      }
+    },
     "done": {
       "localizations": {
         "ru": {
@@ -1838,6 +1868,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "нет значения"
+          }
+        }
+      }
+    },
+    "not checked yet": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ещё не проверялся"
           }
         }
       }

@@ -133,8 +133,10 @@ struct SourceView: View {
     }
 
     private var lastCheckText: String? {
-        guard let date = registry.lastCheck[source.id] else { return nil }
-        return date.formatted(date: .omitted, time: .shortened)
+        guard let date = registry.lastCheck[source.id] else { return String(localized: "not checked yet") }
+        let when = Calendar.current.isDateInToday(date) ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(date: .abbreviated, time: .shortened)
+        return String(localized: "checked \(when)")
     }
 
     private var keys: some View {
