@@ -1762,6 +1762,16 @@
         }
       }
     },
+    "at %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "в %@"
+          }
+        }
+      }
+    },
     "auto-accepted": {
       "localizations": {
         "ru": {
@@ -1978,6 +1988,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "ждёт"
+          }
+        }
+      }
+    },
+    "yesterday, %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "вчера, %@"
           }
         }
       }

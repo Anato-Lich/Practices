@@ -214,7 +214,8 @@ struct AttentionRow: View {
                 Text(verbatim: title).font(.callout.weight(.medium)).lineLimit(1)
                 HStack(spacing: 4) {
                     Text(verbatim: detail)
-                    if let date { Text(date, style: .relative) }
+                    // When it happened, not a live "N min, N secs" count that reads like an uptime timer.
+                    if let date { Text(verbatim: "· " + Self.when(date)) }
                 }
                 .font(.caption).foregroundStyle(.secondary)
             }
@@ -230,6 +231,14 @@ struct AttentionRow: View {
                     .buttonStyle(.borderless).help("Dismiss")
             }
         }
+    }
+
+    static func when(_ date: Date) -> String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return String(localized: "at \(time)") }
+        if calendar.isDateInYesterday(date) { return String(localized: "yesterday, \(time)") }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     private func openLogs(_ id: String) {
