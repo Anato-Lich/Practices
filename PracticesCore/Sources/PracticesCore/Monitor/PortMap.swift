@@ -39,8 +39,8 @@ public struct MonitorSnapshot: Sendable, Codable {
 
     public var failedContainers: [Container] {
         (containers ?? []).filter { c in
-            c.isUnhealthy || c.state == "restarting" || c.state == "dead"
-                || (c.exitCode.map { !IncidentDetector.quietExitCodes.contains($0) } ?? false)
+            !c.isEphemeral && (c.isUnhealthy || c.state == "restarting" || c.state == "dead")
+                || (!c.isEphemeral && (c.exitCode.map { !IncidentDetector.quietExitCodes.contains($0) && $0 != 137 } ?? false))
         }
     }
 

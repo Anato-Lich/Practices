@@ -105,7 +105,7 @@ struct MonitorPopover: View {
         let byID = Dictionary((snapshot.containers ?? []).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let incidentIDs = Set(model.incidents.map(\.containerID))
         let live = (snapshot.containers ?? []).filter {
-            ($0.isUnhealthy || $0.state == "restarting" || $0.state == "dead") && !incidentIDs.contains($0.id)
+            !$0.isEphemeral && ($0.isUnhealthy || $0.state == "restarting" || $0.state == "dead") && !incidentIDs.contains($0.id)
         }
         if !model.incidents.isEmpty || !live.isEmpty {
             Section {
@@ -359,7 +359,7 @@ struct ProjectGroup: View {
     /// green when something runs, grey when the project is simply stopped.
     private func dotColor(running: Int) -> Color {
         if containers.contains(where: { $0.isUnhealthy || $0.state == "restarting" || $0.state == "dead" }) { return .red }
-        if containers.contains(where: { $0.exitCode.map { !IncidentDetector.quietExitCodes.contains($0) } ?? false }) { return .orange }
+        if containers.contains(where: { c in !c.isEphemeral && (c.exitCode.map { !IncidentDetector.quietExitCodes.contains($0) && $0 != 137 } ?? false) }) { return .orange }
         return running == 0 ? Color.secondary.opacity(0.4) : .green
     }
 }
@@ -408,13 +408,13 @@ struct ContainerRow: View {
 
     private var symbol: String {
         if container.isUnhealthy || container.state == "restarting" || container.state == "dead" { return "xmark.octagon.fill" }
-        if let code = container.exitCode, !IncidentDetector.quietExitCodes.contains(code) { return "xmark.circle" }
+        if let code = container.exitCode, !IncidentDetector.quietExitCodes.contains(code), code != 137, !container.isEphemeral { return "xmark.circle" }
         return container.isRunning ? "circle.fill" : "circle"
     }
 
     private var color: Color {
         if container.isUnhealthy || container.state == "restarting" || container.state == "dead" { return .red }
-        if let code = container.exitCode, !IncidentDetector.quietExitCodes.contains(code) { return .orange }
+        if let code = container.exitCode, !IncidentDetector.quietExitCodes.contains(code), code != 137, !container.isEphemeral { return .orange }
         return container.isRunning ? .green : .secondary
     }
 }

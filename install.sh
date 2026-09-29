@@ -10,6 +10,9 @@ echo "Building practicesctl…"
 (cd PracticesCore && swift build -c release -q)
 mkdir -p ~/.practices/bin ~/.local/bin
 rm -rf ~/.practices/bin/PracticesCore_PracticesCore.bundle
+# Remove, then copy: overwriting a signed binary in place keeps the kernel's cached signature
+# of the old file, and macOS kills the new one at launch (exit 137).
+rm -f ~/.practices/bin/practicesctl
 cp PracticesCore/.build/release/practicesctl ~/.practices/bin/practicesctl
 cp -R PracticesCore/.build/release/PracticesCore_PracticesCore.bundle ~/.practices/bin/
 ln -sf ~/.practices/bin/practicesctl ~/.local/bin/practicesctl

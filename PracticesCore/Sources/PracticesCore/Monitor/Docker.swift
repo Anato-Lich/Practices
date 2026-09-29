@@ -18,6 +18,17 @@ public struct Container: Identifiable, Hashable, Sendable, Codable {
     public let composeProject: String?
     public let composeService: String?
     public let workingDir: String?      // compose project directory
+    /// Labels only compose puts on its own containers (not on images), and `oneoff`.
+    public var composeContainerNumber: String? = nil
+    public var oneoff: String? = nil
+
+    /// A throwaway container (see IncidentDetector.isEphemeral): not counted as needing attention.
+    public var isEphemeral: Bool {
+        var labels: [String: String] = [:]
+        labels["com.docker.compose.container-number"] = composeContainerNumber
+        labels["com.docker.compose.oneoff"] = oneoff
+        return IncidentDetector.isEphemeral(name: name, labels: labels)
+    }
 
     public var isRunning: Bool { state == "running" }
     public var isUnhealthy: Bool { status.contains("(unhealthy)") }
@@ -42,10 +53,12 @@ public enum Docker {
 
     /// Output template for `docker ps`. Labels are pulled one by one with `.Label`, because
     /// the combined `.Labels` string is comma-joined and compose working dirs may hold commas.
-    static let psFormat = #"{"id":{{json .ID}},"name":{{json .Names}},"image":{{json .Image}},"state":{{json .State}},"status":{{json .Status}},"ports":{{json .Ports}},"project":{{json (.Label "com.docker.compose.project")}},"service":{{json (.Label "com.docker.compose.service")}},"workdir":{{json (.Label "com.docker.compose.project.working_dir")}}}"#
+    static let psFormat = #"{"id":{{json .ID}},"name":{{json .Names}},"image":{{json .Image}},"state":{{json .State}},"status":{{json .Status}},"ports":{{json .Ports}},"project":{{json (.Label "com.docker.compose.project")}},"service":{{json (.Label "com.docker.compose.service")}},"workdir":{{json (.Label "com.docker.compose.project.working_dir")}},"number":{{json (.Label "com.docker.compose.container-number")}},"oneoff":{{json (.Label "com.docker.compose.oneoff")}}}"#
 
     private struct Row: Decodable {
         let id, name, image, state, status, ports, project, service, workdir: String
+        let number: String?
+        let oneoff: String?
     }
 
     public static func containers(includeStopped: Bool = true) async throws -> [Container] {
@@ -58,11 +71,14 @@ public enum Docker {
         let decoder = JSONDecoder()
         return output.split(separator: "\n").compactMap { line in
             guard let row = try? decoder.decode(Row.self, from: Data(line.utf8)) else { return nil }
-            return Container(
+            var container = Container(
                 id: row.id, name: row.name, image: row.image, state: row.state, status: row.status,
                 ports: parse(ports: row.ports),
                 composeProject: row.project.nilIfEmpty, composeService: row.service.nilIfEmpty,
                 workingDir: row.workdir.nilIfEmpty)
+            container.composeContainerNumber = row.number?.nilIfEmpty
+            container.oneoff = row.oneoff?.nilIfEmpty
+            return container
         }
     }
 

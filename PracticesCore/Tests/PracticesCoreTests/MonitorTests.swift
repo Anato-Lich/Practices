@@ -138,3 +138,46 @@ import Foundation
         #expect(conflicts[0].runningOn == [5175])
     }
 }
+
+@Suite struct IncidentRulesTests {
+    func event(_ action: String, _ id: String, name: String, code: Int? = nil, at t: Int, labels: [String: String] = [:]) -> DockerEvent {
+        var attrs = labels
+        attrs["name"] = name
+        if let code { attrs["exitCode"] = String(code) }
+        return DockerEvent(Type: "container", Action: action, Actor: .init(ID: id, Attributes: attrs), time: t)
+    }
+    let service = ["com.docker.compose.project": "route-verdict", "com.docker.compose.service": "route-verdict",
+                   "com.docker.compose.container-number": "1"]
+    let fromImage = ["com.docker.compose.project": "route-verdict", "com.docker.compose.service": "route-verdict"]
+
+    @Test func killBeforeDieIsAStop() {
+        var d = IncidentDetector()
+        #expect(d.consume(event("kill", "a", name: "route-verdict", at: 0, labels: service)).isEmpty)
+        #expect(d.consume(event("die", "a", name: "route-verdict", code: 137, at: 10, labels: service)).isEmpty)
+        // 137 with nobody asking: killed from inside or by memory pressure — worth knowing.
+        #expect(d.consume(event("die", "b", name: "worker", code: 137, at: 20, labels: service)).map(\.kind) == [.crashed])
+    }
+
+    @Test func throwawayContainersAreQuiet() {
+        var d = IncidentDetector()
+        #expect(d.consume(event("health_status: unhealthy", "t", name: "epic_chatelet", at: 0, labels: fromImage)).isEmpty)
+        #expect(d.consume(event("die", "t", name: "cranky_shirley", code: 1, at: 1, labels: fromImage)).isEmpty)
+        #expect(d.consume(event("die", "o", name: "rv-run-1", code: 1, at: 2, labels: service.merging(["com.docker.compose.oneoff": "True"]) { $1 })).isEmpty)
+        // A named `docker run` is somebody's service: still watched.
+        #expect(d.consume(event("die", "n", name: "rv-scope-tmp", code: 1, at: 3, labels: fromImage)).map(\.kind) == [.crashed])
+    }
+
+    @Test func unhealthyOnceUntilHealthy() {
+        var d = IncidentDetector()
+        #expect(d.consume(event("health_status: unhealthy", "a", name: "route-verdict", at: 0, labels: service)).count == 1)
+        #expect(d.consume(event("health_status: unhealthy", "a", name: "route-verdict", at: 30, labels: service)).isEmpty)
+        #expect(d.consume(event("health_status: healthy", "a", name: "route-verdict", at: 60, labels: service)).isEmpty)
+        #expect(d.consume(event("health_status: unhealthy", "a", name: "route-verdict", at: 90, labels: service)).count == 1)
+    }
+
+    @Test func oomIsReportedOnce() {
+        var d = IncidentDetector()
+        #expect(d.consume(event("oom", "a", name: "api", at: 0, labels: service)).map(\.kind) == [.outOfMemory])
+        #expect(d.consume(event("die", "a", name: "api", code: 137, at: 1, labels: service)).isEmpty)
+    }
+}

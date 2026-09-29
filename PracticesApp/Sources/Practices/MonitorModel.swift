@@ -40,7 +40,7 @@ final class MonitorModel {
     /// popover but do not light the badge.
     var alertCount: Int {
         let live = (snapshot?.containers ?? []).filter {
-            $0.isUnhealthy || $0.state == "restarting" || $0.state == "dead"
+            !$0.isEphemeral && ($0.isUnhealthy || $0.state == "restarting" || $0.state == "dead")
         }
         let ids = Set(live.map(\.id)).union(incidents.map(\.containerID))
         return ids.count
