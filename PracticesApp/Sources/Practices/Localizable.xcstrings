@@ -2,42 +2,12 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
-    "%@ already exists": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ уже есть"
-          }
-        }
-      }
-    },
-    "%@ — %lld file(s)": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ — файлов: %lld"
-          }
-        }
-      }
-    },
     "%lld runs": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld прогонов"
-          }
-        }
-      }
-    },
-    "A new name for a value already known as %@.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Новое имя для значения, которое уже известно как %@."
           }
         }
       }
@@ -62,32 +32,22 @@
         }
       }
     },
-    "Accept as new version": {
+    "Add one with `practicesctl service add <id> --project <project>`.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Принять как новую версию"
+            "value": "Добавьте первый: `practicesctl service add <id> --project <project>`."
           }
         }
       }
     },
-    "Agents send changed practices here with `propose_update`. Those that pass every rule are accepted by themselves.": {
+    "All endpoints answer": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Агенты присылают сюда изменённые практики через `propose_update`. Те, что проходят все правила, принимаются сами."
-          }
-        }
-      }
-    },
-    "All targets answer": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Все цели отвечают"
+            "value": "Все точки входа отвечают"
           }
         }
       }
@@ -162,22 +122,22 @@
         }
       }
     },
+    "Check conditions and endpoints of every service — nothing is checked without asking": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить условия и точки входа всех сервисов — без запроса ничего не проверяется"
+          }
+        }
+      }
+    },
     "Check preconditions and targets of every source": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Проверить предусловия и цели всех источников"
-          }
-        }
-      }
-    },
-    "Check preconditions and targets of every source — nothing is checked without asking": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Проверить предусловия и цели всех источников — без запроса ничего не проверяется"
           }
         }
       }
@@ -242,22 +202,22 @@
         }
       }
     },
+    "Conditions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Условия"
+          }
+        }
+      }
+    },
     "Connect %@ to a project": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Подключить %@ к проекту"
-          }
-        }
-      }
-    },
-    "Connect a source to a project from its card (“Connect to project…”), or adopt an existing project with `practicesctl init --write`.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Подключите источник к проекту с его карточки («Подключить к проекту…») или возьмите готовый проект под управление: `practicesctl init --write`."
           }
         }
       }
@@ -332,16 +292,6 @@
         }
       }
     },
-    "Could not read the function": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не удалось прочитать функцию"
-          }
-        }
-      }
-    },
     "Could not stop process %lld": {
       "localizations": {
         "ru": {
@@ -368,26 +318,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Упал с кодом %lld"
-          }
-        }
-      }
-    },
-    "Create draft": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Создать черновик"
-          }
-        }
-      }
-    },
-    "Decided": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Решённые"
           }
         }
       }
@@ -458,6 +388,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Документация"
+          }
+        }
+      }
+    },
+    "Endpoints": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Точки входа"
           }
         }
       }
@@ -552,26 +492,6 @@
         }
       }
     },
-    "Files that differ from the registry": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Файлы, которые расходятся с реестром"
-          }
-        }
-      }
-    },
-    "Fill the parameters from this set": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Заполнить параметры из набора"
-          }
-        }
-      }
-    },
     "Follow": {
       "localizations": {
         "ru": {
@@ -598,16 +518,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Не проходит healthcheck"
-          }
-        }
-      }
-    },
-    "Import the Connectors sources with `practicesctl import connectors`.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Импортируйте источники Connectors: `practicesctl import connectors`."
           }
         }
       }
@@ -712,6 +622,16 @@
         }
       }
     },
+    "Links": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Связи"
+          }
+        }
+      }
+    },
     "Logs": {
       "localizations": {
         "ru": {
@@ -732,16 +652,6 @@
         }
       }
     },
-    "Make a practice": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать практикой"
-          }
-        }
-      }
-    },
     "More than one owner on this port": {
       "localizations": {
         "ru": {
@@ -752,52 +662,12 @@
         }
       }
     },
-    "Name": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Название"
-          }
-        }
-      }
-    },
-    "Names this value already has in projects": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Имена, которые это значение уже носит в проектах"
-          }
-        }
-      }
-    },
-    "New practice from %@()": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Новая практика из %@()"
-          }
-        }
-      }
-    },
     "New value (the current one stays hidden)": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Новое значение (текущее не показывается)"
-          }
-        }
-      }
-    },
-    "No connected files yet": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Подключённых файлов пока нет"
           }
         }
       }
@@ -822,12 +692,32 @@
         }
       }
     },
+    "No endpoints": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Точек входа нет"
+          }
+        }
+      }
+    },
     "No folder chosen": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Папка не выбрана"
+          }
+        }
+      }
+    },
+    "No links": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Связей нет"
           }
         }
       }
@@ -892,16 +782,6 @@
         }
       }
     },
-    "No project · first environments": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Без проекта · первые окружения"
-          }
-        }
-      }
-    },
     "No result": {
       "localizations": {
         "ru": {
@@ -922,32 +802,12 @@
         }
       }
     },
-    "No sources yet": {
+    "No services yet": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Источников пока нет"
-          }
-        }
-      }
-    },
-    "No targets": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Целей нет"
-          }
-        }
-      }
-    },
-    "No value in the registry: %@": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Нет значения в реестре: %@"
+            "value": "Сервисов пока нет"
           }
         }
       }
@@ -1072,26 +932,6 @@
         }
       }
     },
-    "Parameter sets": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Наборы параметров"
-          }
-        }
-      }
-    },
-    "Parameters the agent tried": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Параметры, на которых проверял агент"
-          }
-        }
-      }
-    },
     "Port conflicts": {
       "localizations": {
         "ru": {
@@ -1118,66 +958,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Практики"
-          }
-        }
-      }
-    },
-    "Practices run with the environments this project chose": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Практики запускаются с окружениями, которые выбрал проект"
-          }
-        }
-      }
-    },
-    "Project": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Проект"
-          }
-        }
-      }
-    },
-    "Projects": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Проекты"
-          }
-        }
-      }
-    },
-    "Projects appear here once they have a practices.yaml (`practicesctl init --write` in the project).": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Проекты появятся здесь, когда у них будет practices.yaml (`practicesctl init --write` в папке проекта)."
-          }
-        }
-      }
-    },
-    "Proposals": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Предложения"
-          }
-        }
-      }
-    },
-    "Proposed changes are accepted by themselves only when they return the same rows on every saved set.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Предложенные правки принимаются сами, только если на каждом сохранённом наборе возвращают те же строки."
           }
         }
       }
@@ -1222,16 +1002,6 @@
         }
       }
     },
-    "Reject": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Отклонить"
-          }
-        }
-      }
-    },
     "Remove value": {
       "localizations": {
         "ru": {
@@ -1262,32 +1032,12 @@
         }
       }
     },
-    "Rewrite the files that differ from the registry": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Перезаписать файлы, которые расходятся с реестром"
-          }
-        }
-      }
-    },
     "Rows with the field / rows looked at, in the latest run": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Строк с полем / просмотрено строк, в последнем прогоне"
-          }
-        }
-      }
-    },
-    "Rules for accepting by itself": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Правила автопринятия"
           }
         }
       }
@@ -1342,16 +1092,6 @@
         }
       }
     },
-    "Same fields and the same rows on every saved parameter set, not slower by more than 5% (or 50 ms), the source not marked write-allowed. Accepted changes are versions: any can be restored.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Те же поля и те же строки на каждом сохранённом наборе, не медленнее больше чем на 5 % (или 50 мс), источник не помечен «запись разрешена». Принятые правки — версии, любую можно вернуть."
-          }
-        }
-      }
-    },
     "Save": {
       "localizations": {
         "ru": {
@@ -1368,26 +1108,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Сохранить как новую версию (⌘S)"
-          }
-        }
-      }
-    },
-    "Save parameter set": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сохранить набор параметров"
-          }
-        }
-      }
-    },
-    "Save these parameters as a set: new versions are checked on it": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сохранить параметры как набор: на нём проверяются новые версии"
           }
         }
       }
@@ -1418,6 +1138,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Секреты открытым текстом"
+          }
+        }
+      }
+    },
+    "Services": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сервисы"
           }
         }
       }
@@ -1462,32 +1192,12 @@
         }
       }
     },
-    "Some targets do not answer": {
+    "Some endpoints do not answer": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Часть целей не отвечает"
-          }
-        }
-      }
-    },
-    "Source": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Источник"
-          }
-        }
-      }
-    },
-    "Sources": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Источники"
+            "value": "Часть точек входа не отвечает"
           }
         }
       }
@@ -1542,16 +1252,6 @@
         }
       }
     },
-    "Sync all": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Синхронизировать всё"
-          }
-        }
-      }
-    },
     "Table": {
       "localizations": {
         "ru": {
@@ -1572,32 +1272,12 @@
         }
       }
     },
-    "Targets": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Цели"
-          }
-        }
-      }
-    },
     "Text": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Текст"
-          }
-        }
-      }
-    },
-    "The draft gets the file's imports, the constants it uses and `run = %@`. Inline what it needs from its project, then save a version with ⌘S.": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "В черновик попадут импорты файла, используемые константы и `run = %@`. Перенесите то, что функции нужно из проекта, и сохраните версию ⌘S."
           }
         }
       }
@@ -1612,12 +1292,12 @@
         }
       }
     },
-    "The same value under different names — a source the registry does not have yet.": {
+    "The same value under different names — a service the registry does not have yet.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Одно значение под разными именами — источник, которого ещё нет в реестре."
+            "value": "Одно значение под разными именами — сервис, которого ещё нет в реестре."
           }
         }
       }
@@ -1662,62 +1342,12 @@
         }
       }
     },
-    "Variable names in projects": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Имена переменных в проектах"
-          }
-        }
-      }
-    },
-    "Verdict": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Решение"
-          }
-        }
-      }
-    },
     "Versions": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Версии"
-          }
-        }
-      }
-    },
-    "Waiting for you": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ждут вас"
-          }
-        }
-      }
-    },
-    "What and why": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Что и почему"
-          }
-        }
-      }
-    },
-    "Why it waits for you": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Почему ждёт вас"
           }
         }
       }
@@ -1732,22 +1362,12 @@
         }
       }
     },
-    "Write this source's values into a project's env file": {
+    "Write this service's values into a project's env file": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Записать значения источника в env-файл проекта"
-          }
-        }
-      }
-    },
-    "accepted": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "принято"
+            "value": "Записать значения сервиса в env-файл проекта"
           }
         }
       }
@@ -1768,16 +1388,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "в %@"
-          }
-        }
-      }
-    },
-    "auto-accepted": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "принято само"
           }
         }
       }
@@ -1842,16 +1452,6 @@
         }
       }
     },
-    "in projects also: %@": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "в проектах также: %@"
-          }
-        }
-      }
-    },
     "input: %@": {
       "localizations": {
         "ru": {
@@ -1898,16 +1498,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "не задано"
-          }
-        }
-      }
-    },
-    "rejected": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "отклонено"
           }
         }
       }
@@ -1982,16 +1572,6 @@
         }
       }
     },
-    "waiting": {
-      "localizations": {
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ждёт"
-          }
-        }
-      }
-    },
     "yesterday, %@": {
       "localizations": {
         "ru": {
@@ -2002,12 +1582,12 @@
         }
       }
     },
-    "⌘↩ runs it with the values of its sources.": {
+    "⌘↩ runs it with the values of its services.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "⌘↩ запускает её с кредами её источников."
+            "value": "⌘↩ запускает её с кредами её сервисов."
           }
         }
       }

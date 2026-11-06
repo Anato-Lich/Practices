@@ -1,57 +1,79 @@
 import Foundation
 import Network
 
-/// Result of probing one endpoint. Messages name the target, never its host: hosts come from
-/// the secret store.
+/// Result of probing one endpoint or one condition. Messages name the endpoint, never its
+/// host: hosts come from the secret store.
 public struct CheckResult: Hashable, Sendable, Codable {
-    public let source: String
+    public let service: String
     public let env: String
-    public let target: String           // target id, or "requires" for a precondition
+    public let endpoint: String         // endpoint id, or "requires:<condition id>"
     public let ok: Bool
     public let millis: Int?
     public let message: String?
 
-    public init(source: String, env: String, target: String, ok: Bool, millis: Int?, message: String?) {
-        self.source = source; self.env = env; self.target = target
+    public init(service: String, env: String, endpoint: String, ok: Bool, millis: Int?, message: String?) {
+        self.service = service; self.env = env; self.endpoint = endpoint
         self.ok = ok; self.millis = millis; self.message = message
     }
 }
 
 public enum Checks {
 
-    /// Preconditions of a source in an environment; an empty list means all hold.
-    public static func unmet(_ source: Source, env: String, values: [String: String]) async -> [String] {
-        var failures: [String] = []
-        for requirement in source.requires {
-            let result = await probe(hostPort: requirement.reachable, values: values)
-            if !result.ok {
-                failures.append(requirement.hint ?? "\(source.name): not reachable (\(result.message ?? "no answer"))")
+    /// The conditions of a service and its endpoints (DECISIONS 11). One with a `reachable`
+    /// template is probed, and its hint is the message when the probe fails; one without is
+    /// declared knowledge and holds. A template over keys this service has no values for
+    /// cannot be checked from here and does not fail the service.
+    public static func conditions(_ service: Service, env: String, values: [String: String],
+                                  registry: Registry = Registry()) async -> [CheckResult] {
+        var results: [CheckResult] = []
+        for id in service.conditionIDs {
+            func result(_ ok: Bool, _ millis: Int? = nil, _ message: String? = nil) -> CheckResult {
+                CheckResult(service: service.id, env: env, endpoint: "requires:\(id)", ok: ok, millis: millis, message: message)
             }
+            guard let condition = registry.condition(id) else {
+                results.append(result(false, nil, "condition \(id) is not declared in any space"))
+                continue
+            }
+            guard let template = condition.reachable else { results.append(result(true, nil, condition.hint)); continue }
+            guard (try? Template.render(template, values: values)) != nil else {
+                results.append(result(true, nil, "not checked: no values here for its address"))
+                continue
+            }
+            let r = await probe(hostPort: template, values: values)
+            results.append(result(r.ok, r.millis, r.ok ? nil
+                : condition.hint ?? "\(condition.name): not reachable (\(r.message ?? "no answer"))"))
         }
-        return failures
+        return results
     }
 
-    /// Every target of a source, concurrently.
-    public static func check(_ source: Source, env: String, values: [String: String]) async -> [CheckResult] {
+    /// Messages of the conditions that do not hold; an empty list means all hold. Asked before
+    /// a run, so a missing tunnel fails with a sentence instead of a timeout.
+    public static func unmet(_ service: Service, env: String, values: [String: String],
+                             registry: Registry = Registry()) async -> [String] {
+        await conditions(service, env: env, values: values, registry: registry).filter { !$0.ok }.compactMap(\.message)
+    }
+
+    /// Every endpoint of a service, concurrently.
+    public static func check(_ service: Service, env: String, values: [String: String]) async -> [CheckResult] {
         await withTaskGroup(of: CheckResult.self) { group in
-            for target in source.targets {
+            for endpoint in service.endpoints {
                 group.addTask {
                     let (ok, ms, message): (Bool, Int?, String?)
-                    if let url = target.url {
+                    if let url = endpoint.url {
                         (ok, ms, message) = await probe(url: url, values: values)
-                    } else if let address = target.address {
+                    } else if let address = endpoint.address {
                         let r = await probe(hostPort: address, values: values)
                         (ok, ms, message) = (r.ok, r.millis, r.message)
                     } else {
-                        (ok, ms, message) = (false, nil, "target has neither url nor address")
+                        (ok, ms, message) = (false, nil, "endpoint has neither url nor address")
                     }
-                    return CheckResult(source: source.id, env: env, target: target.id, ok: ok, millis: ms, message: message)
+                    return CheckResult(service: service.id, env: env, endpoint: endpoint.id, ok: ok, millis: ms, message: message)
                 }
             }
             var results: [CheckResult] = []
             for await r in group { results.append(r) }
-            let order = source.targets.map(\.id)
-            return results.sorted { (order.firstIndex(of: $0.target) ?? 0) < (order.firstIndex(of: $1.target) ?? 0) }
+            let order = service.endpoints.map(\.id)
+            return results.sorted { (order.firstIndex(of: $0.endpoint) ?? 0) < (order.firstIndex(of: $1.endpoint) ?? 0) }
         }
     }
 
@@ -139,15 +161,15 @@ final class OnceBox: @unchecked Sendable {
     func claim() -> Bool { lock.withLock { if done { return false }; done = true; return true } }
 }
 
-/// The environment a command runs with: values of the referenced sources merged (PLAN §3.1 —
-/// the project reads `os.environ` and knows nothing about Practices).
+/// The environment a command runs with: values of the referenced services merged (the project
+/// reads `os.environ` and knows nothing about Practices).
 public enum RunEnvironment {
 
     public struct Conflict: Error, CustomStringConvertible, Sendable {
         public let key: String
-        public let sources: [String]
+        public let services: [String]
         public var description: String {
-            "\(key) has different values in \(sources.joined(separator: " and "))"
+            "\(key) has different values in \(services.joined(separator: " and "))"
         }
     }
 
@@ -159,42 +181,37 @@ public enum RunEnvironment {
 
     public struct Resolved: Sendable {
         public let values: [String: String]
-        public let sources: [(source: Source, env: String)]
-        /// Keys a source declares but has no value for, per `source@env`.
+        public let services: [(service: Service, env: String)]
+        /// Keys a service declares but has no value for, per `service@env`.
         public let missing: [String: [String]]
     }
 
-    /// `aliases` (project variable → registry key) add the project's own names for values.
-    public static func resolve(_ refs: [SourceRef], aliases: [String: String] = [:], registry: Registry = Registry(),
+    public static func resolve(_ refs: [ServiceRef], registry: Registry = Registry(),
                                store: SecretStore = SecretStore()) throws -> Resolved {
         var values: [String: String] = [:]
         var owner: [String: String] = [:]
-        var sources: [(Source, String)] = []
+        var services: [(Service, String)] = []
         var missing: [String: [String]] = [:]
         for ref in refs {
-            guard let source = try? registry.source(ref.source) else {
-                throw Unknown(ref: ref.description, reason: "no such source in the registry")
+            guard let service = try? registry.service(ref.service) else {
+                throw Unknown(ref: ref.description, reason: "no such service in the registry")
             }
-            let env = ref.env ?? source.defaultEnv
-            guard source.envs.contains(env) else {
-                throw Unknown(ref: ref.description, reason: "environments are " + source.envs.joined(separator: ", "))
+            let env = ref.env ?? service.defaultEnv
+            guard service.envs.contains(env) else {
+                throw Unknown(ref: ref.description, reason: "environments are " + service.envs.joined(separator: ", "))
             }
-            let own = try store.values(source: source.id, env: env)
-            let absent = source.keys.map(\.name).filter { (own[$0] ?? "").isEmpty }
-            if !absent.isEmpty { missing["\(source.id)@\(env)"] = absent }
-            for (key, value) in own where source.keys.contains(where: { $0.name == key }) {
+            let own = try store.values(service: service.id, env: env)
+            let absent = service.keys.map(\.name).filter { (own[$0] ?? "").isEmpty }
+            if !absent.isEmpty { missing["\(service.id)@\(env)"] = absent }
+            for (key, value) in own where service.keys.contains(where: { $0.name == key }) {
                 if let existing = values[key], existing != value {
-                    throw Conflict(key: key, sources: [owner[key]!, "\(source.id)@\(env)"])
+                    throw Conflict(key: key, services: [owner[key]!, "\(service.id)@\(env)"])
                 }
                 values[key] = value
-                owner[key] = "\(source.id)@\(env)"
+                owner[key] = "\(service.id)@\(env)"
             }
-            sources.append((source, env))
+            services.append((service, env))
         }
-        for (projectName, key) in aliases {
-            if let value = values[key] { values[projectName] = value }
-            else { missing["alias \(projectName)", default: []].append(key) }
-        }
-        return Resolved(values: values, sources: sources, missing: missing)
+        return Resolved(values: values, services: services, missing: missing)
     }
 }

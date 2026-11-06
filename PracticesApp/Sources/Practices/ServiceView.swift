@@ -1,10 +1,10 @@
 import SwiftUI
 import PracticesCore
 
-/// A source card (mock-up board 1): targets, keys, guards, notes, documents and fields.
-struct SourceView: View {
+/// A service card: endpoints, conditions, links, keys, guards, notes, documents and fields.
+struct ServiceView: View {
     @Environment(RegistryModel.self) private var registry
-    let source: Source
+    let service: Service
     @State private var editing: KeyEdit?
     @State private var connecting = false
 
@@ -21,9 +21,11 @@ struct SourceView: View {
                 Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
                     GridRow {
                         VStack(spacing: 16) {
-                            targets
+                            endpoints
+                            if !service.conditionIDs.isEmpty { conditions }
                             practices
-                            if !source.guards.isEmpty { guards }
+                            links
+                            if !service.guards.isEmpty { guards }
                             notes
                         }
                         VStack(spacing: 16) {
@@ -38,25 +40,25 @@ struct SourceView: View {
             .padding(20)
             .frame(maxWidth: 1100, alignment: .leading)
         }
-        .navigationTitle(source.name)
+        .navigationTitle(service.name)
         .toolbar {
             ToolbarItem {
-                Button { Task { await registry.check(source.id) } } label: {
+                Button { Task { await registry.check(service.id) } } label: {
                     Label("Check", systemImage: "arrow.clockwise")
                 }
-                .disabled(registry.checking.contains(source.id))
+                .disabled(registry.checking.contains(service.id))
             }
             ToolbarItem {
                 Button { connecting = true } label: { Label("Connect to project…", systemImage: "arrow.right.doc.on.clipboard") }
-                    .help("Write this source's values into a project's env file")
+                    .help("Write this service's values into a project's env file")
             }
             ToolbarItem {
-                Button { registry.revealSource(source.id) } label: { Label("Show in Finder", systemImage: "folder") }
+                Button { registry.revealService(service.id) } label: { Label("Show in Finder", systemImage: "folder") }
             }
         }
-        .sheet(isPresented: $connecting) { ConnectSheet(source: source) }
+        .sheet(isPresented: $connecting) { ConnectSheet(service: service) }
         .sheet(item: $editing) { edit in
-            SecretSheet(source: source, key: edit.key, env: edit.env)
+            SecretSheet(service: service, key: edit.key, env: edit.env)
         }
     }
 
@@ -65,34 +67,37 @@ struct SourceView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(verbatim: source.name).font(.title2.weight(.semibold))
-                Chip(text: source.kind, mono: true)
-                ForEach(source.tags, id: \.self) { tag in
+                Text(verbatim: service.name).font(.title2.weight(.semibold))
+                Chip(text: service.kind, mono: true)
+                ForEach(service.tags, id: \.self) { tag in
                     Chip(text: tag, tint: tag == "read-only" ? .orange : nil)
                 }
             }
-            if let description = source.description {
+            if let description = service.description {
                 Text(verbatim: description).foregroundStyle(.secondary)
             }
+            // Where the card is, the repository it is built from, the other names it goes by.
+            let facts = [registry.projectPaths[service.project] ?? service.project, service.repo?.description,
+                         service.aliases.isEmpty ? nil : "aka " + service.aliases.joined(separator: ", ")].compactMap { $0 }
+            Text(verbatim: facts.joined(separator: "  ·  ")).font(.caption.monospaced()).foregroundStyle(.secondary)
+                .textSelection(.enabled)
         }
     }
 
     // MARK: Cards
 
-    private var targets: some View {
-        Card(title: "Targets", trailing: lastCheckText) {
-            let results = registry.checks[source.id] ?? []
+    private var endpoints: some View {
+        Card(title: "Endpoints", trailing: lastCheckText) {
+            let results = registry.checks[service.id] ?? []
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(results.filter { $0.target == "requires" }, id: \.self) { r in
-                    Label { Text(verbatim: r.message ?? "") } icon: { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red) }
-                        .font(.callout)
-                }
-                ForEach(source.targets, id: \.id) { target in
-                    let result = results.first { $0.target == target.id }
+                ForEach(service.endpoints, id: \.id) { endpoint in
+                    let result = results.first { $0.endpoint == endpoint.id }
                     HStack(spacing: 8) {
                         HealthDot(health: result.map { $0.ok ? .up : .down } ?? .unknown)
-                        Text(verbatim: target.id).font(.callout.monospaced())
-                        Text(verbatim: target.label ?? "").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Text(verbatim: endpoint.id).font(.callout.monospaced())
+                        // The template names keys, never their values.
+                        Text(verbatim: endpoint.label ?? endpoint.address ?? endpoint.url ?? "")
+                            .font(.callout).foregroundStyle(.secondary).lineLimit(1)
                         Spacer()
                         if let result {
                             Text(verbatim: result.ok ? (result.millis.map { "\($0) ms" } ?? "") : (result.message ?? ""))
@@ -101,14 +106,62 @@ struct SourceView: View {
                         }
                     }
                 }
-                if source.targets.isEmpty { Text("No targets").foregroundStyle(.secondary).font(.callout) }
+                if service.endpoints.isEmpty { Text("No endpoints").foregroundStyle(.secondary).font(.callout) }
             }
         }
     }
 
+    private var conditions: some View {
+        Card(title: "Conditions", trailing: nil) {
+            let results = registry.checks[service.id] ?? []
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(service.conditionIDs, id: \.self) { id in
+                    let condition = registry.condition(id)
+                    let failed = results.first { $0.endpoint == "requires:\(id)" && !$0.ok }
+                    let scope = service.requires.contains(id) ? [] : service.endpoints.filter { $0.requires.contains(id) }.map(\.id)
+                    Label {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(verbatim: (condition?.name ?? id) + (scope.isEmpty ? "" : "  ·  " + scope.joined(separator: ", "))).font(.callout)
+                            if let hint = condition?.hint ?? failed?.message { Text(verbatim: hint).font(.caption).foregroundStyle(.secondary) }
+                        }
+                    } icon: {
+                        Image(systemName: failed == nil ? "network.badge.shield.half.filled" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(failed == nil ? Color.secondary : Color.red)
+                    }
+                }
+            }
+        }
+    }
+
+    private var links: some View {
+        Card(title: "Links", trailing: nil) {
+            let out = registry.links(of: service.id), incoming = registry.links(to: service.id)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(out, id: \.self) { link in linkRow("→", link.to, link) }
+                ForEach(incoming, id: \.link) { from, link in linkRow("←", from, link, incoming: true) }
+                if out.isEmpty && incoming.isEmpty { Text("No links").foregroundStyle(.secondary).font(.callout) }
+            }
+        }
+    }
+
+    /// `→ xkeeper-pg/devices@prod` over `db x-keeper_devices.devices (read) — why`. For an
+    /// incoming link the other side is the caller and the endpoint is this service's.
+    private func linkRow(_ arrow: String, _ other: String, _ link: PracticesCore.Link, incoming: Bool = false) -> some View {
+        Button { registry.selection = .service(other) } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: "\(arrow) \(other)" + (link.endpoint.map { incoming ? " (to \($0))" : "/\($0)" } ?? "") + (link.env.map { "@\($0)" } ?? ""))
+                    .font(.callout.monospaced())
+                let how = [link.via, link.what, link.access.map { "(\($0))" }, link.why.map { "— \($0)" }].compactMap { $0 }
+                if !how.isEmpty { Text(verbatim: how.joined(separator: " ")).font(.caption).foregroundStyle(.secondary) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private var practices: some View {
         Card(title: "Practices", trailing: nil) {
-            let list = registry.practices[source.id] ?? []
+            let list = registry.practices[service.id] ?? []
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(list) { practice in
                     let last = registry.lastRun(of: practice.ref)
@@ -133,7 +186,7 @@ struct SourceView: View {
     }
 
     private var lastCheckText: String? {
-        guard let date = registry.lastCheck[source.id] else { return String(localized: "not checked yet") }
+        guard let date = registry.lastCheck[service.id] else { return String(localized: "not checked yet") }
         let when = Calendar.current.isDateInToday(date) ? date.formatted(date: .omitted, time: .shortened)
             : date.formatted(date: .abbreviated, time: .shortened)
         return String(localized: "checked \(when)")
@@ -141,29 +194,20 @@ struct SourceView: View {
 
     private var keys: some View {
         Card(title: "Keys", trailing: nil) {
-            let status = registry.keyStatus[source.id] ?? [:]
-            let names = Names.load(source.id)
+            let status = registry.keyStatus[service.id] ?? [:]
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 GridRow {
                     Text("Key").foregroundStyle(.secondary)
-                    ForEach(source.envs, id: \.self) { Text(verbatim: $0).foregroundStyle(.secondary) }
+                    ForEach(service.envs, id: \.self) { Text(verbatim: $0).foregroundStyle(.secondary) }
                 }
                 .font(.caption)
-                ForEach(source.keys, id: \.name) { key in
+                ForEach(service.keys, id: \.name) { key in
                     GridRow {
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
-                                Text(verbatim: key.name).font(.callout.monospaced()).lineLimit(1)
-                                if key.secret { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.tertiary) }
-                            }
-                            let others = (names[key.name] ?? []).map(\.name).filter { $0 != key.name }
-                            if !others.isEmpty {
-                                Text("in projects also: \(others.joined(separator: ", "))")
-                                    .font(.caption2.monospaced()).foregroundStyle(others.count > 1 ? .orange : .secondary)
-                                    .lineLimit(2)
-                            }
+                        HStack(spacing: 4) {
+                            Text(verbatim: key.name).font(.callout.monospaced()).lineLimit(1)
+                            if key.secret { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.tertiary) }
                         }
-                        ForEach(source.envs, id: \.self) { env in
+                        ForEach(service.envs, id: \.self) { env in
                             let set = status[env]?.contains(key.name) == true
                             Button { editing = KeyEdit(key: key.name, env: env) } label: {
                                 Text(set ? "set" : "not set")
@@ -184,7 +228,7 @@ struct SourceView: View {
     private var copies: some View {
         Card(title: "Copies in projects", trailing: nil) {
             if let all = registry.copies {
-                let mine = all.filter { $0.ref.hasPrefix(source.id + "/") }
+                let mine = all.filter { $0.ref.hasPrefix(service.id + "/") }
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(mine, id: \.self) { copy in
                         HStack(alignment: .firstTextBaseline) {
@@ -233,7 +277,7 @@ struct SourceView: View {
     private var guards: some View {
         Card(title: "Guards", trailing: nil) {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(source.guards, id: \.self) { rule in
+                ForEach(service.guards, id: \.self) { rule in
                     Label { Text(verbatim: rule).font(.callout) } icon: {
                         Image(systemName: "lock.shield").foregroundStyle(.orange)
                     }
@@ -244,7 +288,7 @@ struct SourceView: View {
 
     private var notes: some View {
         Card(title: "Notes", trailing: nil) {
-            if let text = registry.notes(of: source.id), !text.isEmpty,
+            if let text = registry.notes(of: service.id), !text.isEmpty,
                let attributed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
                 Text(attributed).font(.callout).textSelection(.enabled)
             } else {
@@ -255,10 +299,10 @@ struct SourceView: View {
 
     private var docs: some View {
         Card(title: "Documentation", trailing: nil) {
-            let docs = registry.docs(of: source.id)
+            let docs = registry.docs(of: service.id)
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(docs, id: \.self) { doc in
-                    Button { registry.open(doc, of: source.id) } label: {
+                    Button { registry.open(doc, of: service.id) } label: {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(verbatim: doc.title).font(.callout)
                             Text(verbatim: [doc.kind.rawValue, doc.section].compactMap { $0 }.joined(separator: " · "))
@@ -274,7 +318,7 @@ struct SourceView: View {
 
     @ViewBuilder
     private var fields: some View {
-        let fields = registry.fields(of: source.id)
+        let fields = registry.fields(of: service.id)
         if !fields.isEmpty {
             Card(title: "Fields", trailing: "\(fields.filter { $0.meaning != nil }.count)/\(fields.count)") {
                 Grid(alignment: .topLeading, horizontalSpacing: 14, verticalSpacing: 7) {
@@ -307,30 +351,30 @@ struct SourceView: View {
 struct SecretSheet: View {
     @Environment(RegistryModel.self) private var registry
     @Environment(\.dismiss) private var dismiss
-    let source: Source
+    let service: Service
     let key: String
     let env: String
     @State private var value = ""
 
     var body: some View {
-        let isSet = registry.keyStatus[source.id]?[env]?.contains(key) == true
+        let isSet = registry.keyStatus[service.id]?[env]?.contains(key) == true
         VStack(alignment: .leading, spacing: 14) {
             Text(verbatim: "\(key)").font(.headline.monospaced())
-            Text(verbatim: "\(source.name) · \(env)").foregroundStyle(.secondary)
+            Text(verbatim: "\(service.name) · \(env)").foregroundStyle(.secondary)
             SecureField(isSet ? "New value (the current one stays hidden)" : "Value", text: $value)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 380)
             HStack {
                 if isSet {
                     Button("Remove value", role: .destructive) {
-                        registry.unset(key: key, source: source.id, env: env)
+                        registry.unset(key: key, service: service.id, env: env)
                         dismiss()
                     }
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save") {
-                    registry.set(value, key: key, source: source.id, env: env)
+                    registry.set(value, key: key, service: service.id, env: env)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)

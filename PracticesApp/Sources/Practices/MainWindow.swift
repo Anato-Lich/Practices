@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import PracticesCore
 
-/// The main window: sources on the left, a source card or Doctor on the right. The app lives
+/// The main window: services on the left, a service card or Doctor on the right. The app lives
 /// in the menu bar; while this window is open it also shows in the Dock and ⌘Tab.
 struct MainWindow: View {
     static let id = "main"
@@ -10,10 +10,8 @@ struct MainWindow: View {
     @Environment(RegistryModel.self) private var registry
     @Environment(MonitorModel.self) private var monitor
     enum SidebarItem: Hashable {
-        case source(String)
+        case service(String)
         case practice(String)
-        case proposals
-        case projects
         case conflicts
         case doctor
     }
@@ -22,11 +20,11 @@ struct MainWindow: View {
         @Bindable var registry = registry
         NavigationSplitView {
             List(selection: $registry.selection) {
-                Section("Sources") {
-                    ForEach(registry.sources) { source in
-                        let practices = registry.practices[source.id] ?? []
+                Section("Services") {
+                    ForEach(registry.services) { service in
+                        let practices = registry.practices[service.id] ?? []
                         if practices.isEmpty {
-                            sourceRow(source)
+                            serviceRow(service)
                         } else {
                             DisclosureGroup {
                                 ForEach(practices) { p in
@@ -36,7 +34,7 @@ struct MainWindow: View {
                                     .tag(SidebarItem.practice(p.ref))
                                 }
                             } label: {
-                                sourceRow(source)
+                                serviceRow(service)
                             }
                         }
                     }
@@ -52,31 +50,6 @@ struct MainWindow: View {
                     }
                 }
                 Section {
-                    Label {
-                        HStack {
-                            Text("Proposals")
-                            Spacer()
-                            if registry.pendingProposals > 0 {
-                                Text(verbatim: String(registry.pendingProposals)).foregroundStyle(.orange).font(.caption)
-                            }
-                        }
-                    } icon: {
-                        Image(systemName: "arrow.triangle.pull")
-                    }
-                    .tag(SidebarItem.proposals)
-                    Label {
-                        HStack {
-                            Text("Projects")
-                            Spacer()
-                            if registry.staleFiles > 0 {
-                                Text(verbatim: String(registry.staleFiles)).foregroundStyle(.orange).font(.caption)
-                                    .help("Files that differ from the registry")
-                            }
-                        }
-                    } icon: {
-                        Image(systemName: "doc.badge.gearshape")
-                    }
-                    .tag(SidebarItem.projects)
                     Label {
                         HStack {
                             Text("Port conflicts")
@@ -112,14 +85,10 @@ struct MainWindow: View {
                 }
             } else {
                 switch registry.selection {
-                case .source(let id):
-                    if let source = registry.source(id) { SourceView(source: source) } else { placeholder }
+                case .service(let id):
+                    if let service = registry.service(id) { ServiceView(service: service) } else { placeholder }
                 case .practice(let ref):
                     PracticeView(model: registry.model(for: ref)).id(ref)
-                case .proposals:
-                    ProposalsView()
-                case .projects:
-                    ProjectsView()
                 case .conflicts:
                     ConflictsView()
                 case .doctor:
@@ -131,60 +100,45 @@ struct MainWindow: View {
         }
         .searchable(text: $registry.searchText, placement: .sidebar, prompt: Text("Fields, practices, docs"))
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Picker(selection: $registry.projectPath) {
-                    Text("No project · first environments").tag(String?.none)
-                    ForEach(registry.projects, id: \.dir.path) { project in
-                        Text(verbatim: project.dir.path.replacingOccurrences(of: NSHomeDirectory() + "/Projects/", with: "")
-                             + " · " + project.manifest.sources.map(\.description).joined(separator: ", "))
-                            .tag(String?.some(project.dir.path))
-                    }
-                } label: {
-                    Label("Project", systemImage: "folder.badge.gearshape")
-                }
-                .help(registry.projects.isEmpty
-                      ? "Projects appear here once they have a practices.yaml (`practicesctl init --write` in the project)."
-                      : "Practices run with the environments this project chose")
-            }
             ToolbarItem {
                 Button { Task { await registry.checkAll() } } label: {
                     Label("Check all", systemImage: "checkmark.circle")
                 }
-                .help("Check preconditions and targets of every source — nothing is checked without asking")
+                .help("Check conditions and endpoints of every service — nothing is checked without asking")
             }
         }
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             registry.reload()
-            registry.reloadProposals()
-            if registry.selection == nil, let first = registry.sources.first { registry.selection = .source(first.id) }
+            if registry.selection == nil, let first = registry.services.first { registry.selection = .service(first.id) }
             guard !CommandLine.arguments.contains("--render-window") else { return }
             NSApp.setActivationPolicy(.regular)
             Task { await registry.scanCopies() }
-            Task { await registry.refreshFiles() }
-            // Names of keys in project env files change as projects do; ~2 s, in the background.
-            Task.detached { _ = try? await Names.refresh() }
         }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }
 
-    private func sourceRow(_ source: Source) -> some View {
+    private func serviceRow(_ service: Service) -> some View {
         HStack(spacing: 8) {
-            HealthDot(health: registry.health(of: source.id))
-                .help(registry.lastCheck[source.id].map { String(localized: "Last check \($0.formatted(date: .abbreviated, time: .shortened))") }
+            HealthDot(health: registry.health(of: service.id))
+                .help(registry.lastCheck[service.id].map { String(localized: "Last check \($0.formatted(date: .abbreviated, time: .shortened))") }
                       ?? String(localized: "Not checked yet"))
-            Text(verbatim: source.name).lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: service.name).lineLimit(1)
+                Text(verbatim: registry.projectPaths[service.project] ?? service.project)
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+            }
             Spacer()
-            if registry.checking.contains(source.id) { ProgressView().controlSize(.mini) }
+            if registry.checking.contains(service.id) { ProgressView().controlSize(.mini) }
         }
-        .tag(SidebarItem.source(source.id))
+        .tag(SidebarItem.service(service.id))
     }
 
     private var placeholder: some View {
         ContentUnavailableView {
-            Label("No sources yet", systemImage: "tray")
+            Label("No services yet", systemImage: "tray")
         } description: {
-            Text("Import the Connectors sources with `practicesctl import connectors`.")
+            Text("Add one with `practicesctl service add <id> --project <project>`.")
         }
     }
 }
@@ -208,8 +162,8 @@ struct HealthDot: View {
     private var help: LocalizedStringKey {
         switch health {
         case .unknown: "Not checked yet"
-        case .up: "All targets answer"
-        case .partial: "Some targets do not answer"
+        case .up: "All endpoints answer"
+        case .partial: "Some endpoints do not answer"
         case .down: "Not reachable"
         }
     }

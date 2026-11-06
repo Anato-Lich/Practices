@@ -8,7 +8,7 @@ import AppKit
 enum DevRender {
     static func runIfRequested() {
         let args = CommandLine.arguments
-        // `--check-to <file>`: run every source check and write the results as JSON, then exit.
+        // `--check-to <file>`: run every service check and write the results as JSON, then exit.
         // Launched with `open`, the app is its own responsible process — the way to see what a
         // check does outside the terminal's network context.
         if let i = args.firstIndex(of: "--check-to"), i + 1 < args.count {
@@ -44,9 +44,7 @@ enum DevRender {
                     while practice.running { try? await Task.sleep(for: .milliseconds(200)) }
                     if let k = args.firstIndex(of: "--step"), k + 1 < args.count { practice.selectedStep = Int(args[k + 1]) }
                 }
-                if let j = args.firstIndex(of: "--source"), j + 1 < args.count { registry.selection = .source(args[j + 1]) }
-                if args.contains("--projects") { await registry.refreshFiles(); registry.selection = .projects }
-                if args.contains("--proposals") { registry.reloadProposals(); registry.selection = .proposals }
+                if let j = args.firstIndex(of: "--service"), j + 1 < args.count { registry.selection = .service(args[j + 1]) }
                 if let j = args.firstIndex(of: "--search"), j + 1 < args.count {
                     registry.searchText = args[j + 1]
                     if let w = args.firstIndex(of: "--wait"), w + 1 < args.count { try? await Task.sleep(for: .seconds(Double(args[w + 1]) ?? 0)) }

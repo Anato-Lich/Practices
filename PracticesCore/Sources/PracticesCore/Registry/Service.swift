@@ -1,22 +1,30 @@
 import Foundation
 
-/// A data source: the first-class object everything else refers to (PLAN, "Центральная
-/// сущность — источник"). Stored as `registry/sources/<id>/source.yaml`; holds names of keys,
-/// never their values.
-public struct Source: Codable, Identifiable, Hashable, Sendable {
+/// A service: a compose service of a repository or an external system without one (Kafka,
+/// X-Keeper Postgres, MoySklad) — what used to be a "source" (DECISIONS 5). Stored as
+/// `projects/<project>/services/<id>/service.yaml` in its space; holds names of keys, never
+/// their values. The id is unique across all spaces (DECISIONS 7).
+public struct Service: Codable, Identifiable, Hashable, Sendable {
     public var id: String
+    /// Where the card lives — for display only; filled by the registry, not written to yaml.
+    public var space = ""
+    public var project = ""
     public var name: String
     public var kind: String                 // postgres, clickhouse, kafka, http, socket…
     public var description: String?
     public var tags: [String]
-    /// Environments this source exists in; each has its own set of values.
+    /// The repository the service is built from; nil for an external service.
+    public var repo: RepoID?
+    /// Other names projects know it by: a compose service, a host (DECISIONS 8).
+    public var aliases: [String]
+    /// Environments this service exists in; each has its own set of values.
     public var envs: [String]
     public var keys: [Key]
-    /// Endpoints worth checking, as templates over the keys: `${XK_PG_HOST}`.
-    public var targets: [Target]
-    /// Checked before `run`, so a missing tunnel fails with a sentence instead of a timeout.
-    public var requires: [Requirement]
-    /// Rules the practices of this source keep, in words (read-only, shared consumer groups).
+    /// Addresses the service is reached at, as templates over the keys: `${XK_PG_HOST}`.
+    public var endpoints: [Endpoint]
+    /// Ids of conditions that hold for the whole service ("corp-network").
+    public var requires: [String]
+    /// Rules the practices of this service keep, in words (read-only, shared consumer groups).
     public var guards: [String]
 
     public struct Key: Codable, Hashable, Sendable {
@@ -64,37 +72,39 @@ public struct Source: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// Either `address` (`host:port`, checked with a TCP connect) or `url` (an HTTP request).
-    public struct Target: Codable, Hashable, Sendable {
+    public struct Endpoint: Codable, Hashable, Sendable {
         public var id: String
         public var label: String?
         public var address: String?
         public var url: String?
+        /// Ids of conditions of this endpoint alone (DECISIONS 10).
+        public var requires: [String]
 
-        public init(id: String, label: String? = nil, address: String? = nil, url: String? = nil) {
-            self.id = id; self.label = label; self.address = address; self.url = url
+        public init(id: String, label: String? = nil, address: String? = nil, url: String? = nil, requires: [String] = []) {
+            self.id = id; self.label = label; self.address = address; self.url = url; self.requires = requires
         }
-    }
 
-    public struct Requirement: Codable, Hashable, Sendable {
-        /// `host:port` template that must accept a TCP connection.
-        public var reachable: String
-        /// What to tell the user when it does not: "нужен WireGuard-туннель".
-        public var hint: String?
-
-        public init(reachable: String, hint: String? = nil) {
-            self.reachable = reachable; self.hint = hint
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(id: try c.decode(String.self, forKey: .id),
+                      label: try c.decodeIfPresent(String.self, forKey: .label),
+                      address: try c.decodeIfPresent(String.self, forKey: .address),
+                      url: try c.decodeIfPresent(String.self, forKey: .url),
+                      requires: try c.decodeIfPresent([String].self, forKey: .requires) ?? [])
         }
     }
 
     public init(id: String, name: String, kind: String, description: String? = nil, tags: [String] = [],
-                envs: [String] = ["prod"], keys: [Key] = [], targets: [Target] = [],
-                requires: [Requirement] = [], guards: [String] = []) {
+                repo: RepoID? = nil, aliases: [String] = [], envs: [String] = ["prod"], keys: [Key] = [],
+                endpoints: [Endpoint] = [], requires: [String] = [], guards: [String] = []) {
         self.id = id; self.name = name; self.kind = kind; self.description = description
-        self.tags = tags; self.envs = envs; self.keys = keys; self.targets = targets
-        self.requires = requires; self.guards = guards
+        self.tags = tags; self.repo = repo; self.aliases = aliases; self.envs = envs; self.keys = keys
+        self.endpoints = endpoints; self.requires = requires; self.guards = guards
     }
 
-    enum CodingKeys: String, CodingKey { case id, name, kind, description, tags, envs, keys, targets, requires, guards }
+    enum CodingKeys: String, CodingKey {
+        case id, name, kind, description, tags, repo, aliases, envs, keys, endpoints, requires, guards
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -103,33 +113,59 @@ public struct Source: Codable, Identifiable, Hashable, Sendable {
         kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "other"
         description = try c.decodeIfPresent(String.self, forKey: .description)
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        repo = try c.decodeIfPresent(RepoID.self, forKey: .repo)
+        aliases = try c.decodeIfPresent([String].self, forKey: .aliases) ?? []
         envs = try c.decodeIfPresent([String].self, forKey: .envs) ?? ["prod"]
         keys = try c.decodeIfPresent([Key].self, forKey: .keys) ?? []
-        targets = try c.decodeIfPresent([Target].self, forKey: .targets) ?? []
-        requires = try c.decodeIfPresent([Requirement].self, forKey: .requires) ?? []
+        endpoints = try c.decodeIfPresent([Endpoint].self, forKey: .endpoints) ?? []
+        requires = try c.decodeIfPresent([String].self, forKey: .requires) ?? []
         guards = try c.decodeIfPresent([String].self, forKey: .guards) ?? []
     }
 
     public var defaultEnv: String { envs.first ?? "prod" }
+
+    /// Conditions of the service and of its endpoints, each once.
+    public var conditionIDs: [String] {
+        var seen = Set<String>()
+        return (requires + endpoints.flatMap(\.requires)).filter { seen.insert($0).inserted }
+    }
 }
 
-/// A document attached to a source: a file under `docs/` or a link.
-public struct SourceDoc: Codable, Hashable, Sendable {
+/// `service@env`; without `@env` the service's first environment.
+public struct ServiceRef: Hashable, Sendable, CustomStringConvertible {
+    public var service: String
+    public var env: String?
+
+    public init(service: String, env: String? = nil) { self.service = service; self.env = env }
+
+    public init(parsing text: String) {
+        let parts = text.split(separator: "@", maxSplits: 1).map(String.init)
+        self.init(service: parts[0], env: parts.count > 1 ? parts[1] : nil)
+    }
+
+    public var description: String { env.map { "\(service)@\($0)" } ?? service }
+}
+
+/// A document about a service: a file in a repository (`repo` + `path`), a file beside the card
+/// under `docs/`, or a link. Documentation that already lives in code repositories is referred
+/// to, not copied.
+public struct ServiceDoc: Codable, Hashable, Sendable {
     public enum Kind: String, Codable, Sendable { case official, collected, generated }
     public var title: String
     public var kind: Kind
-    /// Relative to the source's `docs/` folder, or absolute (a file in a project).
+    /// The repository `path` is in; nil — relative to the service's `docs/` folder, or absolute.
+    public var repo: RepoID?
     public var path: String?
     public var url: String?
     /// Heading inside the file this doc is about, when it is one section of a bigger file.
     public var section: String?
 
-    public init(title: String, kind: Kind, path: String? = nil, url: String? = nil, section: String? = nil) {
-        self.title = title; self.kind = kind; self.path = path; self.url = url; self.section = section
+    public init(title: String, kind: Kind, repo: RepoID? = nil, path: String? = nil, url: String? = nil, section: String? = nil) {
+        self.title = title; self.kind = kind; self.repo = repo; self.path = path; self.url = url; self.section = section
     }
 }
 
-/// One entry of `fields.yaml`: what a field of the source's results means.
+/// One entry of `fields.yaml`: what a field of the service's results means.
 public struct FieldDoc: Codable, Hashable, Sendable {
     public var path: String                 // extra.acc_motion
     public var type: String?

@@ -1,44 +1,27 @@
 import Foundation
 
-/// An env file of a project that Practices keeps filled: the registry is the source, the file
-/// is written from it (DECISIONS 48) — the way a new source reaches a project.
-public struct ManagedFile: Codable, Hashable, Sendable {
+/// What to write into an env file of a project: the registry is the source, the file is
+/// written from it (DECISIONS 48) and only on command. Nothing remembers the file afterwards:
+/// which service a repository uses and under which names is a link (DECISIONS 18).
+public struct ManagedFile: Hashable, Sendable {
     /// Relative to the project directory: `.env`, `.default.env`, `deploy/.deploy.env`.
     public var path: String
-    public var sources: [SourceRef]
+    public var services: [ServiceRef]
     /// Project variable → registry key, for projects that name variables their own way.
     public var env: [String: String]
-    /// Registry keys to write; nil writes every key of the sources.
+    /// Registry keys to write; nil writes every key of the services.
     public var only: [String]?
 
-    public init(path: String, sources: [SourceRef], env: [String: String] = [:], only: [String]? = nil) {
-        self.path = path; self.sources = sources; self.env = env; self.only = only
+    public init(path: String, services: [ServiceRef], env: [String: String] = [:], only: [String]? = nil) {
+        self.path = path; self.services = services; self.env = env; self.only = only
     }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        path = try c.decode(String.self, forKey: .path)
-        sources = try c.decodeIfPresent([SourceRef].self, forKey: .sources) ?? []
-        env = try c.decodeIfPresent([String: String].self, forKey: .env) ?? [:]
-        only = try c.decodeIfPresent([String].self, forKey: .only)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(path, forKey: .path)
-        try c.encode(sources, forKey: .sources)
-        if !env.isEmpty { try c.encode(env, forKey: .env) }
-        if let only { try c.encode(only, forKey: .only) }
-    }
-
-    enum CodingKeys: String, CodingKey { case path, sources, env, only }
 }
 
-/// Writes managed env files. Existing keys keep their line and only change their value; new
+/// Writes env files. Existing keys keep their line and only change their value; new
 /// keys go into a marked block at the end; everything else in the file stays as it is.
 public enum EnvFiles {
 
-    public static let blockStart = "# >>> practices — values from ~/.practices; change them in Practices, then sync"
+    public static let blockStart = "# >>> practices — values from ~/.practices; change them in Practices, then connect again"
     public static let blockEnd = "# <<< practices"
 
     public enum State: String, Codable, Sendable { case same, changed, new, missingValue }
@@ -47,7 +30,7 @@ public enum EnvFiles {
     public struct Line: Hashable, Sendable, Codable {
         public let variable: String
         public let key: String
-        public let source: String
+        public let service: String
         public let env: String
         public let state: State
     }
@@ -56,18 +39,18 @@ public enum EnvFiles {
         public let description: String
     }
 
-    /// Variables the file should hold: every key of its sources (or `only`), under the
+    /// Variables the file should hold: every key of its services (or `only`), under the
     /// project's alias when it has one.
-    static func wanted(_ file: ManagedFile, registry: Registry, store: SecretStore) throws -> [(variable: String, key: String, source: String, env: String, value: String?)] {
+    static func wanted(_ file: ManagedFile, registry: Registry, store: SecretStore) throws -> [(variable: String, key: String, service: String, env: String, value: String?)] {
         var out: [(String, String, String, String, String?)] = []
         let aliasesByKey = Dictionary(grouping: file.env, by: \.value).mapValues { $0.map(\.key).sorted() }
-        for ref in file.sources {
-            let source = try registry.source(ref.source)
-            let env = ref.env ?? source.defaultEnv
-            let values = try store.values(source: source.id, env: env)
-            for key in source.keys where file.only?.contains(key.name) ?? true {
+        for ref in file.services {
+            let service = try registry.service(ref.service)
+            let env = ref.env ?? service.defaultEnv
+            let values = try store.values(service: service.id, env: env)
+            for key in service.keys where file.only?.contains(key.name) ?? true {
                 for variable in aliasesByKey[key.name] ?? [key.name] {
-                    out.append((variable, key.name, source.id, env, values[key.name].flatMap { $0.isEmpty ? nil : $0 }))
+                    out.append((variable, key.name, service.id, env, values[key.name].flatMap { $0.isEmpty ? nil : $0 }))
                 }
             }
         }
@@ -77,13 +60,13 @@ public enum EnvFiles {
     public static func plan(_ file: ManagedFile, project: URL, registry: Registry = Registry(),
                             store: SecretStore = SecretStore()) throws -> [Line] {
         let url = project.appendingPathComponent(file.path)
-        let existing = (try? String(contentsOf: url, encoding: .utf8)).map(ConnectorsImport.parseDotenv) ?? []
+        let existing = (try? String(contentsOf: url, encoding: .utf8)).map(parseDotenv) ?? []
         let current = Dictionary(existing.map { ($0.key, $0.value) }, uniquingKeysWith: { _, last in last })
         return try wanted(file, registry: registry, store: store).map { w in
             let state: State = w.value == nil ? .missingValue
                 : current[w.variable] == nil ? .new
                 : current[w.variable] == w.value ? .same : .changed
-            return Line(variable: w.variable, key: w.key, source: w.source, env: w.env, state: state)
+            return Line(variable: w.variable, key: w.key, service: w.service, env: w.env, state: state)
         }
     }
 
@@ -93,7 +76,7 @@ public enum EnvFiles {
                              registry: Registry = Registry(), store: SecretStore = SecretStore()) async throws -> [Line] {
         let url = project.appendingPathComponent(file.path)
         // A committed file (hyper-imu's `.default.env`) may hold plain settings, never secrets.
-        let secretKeys = try file.sources.flatMap { try registry.source($0.source).keys.filter(\.secret).map(\.name) }
+        let secretKeys = try file.services.flatMap { try registry.service($0.service).keys.filter(\.secret).map(\.name) }
         let writesSecrets = try wanted(file, registry: registry, store: store).contains { secretKeys.contains($0.key) && $0.value != nil }
         if !force, writesSecrets, try await isTracked(url) {
             throw Refused(description: "\(file.path) is tracked by git (not in .gitignore) — secrets would be committed. Ignore it first, write only plain keys (--only), or --force.")
@@ -117,8 +100,8 @@ public enum EnvFiles {
     static func render(_ text: String, values: [String: String], order: [String]) -> String {
         var lines = text.isEmpty ? [] : text.components(separatedBy: "\n")
         if lines.last == "" { lines.removeLast() }
-        // Drop the old block; its keys are placed again below.
-        if let start = lines.firstIndex(of: blockStart) {
+        // Drop the old block (whatever its heading said then); its keys are placed again below.
+        if let start = lines.firstIndex(where: { $0.hasPrefix("# >>> practices") }) {
             let end = lines[start...].firstIndex(of: blockEnd) ?? (lines.count - 1)
             lines.removeSubrange(start...end)
             while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeLast() }
@@ -171,59 +154,25 @@ public enum EnvFiles {
         let ignored = (try? await Shell.run("git", ["-C", probe.path, "check-ignore", "-q", url.path])) != nil
         return !ignored
     }
-}
 
-/// Connecting sources to projects and keeping their files current.
-public enum ProjectFiles {
-
-    /// Adds (or replaces) a managed file in the project's manifest, then writes it.
-    @discardableResult
-    public static func connect(_ file: ManagedFile, project: URL, force: Bool = false) async throws -> [EnvFiles.Line] {
-        var manifest = ProjectManifest.load(project) ?? ProjectManifest(sources: [])
-        if let i = manifest.files.firstIndex(where: { $0.path == file.path }) {
-            var merged = manifest.files[i]
-            for ref in file.sources {
-                merged.sources.removeAll { $0.source == ref.source }
-                merged.sources.append(ref)
+    /// Parses a dotenv file: `KEY=value`, optional `export `, quotes stripped, `#` comments.
+    public static func parseDotenv(_ text: String) -> [(key: String, value: String)] {
+        var result: [(String, String)] = []
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            if line.hasPrefix("export ") { line = String(line.dropFirst(7)) }
+            guard let eq = line.firstIndex(of: "=") else { continue }
+            let key = line[..<eq].trimmingCharacters(in: .whitespaces)
+            var value = line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
+            if value.count >= 2, let q = value.first, (q == "\"" || q == "'"), value.last == q {
+                value = String(value.dropFirst().dropLast())
+            } else if let hash = value.range(of: " #") {
+                value = value[..<hash.lowerBound].trimmingCharacters(in: .whitespaces)
             }
-            merged.env.merge(file.env) { _, new in new }
-            if let only = file.only { merged.only = Array(Set((merged.only ?? []) + only)).sorted() }
-            manifest.files[i] = merged
-        } else {
-            manifest.files.append(file)
+            guard key.range(of: #"^[A-Za-z_][A-Za-z0-9_]*$"#, options: .regularExpression) != nil else { continue }
+            result.append((key, value))
         }
-        for ref in file.sources where !manifest.sources.contains(where: { $0.source == ref.source }) {
-            manifest.sources.append(ref)
-        }
-        let target = manifest.files.first { $0.path == file.path }!
-        let lines = try await EnvFiles.write(target, project: project, force: force)
-        try manifest.save(to: project)
-        return lines
-    }
-
-    public struct FileStatus: Sendable {
-        public let project: URL
-        public let file: ManagedFile
-        public let lines: [EnvFiles.Line]
-        public var stale: Bool { lines.contains { $0.state == .changed || $0.state == .new } }
-    }
-
-    /// Every managed file of every project, with what a sync would change.
-    public static func status(root: String = Monitor.projectsRoot()) -> [FileStatus] {
-        ProjectManifest.all(root: root).flatMap { project in
-            project.manifest.files.compactMap { file in
-                (try? EnvFiles.plan(file, project: project.dir)).map { FileStatus(project: project.dir, file: file, lines: $0) }
-            }
-        }
-    }
-
-    /// Rewrites the stale files; returns them.
-    public static func sync(_ statuses: [FileStatus], force: Bool = false) async throws -> [FileStatus] {
-        var done: [FileStatus] = []
-        for s in statuses where s.stale {
-            try await EnvFiles.write(s.file, project: s.project, force: force)
-            done.append(s)
-        }
-        return done
+        return result
     }
 }

@@ -63,7 +63,7 @@ struct DoctorView: View {
         switch kind {
         case .leak: "A registry secret is written in a file. Move it out and delete the copy."
         case .drift: "The key exists in the registry with another value. One of them is stale."
-        case .shared: "The same value under different names — a source the registry does not have yet."
+        case .shared: "The same value under different names — a service the registry does not have yet."
         case .duplicate: "Every key matches the registry: `practicesctl run` can replace this file."
         }
     }

@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import inspect
-import json
 import os
 import threading
 import time
@@ -19,7 +18,8 @@ from typing import Any, Callable
 
 from . import _shape
 
-REGISTRY = Path(os.environ.get("PRACTICES_REGISTRY", str(Path.home() / ".practices" / "registry")))
+#: Roots of the spaces practices live in (Practices sets PRACTICES_SPACES).
+SPACES = [Path(p) for p in os.environ.get("PRACTICES_SPACES", "").split(os.pathsep) if p]
 
 #: Filled by `use()` wrappers; the runner reports it as the run's steps.
 STEPS: list[dict[str, Any]] = []
@@ -30,27 +30,21 @@ _loop: asyncio.AbstractEventLoop | None = None
 _loop_lock = threading.Lock()
 
 
-#: `{ref: path}` — code to run instead of the registry's, for checking a proposal before it
-#: becomes a version (Practices sets PRACTICES_OVERRIDES).
-OVERRIDES: dict[str, str] = json.loads(os.environ.get("PRACTICES_OVERRIDES", "{}") or "{}")
-
-
 def path_of(ref: str) -> Path:
-    """`source/name` → registry/sources/<source>/practices/<name>.py; `chains/name` → registry/chains/<name>.py."""
-    if ref in OVERRIDES:
-        return Path(OVERRIDES[ref])
+    """`service/name` → <space>/projects/*/services/<service>/practices/<name>.py;
+    `chains/name` → <space>/projects/*/chains/<name>.py. Ids are unique across spaces."""
     head, _, name = ref.partition("/")
     if not name:
-        raise ValueError(f"practice reference is 'source/name', got {ref!r}")
-    if head == "chains":
-        return REGISTRY / "chains" / f"{name}.py"
-    return REGISTRY / "sources" / head / "practices" / f"{name}.py"
+        raise ValueError(f"practice reference is 'service/name', got {ref!r}")
+    pattern = f"projects/*/chains/{name}.py" if head == "chains" else f"projects/*/services/{head}/practices/{name}.py"
+    for space in SPACES:
+        for path in sorted(space.glob(pattern)):
+            return path
+    raise FileNotFoundError(f"no practice {ref}")
 
 
 def load(ref: str):
     path = path_of(ref)
-    if not path.exists():
-        raise FileNotFoundError(f"no practice {ref} ({path})")
     spec = importlib.util.spec_from_file_location("practice_" + ref.replace("/", "__").replace("-", "_"), path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -105,7 +99,7 @@ def use(ref: str) -> Callable[..., Any]:
 
 
 def update_secret(key: str, value: str) -> None:
-    """Hands a new value of one of the source's keys (a rotated token) back to the store."""
+    """Hands a new value of one of the service's keys (a rotated token) back to the store."""
     SECRET_UPDATES.append({"key": key, "value": value})
     os.environ[key] = value
 

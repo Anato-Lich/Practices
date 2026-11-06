@@ -5,7 +5,7 @@ import Foundation
 /// groups serve the window and the MCP `search` tool.
 public struct SearchResults: Sendable, Codable {
     public struct FieldHit: Hashable, Sendable, Codable {
-        public let source: String
+        public let service: String
         public let field: FieldDoc
     }
     public struct ResultHit: Hashable, Sendable, Codable {
@@ -20,27 +20,19 @@ public struct SearchResults: Sendable, Codable {
     }
     public struct TextHit: Hashable, Sendable, Codable {
         public let title: String
-        public let source: String?
+        public let service: String?
         public let path: String
         public let excerpt: String
     }
 
-    public struct NameHit: Hashable, Sendable, Codable {
-        public let source: String
-        public let key: String
-        public let name: KnownName
-    }
-
     public var fields: [FieldHit] = []
-    /// Registry keys a project variable name stands for (`SRC_PG_PASSWORD` → XK_PG_PASSWORD).
-    public var names: [NameHit] = []
     public var results: [ResultHit] = []
     public var docs: [TextHit] = []
     public var code: [TextHit] = []
 
     public init() {}
 
-    public var isEmpty: Bool { names.isEmpty && fields.isEmpty && results.isEmpty && docs.isEmpty && code.isEmpty }
+    public var isEmpty: Bool { fields.isEmpty && results.isEmpty && docs.isEmpty && code.isEmpty }
 }
 
 public enum Search {
@@ -53,22 +45,13 @@ public enum Search {
         var out = SearchResults()
 
         // Fields: path, last path component or meaning.
-        for id in registry.sourceIDs() {
+        let services = registry.serviceDirs()
+        for (_, _, id, _) in services {
             for field in registry.fields(of: id) where matches(field.path, q) || (field.meaning?.lowercased().contains(q) ?? false) {
-                out.fields.append(.init(source: id, field: field))
+                out.fields.append(.init(service: id, field: field))
             }
         }
         out.fields.sort { rank($0.field.path, q) < rank($1.field.path, q) }
-
-        // Project variable names and registry keys.
-        for id in registry.sourceIDs() {
-            for (key, names) in Names.load(id, registry: registry) {
-                for name in names where name.name.lowercased().contains(q) || (key.lowercased().contains(q) && name.name != key) {
-                    out.names.append(.init(source: id, key: key, name: name))
-                }
-            }
-        }
-        out.names.sort { ($0.source, $0.key, $0.name.name) < ($1.source, $1.key, $1.name.name) }
 
         // Practices whose latest result schema has the field (steps included for chains).
         let decoder = JSONDecoder()
@@ -107,29 +90,35 @@ public enum Search {
             }
         }
 
-        // Documents and notes, full text.
-        for id in registry.sourceIDs() {
+        // Documents and notes, full text. A document in a repository is read from its clone.
+        var clones: [RepoID: String]?
+        for (_, _, id, dir) in services {
             if let notes = registry.notes(of: id), let excerpt = excerpt(notes, q) {
-                out.docs.append(.init(title: "Notes", source: id, path: registry.dir(of: id).appendingPathComponent("notes.md").path, excerpt: excerpt))
+                out.docs.append(.init(title: "Notes", service: id, path: dir.appendingPathComponent("notes.md").path, excerpt: excerpt))
             }
             for doc in registry.docs(of: id) {
                 guard let path = doc.path else { continue }
-                let file = path.hasPrefix("/") ? path : registry.dir(of: id).appendingPathComponent("docs/\(path)").path
+                var file = path.hasPrefix("/") ? path : dir.appendingPathComponent("docs/\(path)").path
+                if let repo = doc.repo {
+                    if clones == nil { clones = Repos.clones(roots: registry.searchRoots) }
+                    guard let clone = clones?[repo] else { continue }
+                    file = clone + "/" + path
+                }
                 guard var text = try? String(contentsOfFile: file, encoding: .utf8) else { continue }
                 if let section = doc.section { text = Self.section(section, of: text) ?? text }
                 if let excerpt = excerpt(text, q) {
-                    out.docs.append(.init(title: doc.title, source: id, path: file, excerpt: excerpt))
+                    out.docs.append(.init(title: doc.title, service: id, path: file, excerpt: excerpt))
                 }
             }
         }
 
-        // One document attached to several sources is one hit.
+        // One document attached to several services is one hit.
         var byPath: [String: SearchResults.TextHit] = [:]
         var order: [String] = []
         for hit in out.docs {
             if let existing = byPath[hit.path] {
-                let sources = [existing.source, hit.source].compactMap { $0 }.joined(separator: ", ")
-                byPath[hit.path] = SearchResults.TextHit(title: existing.title, source: sources, path: hit.path, excerpt: existing.excerpt)
+                let services = [existing.service, hit.service].compactMap { $0 }.joined(separator: ", ")
+                byPath[hit.path] = SearchResults.TextHit(title: existing.title, service: services, path: hit.path, excerpt: existing.excerpt)
             } else {
                 byPath[hit.path] = hit
                 order.append(hit.path)
@@ -140,7 +129,7 @@ public enum Search {
         // Code and docstrings of practices.
         for practice in store.all() {
             guard let code = try? store.code(of: practice), let excerpt = excerpt(code, q) else { continue }
-            out.code.append(.init(title: practice.ref, source: practice.source, path: store.url(of: practice).path, excerpt: excerpt))
+            out.code.append(.init(title: practice.ref, service: practice.service, path: store.url(of: practice)?.path ?? "", excerpt: excerpt))
         }
         return out
     }

@@ -20,18 +20,13 @@ final class PracticeModel {
     private(set) var failure: String?
     private(set) var versions: [PracticeVersion] = []
     private(set) var runs: [RunRecord] = []
-    private(set) var sets: [ParamSet] = []
     /// A step of a chain chosen to look at; nil shows the final result.
     var selectedStep: Int?
 
     private var runTask: Task<Void, Never>?
 
-    /// Where the project context (environments per source) comes from.
-    weak var registry: RegistryModel?
-
-    init(practice: Practice, registry: RegistryModel? = nil) {
+    init(practice: Practice) {
         self.practice = practice
-        self.registry = registry
         load()
     }
 
@@ -47,10 +42,7 @@ final class PracticeModel {
             await refreshSignature()
         }
         runs = (try? RunsStore())?.runs(of: practice.ref) ?? []
-        sets = store.sets(of: practice)
     }
-
-    func reloadSets() async { sets = store.sets(of: practice) }
 
     private var paramsKey: String { "params:" + practice.ref }
     private func persistParams() { UserDefaults.standard.set(params, forKey: paramsKey) }
@@ -59,7 +51,7 @@ final class PracticeModel {
         signature = try? await PracticeRunner().signature(of: practice)
     }
 
-    /// Saves the code as a new version (a commit of the registry).
+    /// Saves the code as a new version: a commit of this file alone in its space.
     func save() async {
         do {
             try await store.save(code, for: practice)
@@ -84,7 +76,8 @@ final class PracticeModel {
                     try store.writeDraft(code, for: practice)
                     if signature == nil || !(signature?.ok ?? false) { await refreshSignature() }
                 }
-                result = try await PracticeRunner().run(practice, params: params, envs: registry?.contextEnvs ?? [:])
+                // Each service in its first environment: the window has no way to pick another.
+                result = try await PracticeRunner().run(practice, params: params)
             } catch is CancellationError {
                 failure = String(localized: "Stopped")
             } catch {

@@ -77,7 +77,7 @@ public struct PracticeSignature: Codable, Sendable {
     public let doc: String?
 }
 
-/// Runs practices in the Python runtime with the values of the sources they touch in their
+/// Runs practices in the Python runtime with the values of the services they touch in their
 /// environment (the practice itself reads `os.environ`, like any project would).
 public struct PracticeRunner: Sendable {
     public let store: PracticeStore
@@ -90,17 +90,23 @@ public struct PracticeRunner: Sendable {
 
     public struct Failure: Error, CustomStringConvertible, Sendable { public let description: String }
 
-    /// `envs` picks the environment per source (a project's choice, DECISIONS 19); sources
-    /// not named run in their first environment.
-    ///
-    /// `overrides` runs other code in place of a practice's file (a proposal being checked);
-    /// such runs are not recorded and teach no fields.
-    public func run(_ practice: Practice, params: [String: String], envs: [String: String] = [:],
-                    overrides: [String: URL] = [:], record shouldRecord: Bool = true) async throws -> PracticeResult {
+    /// Where the Python side looks practices up: the roots of all spaces.
+    var spacesPath: String {
+        store.registry.spaceIDs().map { store.registry.dir(ofSpace: $0).path }.joined(separator: ":")
+    }
+
+    /// `envs` picks the environment per service; services not named run in their first
+    /// environment. Conditions of the services are checked first (DECISIONS 11): a missing
+    /// tunnel is a sentence here instead of a timeout inside the practice.
+    public func run(_ practice: Practice, params: [String: String], envs: [String: String] = [:]) async throws -> PracticeResult {
         let python = try await PythonRuntime.ensure()
-        let sourceIDs = store.sources(for: practice)
-        let refs = sourceIDs.map { SourceRef(source: $0, env: envs[$0]) }
+        let refs = store.services(for: practice).map { ServiceRef(service: $0, env: envs[$0]) }
         let resolved = try RunEnvironment.resolve(refs, registry: store.registry, store: secrets)
+        var unmet: [String] = []
+        for (service, env) in resolved.services {
+            unmet += await Checks.unmet(service, env: env, values: try secrets.values(service: service.id, env: env), registry: store.registry)
+        }
+        if !unmet.isEmpty { throw Failure(description: unmet.joined(separator: "\n")) }
 
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("practices-run-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -111,14 +117,10 @@ public struct PracticeRunner: Sendable {
 
         var environment = ProcessInfo.processInfo.environment
         for (k, v) in resolved.values { environment[k] = v }
-        environment["PRACTICES_REGISTRY"] = store.registry.root.path
+        environment["PRACTICES_SPACES"] = spacesPath
         environment["PYTHONPATH"] = PythonRuntime.directory.path
         environment["PYTHONUNBUFFERED"] = "1"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
-        if !overrides.isEmpty {
-            let map = overrides.mapValues(\.path)
-            environment["PRACTICES_OVERRIDES"] = String(decoding: try JSONEncoder().encode(map), as: UTF8.self)
-        }
 
         let (stdout, stderr) = try await Self.execute(
             python.path, ["-m", "practices_runner", "run", practice.ref, paramsFile.path, outFile.path],
@@ -126,24 +128,23 @@ public struct PracticeRunner: Sendable {
 
         // Only values of secret keys are masked: database and user names are ordinary text
         // that results legitimately contain.
-        let secretKeys = Set(resolved.sources.flatMap { $0.source.keys.filter(\.secret).map(\.name) })
+        let secretKeys = Set(resolved.services.flatMap { $0.service.keys.filter(\.secret).map(\.name) })
         let secretValues = resolved.values.filter { secretKeys.contains($0.key) }
 
         guard let raw = try? Data(contentsOf: outFile) else {
             throw Failure(description: "the runner produced no result\n" + scrub(stderr, values: secretValues))
         }
-        // Secrets never leave this function: values of the involved sources are masked in
-        // everything the run produced, before it is decoded (PLAN §3.4).
+        // Secrets never leave this function: values of the involved services are masked in
+        // everything the run produced, before it is decoded.
         let masked = scrub(String(decoding: raw, as: UTF8.self), values: secretValues)
         var result = try JSONDecoder().decode(PracticeResult.self, from: Data(masked.utf8))
         // Rotated values were masked above; take them from the raw result instead.
         let rawResult = try? JSONDecoder().decode(PracticeResult.self, from: raw)
-        result.secretsUpdated = try apply(rawResult?.secrets ?? [], sources: resolved.sources)
+        result.secretsUpdated = try apply(rawResult?.secrets ?? [], services: resolved.services)
         result.secrets = nil
         result.stdout = scrub(stdout, values: secretValues)
         result.stderr = scrub(stderr, values: secretValues)
-        result.envs = Dictionary(uniqueKeysWithValues: resolved.sources.map { ($0.source.id, $0.env) })
-        guard overrides.isEmpty, shouldRecord else { return result }
+        result.envs = Dictionary(uniqueKeysWithValues: resolved.services.map { ($0.service.id, $0.env) })
         // A run of unsaved code belongs to no version.
         result.version = await store.isDraft(practice) ? nil : try? await store.versions(of: practice).count
         record(practice, params: params, result: result)
@@ -158,7 +159,7 @@ public struct PracticeRunner: Sendable {
         defer { try? FileManager.default.removeItem(at: work) }
         let out = work.appendingPathComponent("sig.json")
         var environment = ProcessInfo.processInfo.environment
-        environment["PRACTICES_REGISTRY"] = store.registry.root.path
+        environment["PRACTICES_SPACES"] = spacesPath
         environment["PYTHONPATH"] = PythonRuntime.directory.path
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         _ = try await Self.execute(python.path, ["-m", "practices_runner", "signature", practice.ref, out.path],
@@ -176,13 +177,13 @@ public struct PracticeRunner: Sendable {
         return out
     }
 
-    /// A practice may hand back a rotated token (`update_secret`): stored for the source that
+    /// A practice may hand back a rotated token (`update_secret`): stored for the service that
     /// declares the key, in the environment the run used.
-    private func apply(_ updates: [PracticeResult.SecretUpdate], sources: [(source: Source, env: String)]) throws -> [String] {
+    private func apply(_ updates: [PracticeResult.SecretUpdate], services: [(service: Service, env: String)]) throws -> [String] {
         var done: [String] = []
         for update in updates {
-            guard let owner = sources.first(where: { $0.source.keys.contains { $0.name == update.key } }) else { continue }
-            try secrets.set(update.value, key: update.key, source: owner.source.id, env: owner.env)
+            guard let owner = services.first(where: { $0.service.keys.contains { $0.name == update.key } }) else { continue }
+            try secrets.set(update.value, key: update.key, service: owner.service.id, env: owner.env)
             done.append(update.key)
         }
         return done

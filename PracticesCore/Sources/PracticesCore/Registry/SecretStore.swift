@@ -1,6 +1,6 @@
 import Foundation
 
-/// Values of keys: `secrets.json`, `{source: {env: {KEY: value}}}`, mode 0600, excluded from
+/// Values of keys: `secrets.json`, `{service: {env: {KEY: value}}}`, mode 0600, excluded from
 /// Time Machine, never in git (DECISIONS 3). Stored unencrypted by the user's choice; this type
 /// is the one place that reads or writes values, so encryption can be added here alone.
 public struct SecretStore: Sendable {
@@ -32,49 +32,49 @@ public struct SecretStore: Sendable {
         try? target.setResourceValues(excluded)
     }
 
-    /// Values of one source in one environment.
-    public func values(source: String, env: String) throws -> [String: String] {
-        try load()[source]?[env] ?? [:]
+    /// Values of one service in one environment.
+    public func values(service: String, env: String) throws -> [String: String] {
+        try load()[service]?[env] ?? [:]
     }
 
     /// Which of the given keys have a non-empty value, per environment. Never the values.
-    public func status(source: Source) throws -> [String: Set<String>] {
-        let table = try load()[source.id] ?? [:]
+    public func status(service: Service) throws -> [String: Set<String>] {
+        let table = try load()[service.id] ?? [:]
         var result: [String: Set<String>] = [:]
-        for env in source.envs {
+        for env in service.envs {
             let values = table[env] ?? [:]
-            result[env] = Set(source.keys.map(\.name).filter { !(values[$0] ?? "").isEmpty })
+            result[env] = Set(service.keys.map(\.name).filter { !(values[$0] ?? "").isEmpty })
         }
         return result
     }
 
-    public func set(_ value: String, key: String, source: String, env: String) throws {
+    public func set(_ value: String, key: String, service: String, env: String) throws {
         var table = try load()
-        table[source, default: [:]][env, default: [:]][key] = value
+        table[service, default: [:]][env, default: [:]][key] = value
         try save(table)
     }
 
-    public func setAll(_ values: [String: String], source: String, env: String) throws {
+    public func setAll(_ values: [String: String], service: String, env: String) throws {
         var table = try load()
-        table[source, default: [:]][env, default: [:]].merge(values) { _, new in new }
+        table[service, default: [:]][env, default: [:]].merge(values) { _, new in new }
         try save(table)
     }
 
-    public func remove(key: String, source: String, env: String) throws {
+    public func remove(key: String, service: String, env: String) throws {
         var table = try load()
-        table[source]?[env]?[key] = nil
+        table[service]?[env]?[key] = nil
         try save(table)
     }
 
     /// Every secret value with where it belongs, for Doctor's search of plain files. Stays in
     /// this process; callers report names and paths only.
-    func secretValues(sources: [Source]) throws -> [(value: String, source: String, env: String, key: String)] {
+    func secretValues(services: [Service]) throws -> [(value: String, service: String, env: String, key: String)] {
         let table = try load()
         var out: [(String, String, String, String)] = []
-        for source in sources {
-            for key in source.keys where key.secret {
-                for (env, values) in table[source.id] ?? [:] {
-                    if let value = values[key.name], value.count >= 8 { out.append((value, source.id, env, key.name)) }
+        for service in services {
+            for key in service.keys where key.secret {
+                for (env, values) in table[service.id] ?? [:] {
+                    if let value = values[key.name], value.count >= 8 { out.append((value, service.id, env, key.name)) }
                 }
             }
         }

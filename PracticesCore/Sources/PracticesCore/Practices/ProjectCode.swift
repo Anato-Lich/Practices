@@ -1,7 +1,7 @@
 import Foundation
 
-/// Code in ~/Projects that mentions something — the last group of search: logic worth turning
-/// into a practice (mock-up board 6, "В коде проектов · ещё не практика").
+/// Code in ~/Projects that mentions something — the last group of search: logic that is not a
+/// practice yet.
 public struct CodeHit: Codable, Hashable, Sendable {
     public let path: String
     public let line: Int
@@ -57,53 +57,5 @@ public enum ProjectCode {
             }
         }
         return nil
-    }
-
-    /// A draft practice from a Python function in a project: the file's imports, the function,
-    /// and `run` pointing at it. A starting point to edit, not a finished practice.
-    public static func draft(from path: String, function name: String, ref: String) -> String? {
-        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        let lines = text.components(separatedBy: "\n")
-        guard let start = lines.firstIndex(where: {
-            let t = $0.trimmingCharacters(in: .whitespaces)
-            return t.hasPrefix("def \(name)(") || t.hasPrefix("async def \(name)(")
-        }) else { return nil }
-        let indent = lines[start].prefix { $0 == " " }.count
-        var begin = start
-        while begin > 0, lines[begin - 1].trimmingCharacters(in: .whitespaces).hasPrefix("@") { begin -= 1 }
-        var end = start + 1
-        while end < lines.count {
-            let line = lines[end]
-            let t = line.trimmingCharacters(in: .whitespaces)
-            if !t.isEmpty && line.prefix(while: { $0 == " " }).count <= indent && !t.hasPrefix("#") { break }
-            end += 1
-        }
-        let body = lines[begin..<end].map { String($0.dropFirst(min(indent, $0.prefix { $0 == " " }.count))) }
-            .joined(separator: "\n").trimmingCharacters(in: .newlines)
-        let imports = lines.filter { $0.hasPrefix("import ") || $0.hasPrefix("from ") }.joined(separator: "\n")
-        // Module-level constants the function mentions (`_MOVE_START = (2, 3)`), one line each.
-        let constantRegex = try! NSRegularExpression(pattern: #"^([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=]+)?=\s*[^=]"#)
-        let constants = lines.filter { line in
-            guard let m = constantRegex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-                  let r = Range(m.range(at: 1), in: line) else { return false }
-            let name = String(line[r])
-            return name != name.lowercased() && body.range(of: #"\b\#(name)\b"#, options: .regularExpression) != nil
-        }.joined(separator: "\n")
-        let home = NSHomeDirectory() + "/"
-        let origin = path.hasPrefix(home) ? String(path.dropFirst(home.count)) : path
-        return """
-            # practices: \(ref)
-            # Draft from \(origin):\(start + 1) (\(name)). Imports are the source file's: drop what
-            # this function does not need, inline what it needs from its project, then save (⌘S).
-            \(imports)
-            \(constants.isEmpty ? "" : "\n" + constants)
-
-
-            \(body)
-
-
-            run = \(name)
-
-            """
     }
 }

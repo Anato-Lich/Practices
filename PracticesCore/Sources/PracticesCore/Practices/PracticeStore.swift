@@ -1,23 +1,16 @@
 import Foundation
-import Yams
 
-/// A practice: `registry/sources/<source>/practices/<name>.py`, or a chain:
-/// `registry/chains/<name>.py`. Its reference is `source/name` or `chains/name`.
+/// A practice: `projects/<project>/services/<service>/practices/<name>.py` in the service's
+/// space — it belongs to the service it calls (DECISIONS 9) — or a chain:
+/// `projects/<project>/chains/<name>.py`. Its reference is `service/name` or `chains/name`.
 public struct Practice: Identifiable, Hashable, Sendable, Codable {
     public let ref: String
     public var id: String { ref }
     public var isChain: Bool { ref.hasPrefix("chains/") }
-    public var source: String? { isChain ? nil : String(ref.split(separator: "/")[0]) }
+    public var service: String? { isChain ? nil : String(ref.split(separator: "/")[0]) }
     public var name: String { String(ref.split(separator: "/", maxSplits: 1).last ?? "") }
 
     public init(ref: String) { self.ref = ref }
-}
-
-/// Parameters a practice is checked on: its own examples, or the ones an agent sent.
-public struct ParamSet: Codable, Hashable, Sendable {
-    public var name: String
-    public var params: [String: String]
-    public init(name: String, params: [String: String]) { self.name = name; self.params = params }
 }
 
 public struct PracticeVersion: Hashable, Sendable, Codable {
@@ -27,32 +20,54 @@ public struct PracticeVersion: Hashable, Sendable, Codable {
     public let message: String
 }
 
-/// Practices in the registry. Every save is a commit; version N is the file's Nth commit
-/// (DECISIONS 31), so the version history is `git log` and nothing else.
+/// Practices in the registry. Version N is the file's Nth commit (DECISIONS 31), so the
+/// version history is `git log` and nothing else; a file that differs from its last commit is
+/// a draft — the user's own, or an agent's edit waiting to be accepted (DECISIONS 19).
 public struct PracticeStore: Sendable {
     public let registry: Registry
 
     public init(registry: Registry = Registry()) { self.registry = registry }
 
-    public func url(of practice: Practice) -> URL {
-        let parts = practice.ref.split(separator: "/", maxSplits: 1).map(String.init)
-        if practice.isChain { return registry.root.appendingPathComponent("chains/\(parts[1]).py") }
-        return registry.dir(of: parts[0]).appendingPathComponent("practices/\(parts[1]).py")
+    /// The practice's file. A chain that does not exist yet needs the project it will live in;
+    /// nil when the service (or that project) is unknown or the name is not a file name.
+    public func url(of practice: Practice, project: String? = nil) -> URL? {
+        guard Registry.isValidID(practice.name) else { return nil }
+        guard practice.isChain else {
+            return registry.dir(of: practice.service ?? "")?.appendingPathComponent("practices/\(practice.name).py")
+        }
+        let file = "chains/\(practice.name).py"
+        let projects = registry.projectDirs()
+        if let existing = projects.map({ $0.url.appendingPathComponent(file) }).first(where: { FileManager.default.fileExists(atPath: $0.path) }) {
+            return existing
+        }
+        return projects.first { $0.id == project }?.url.appendingPathComponent(file)
+    }
+
+    private func file(of practice: Practice, project: String? = nil) throws -> URL {
+        guard let url = url(of: practice, project: project) else {
+            throw Registry.Failure(practice.isChain ? "no chain \(practice.name): a new one needs its project"
+                                                    : "no service for \(practice.ref)")
+        }
+        // `chains/<name>` is one name for all projects: a second chain would be unreachable.
+        let owner = url.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent
+        if practice.isChain, let project, project != owner {
+            throw Registry.Failure("chain \(practice.name) exists in project \(owner) — a chain's name is global, pick another")
+        }
+        return url
     }
 
     public func all() -> [Practice] {
-        var result: [Practice] = []
-        for id in registry.sourceIDs() { result += list(source: id) }
-        result += chains()
-        return result
+        registry.serviceIDs().flatMap { list(service: $0) } + chains()
     }
 
-    public func list(source id: String) -> [Practice] {
-        names(in: registry.dir(of: id).appendingPathComponent("practices")).map { Practice(ref: "\(id)/\($0)") }
+    public func list(service id: String) -> [Practice] {
+        guard let dir = registry.dir(of: id) else { return [] }
+        return names(in: dir.appendingPathComponent("practices")).map { Practice(ref: "\(id)/\($0)") }
     }
 
-    public func chains() -> [Practice] {
-        names(in: registry.root.appendingPathComponent("chains")).map { Practice(ref: "chains/\($0)") }
+    public func chains(project: String? = nil) -> [Practice] {
+        registry.projectDirs().filter { project == nil || $0.id == project }
+            .flatMap { names(in: $0.url.appendingPathComponent("chains")) }.map { Practice(ref: "chains/\($0)") }
     }
 
     private func names(in dir: URL) -> [String] {
@@ -63,25 +78,23 @@ public struct PracticeStore: Sendable {
     }
 
     public func code(of practice: Practice) throws -> String {
-        try String(contentsOf: url(of: practice), encoding: .utf8)
+        try String(contentsOf: file(of: practice), encoding: .utf8)
     }
 
-    /// Writes the code and commits it; returns the new version number (nil when unchanged).
+    /// Writes the code and commits that file alone; returns the new version number (nil when
+    /// unchanged).
     @discardableResult
-    public func save(_ code: String, for practice: Practice, message: String? = nil) async throws -> Int? {
-        let file = url(of: practice)
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try code.write(to: file, atomically: true, encoding: .utf8)
+    public func save(_ code: String, for practice: Practice, message: String? = nil, project: String? = nil) async throws -> Int? {
+        let file = try writeDraft(code, for: practice, project: project)
         let next = (try await versions(of: practice).count) + 1
-        let committed = try await registry.commit(message.map { "\(practice.ref) v\(next): \($0)" } ?? "\(practice.ref) v\(next)")
+        let committed = try await registry.commit(message.map { "\(practice.ref) v\(next): \($0)" } ?? "\(practice.ref) v\(next)", [file])
         return committed ? next : nil
     }
 
     public func versions(of practice: Practice) async throws -> [PracticeVersion] {
-        let path = url(of: practice).path.replacingOccurrences(of: registry.root.path + "/", with: "")
-        guard FileManager.default.fileExists(atPath: registry.root.appendingPathComponent(".git").path) else { return [] }
-        // A registry without commits yet has no history, not an error.
-        guard let log = try? await registry.git(["log", "--follow", "--format=%H%x09%ct%x09%s", "--", path]) else { return [] }
+        guard let place = url(of: practice).flatMap(registry.place(of:)) else { return [] }
+        // A space without commits yet has no history, not an error.
+        guard let log = try? await registry.git(place.root, ["log", "--follow", "--format=%H%x09%ct%x09%s", "--", place.path]) else { return [] }
         let lines = log.split(separator: "\n").reversed()
         return lines.enumerated().compactMap { i, line in
             let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)
@@ -90,44 +103,27 @@ public struct PracticeStore: Sendable {
         }
     }
 
-    // MARK: Saved parameter sets
-
-    /// `<name>.sets.yaml` beside the practice: named parameter sets new versions are checked on.
-    func setsURL(of practice: Practice) -> URL {
-        url(of: practice).deletingPathExtension().appendingPathExtension("sets.yaml")
-    }
-
-    public func sets(of practice: Practice) -> [ParamSet] {
-        guard let text = try? String(contentsOf: setsURL(of: practice), encoding: .utf8) else { return [] }
-        return (try? YAMLDecoder().decode([ParamSet].self, from: text)) ?? []
-    }
-
-    public func saveSet(_ set: ParamSet, for practice: Practice) async throws {
-        var all = sets(of: practice).filter { $0.name != set.name }
-        all.append(set)
-        try Registry.yaml(all).write(to: setsURL(of: practice), atomically: true, encoding: .utf8)
-        try await registry.commit("\(practice.ref): parameter set \(set.name)")
-    }
-
-    /// Writes the code without committing: a draft that runs can use before it is saved as a
-    /// version.
-    public func writeDraft(_ code: String, for practice: Practice) throws {
-        let file = url(of: practice)
+    /// Writes the code without committing: a draft that runs can use before it becomes a
+    /// version. Returns the file.
+    @discardableResult
+    public func writeDraft(_ code: String, for practice: Practice, project: String? = nil) throws -> URL {
+        let file = try file(of: practice, project: project)
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try code.write(to: file, atomically: true, encoding: .utf8)
+        return file
     }
 
     /// True when the file differs from its last version (or has none yet).
     public func isDraft(_ practice: Practice) async -> Bool {
-        let path = url(of: practice).path.replacingOccurrences(of: registry.root.path + "/", with: "")
-        guard let status = try? await registry.git(["status", "--porcelain", "--", path]) else { return true }
+        guard let place = url(of: practice).flatMap(registry.place(of:)),
+              let status = try? await registry.git(place.root, ["status", "--porcelain", "--", place.path]) else { return true }
         return !status.isEmpty
     }
 
     /// The code of one version.
     public func code(of practice: Practice, at version: PracticeVersion) async throws -> String {
-        let path = url(of: practice).path.replacingOccurrences(of: registry.root.path + "/", with: "")
-        return try await registry.git(["show", "\(version.commit):\(path)"])
+        guard let place = registry.place(of: try file(of: practice)) else { throw Registry.Failure("\(practice.ref) is not in a space") }
+        return try await registry.git(place.root, ["show", "\(version.commit):\(place.path)"])
     }
 
     /// Practices a practice calls through `use("…")`, transitively.
@@ -152,17 +148,17 @@ public struct PracticeStore: Sendable {
         }
     }
 
-    /// Sources whose values a run of this practice needs: its own and its dependencies'.
-    public func sources(for practice: Practice) -> [String] {
+    /// Services whose values a run of this practice needs: its own and its dependencies'.
+    public func services(for practice: Practice) -> [String] {
         var ids: [String] = []
         for p in [practice] + dependencies(of: practice) {
-            if let s = p.source, !ids.contains(s) { ids.append(s) }
+            if let s = p.service, !ids.contains(s) { ids.append(s) }
         }
         return ids
     }
 
-    public static func template(for practice: Practice, source: Source?) -> String {
-        let keys = (source?.keys ?? []).map(\.name).prefix(4).map { "#   \($0)" }.joined(separator: "\n")
+    public static func template(for practice: Practice, service: Service?) -> String {
+        let keys = (service?.keys ?? []).map(\.name).prefix(4).map { "#   \($0)" }.joined(separator: "\n")
         return """
             # practices: \(practice.ref)
             import os
@@ -171,7 +167,7 @@ public struct PracticeStore: Sendable {
             def run(limit: int = 10):
                 \"\"\"What this practice returns, in one sentence.\"\"\"
                 env = os.environ
-                # Values of the source's keys are in the environment, e.g.:
+                # Values of the service's keys are in the environment, e.g.:
             \(keys)
                 return [{"n": i} for i in range(limit)]
 

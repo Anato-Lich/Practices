@@ -1,8 +1,8 @@
 import Foundation
 import CryptoKit
 
-/// A report instead of discipline (PLAN, Doctor). Reads `.env` files and plain text under the
-/// projects root and compares them with the registry. Findings carry key names and paths —
+/// A report instead of discipline. Reads `.env` files and plain text under the projects root
+/// and compares them with the registry. Findings carry key names and paths —
 /// values are compared inside this process and never leave it.
 public struct DoctorFinding: Hashable, Sendable, Codable {
     public enum Kind: String, Sendable, Codable {
@@ -14,7 +14,7 @@ public struct DoctorFinding: Hashable, Sendable, Codable {
     public let kind: Kind
     public let path: String
     public let keys: [String]
-    /// For drift and duplicate: the source the keys belong to; for shared: the other files.
+    /// For drift and duplicate: the service the keys belong to; for shared: the other files.
     public let related: [String]
 }
 
@@ -59,9 +59,9 @@ public enum Doctor {
 
     public static func run(root: String = Monitor.projectsRoot(), registry: Registry = Registry(),
                            store: SecretStore = SecretStore(), scanText: Bool = true) async throws -> [DoctorFinding] {
-        let sources = try registry.sources()
-        var keyOwner: [String: [Source]] = [:]
-        for source in sources { for key in source.keys { keyOwner[key.name, default: []].append(source) } }
+        let services = try registry.services()
+        var keyOwner: [String: [Service]] = [:]
+        for service in services { for key in service.keys { keyOwner[key.name, default: []].append(service) } }
 
         let (envFiles, textFiles) = collect(root: root)
         var findings: [DoctorFinding] = []
@@ -69,36 +69,36 @@ public enum Doctor {
 
         for path in envFiles {
             guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-            let pairs = ConnectorsImport.parseDotenv(text)
-            var bySource: [String: (same: [String], differ: [String])] = [:]
+            let pairs = EnvFiles.parseDotenv(text)
+            var byService: [String: (same: [String], differ: [String])] = [:]
             var unknownCount = 0
             for (key, value) in pairs where !value.isEmpty {
                 guard let owners = keyOwner[key] else {
                     unknownCount += 1
-                    if Source.Key.looksSecret(key), value.count >= 8 {
+                    if Service.Key.looksSecret(key), value.count >= 8 {
                         unknownSecrets[digest(value), default: []].append((path, key))
                     }
                     continue
                 }
-                // A key two sources declare is matched against any of their environments.
+                // A key two services declare is matched against any of their environments.
                 var matched: String?
                 var anyValue = false
-                for source in owners {
-                    for env in source.envs {
-                        guard let stored = try store.values(source: source.id, env: env)[key] else { continue }
+                for service in owners {
+                    for env in service.envs {
+                        guard let stored = try store.values(service: service.id, env: env)[key] else { continue }
                         anyValue = true
-                        if stored == value { matched = source.id }
+                        if stored == value { matched = service.id }
                     }
                 }
                 let owner = matched ?? owners[0].id
-                if matched != nil { bySource[owner, default: ([], [])].same.append(key) }
-                else if anyValue { bySource[owner, default: ([], [])].differ.append(key) }
+                if matched != nil { byService[owner, default: ([], [])].same.append(key) }
+                else if anyValue { byService[owner, default: ([], [])].differ.append(key) }
             }
-            for (source, keys) in bySource.sorted(by: { $0.key < $1.key }) {
+            for (service, keys) in byService.sorted(by: { $0.key < $1.key }) {
                 if !keys.differ.isEmpty {
-                    findings.append(.init(kind: .drift, path: path, keys: keys.differ.sorted(), related: [source]))
-                } else if unknownCount == 0 && bySource.count == 1 {
-                    findings.append(.init(kind: .duplicate, path: path, keys: keys.same.sorted(), related: [source]))
+                    findings.append(.init(kind: .drift, path: path, keys: keys.differ.sorted(), related: [service]))
+                } else if unknownCount == 0 && byService.count == 1 {
+                    findings.append(.init(kind: .duplicate, path: path, keys: keys.same.sorted(), related: [service]))
                 }
             }
         }
@@ -114,13 +114,13 @@ public enum Doctor {
         if scanText {
             // Values of four bytes or more only, as MultiSearch keeps them (secretValues already
             // drops anything under eight).
-            let secrets = try store.secretValues(sources: sources).filter { $0.value.utf8.count >= 4 }
+            let secrets = try store.secretValues(services: services).filter { $0.value.utf8.count >= 4 }
             let search = MultiSearch(secrets.map(\.value))
             for (path, indices) in await search.scan(textFiles).sorted(by: { $0.key < $1.key }) {
                 let hits = indices.map { secrets[$0] }
                 findings.append(.init(kind: .leak, path: path,
                                       keys: Array(Set(hits.map(\.key))).sorted(),
-                                      related: Array(Set(hits.map(\.source))).sorted()))
+                                      related: Array(Set(hits.map(\.service))).sorted()))
             }
         }
 

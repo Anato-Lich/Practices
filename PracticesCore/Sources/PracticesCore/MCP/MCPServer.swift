@@ -1,35 +1,45 @@
 import Foundation
 
-/// Practices for an agent working in a project (PLAN, stage 4): stdio MCP, one JSON-RPC
-/// message per line. Values of secrets are never returned — the agent sees names of variables
-/// and writes code against them (DECISIONS 4). Sources tagged `pii` return shapes, not rows.
+/// Practices for an agent working in a project: stdio MCP, one JSON-RPC message per line.
+/// Everything the window shows is reachable from here (DECISIONS 14). Values of secrets are
+/// never returned — the agent sees names of variables and writes code against them
+/// (DECISIONS 4). Services tagged `pii` return shapes, not rows.
 public final class MCPServer: @unchecked Sendable {
 
     let registry = Registry()
     let secrets = SecretStore()
     lazy var store = PracticeStore(registry: registry)
-    /// The directory the agent's project is in (the server's cwd), shown as a proposal's origin.
+    /// The directory the agent's project is in (the server's cwd), named in notes it leaves.
     let origin: String
 
     public init(origin: String = FileManager.default.currentDirectoryPath) { self.origin = origin }
 
     static let instructions = """
-        Practices is the user's registry of data sources (databases, APIs, sockets), their \
-        credentials and *practices*: small, tested Python functions `run(...)` that fetch or \
-        process data from a source, and *chains* that combine them.
+        Practices is the user's catalogue of their projects: *spaces* (an organisation) hold \
+        *projects* (which nest: a project may have a parent), a project holds *repositories* \
+        (known by remote address, not by folder) and \
+        *services* — a compose service of a repository or an external system (a database, an \
+        API, Kafka). A service has one id, unique everywhere, *endpoints* (addresses), \
+        credentials by name, notes, a dictionary of result fields, *conditions* (e.g. "needs \
+        the corporate network" — read them before the first request), *links* ("this service \
+        calls that one, this way, for this reason"; kept at the caller) and *practices*: small, \
+        tested Python functions `run(...)` that query the service, plus *chains* that combine them.
 
-        Before writing code that reads one of these sources, `search` for the field or the \
-        operation and `get_practice`: reuse the practice instead of writing a new client. Copy \
-        its code as given — the first line `# practices: <ref>@v<N>` is how the copy is tracked; \
-        keep it. Credentials: the code reads environment variables by name (`env_names` lists \
-        them); values are never available to you. The project gets them by running under \
-        `practicesctl run -- <command>`.
+        Start here instead of walking GitLab, GitHub and local folders: `list_projects` / \
+        `get_project` for what belongs where and where the clones are, `get_service` for how a \
+        service is reached and who uses it, `search` for a field or an operation.
 
-        When you change a copied practice in the project (a fix, a faster query), call \
-        `propose_update` with the new code, *what and why*, and the parameters you tried it on. \
-        Practices runs old and new versions and accepts the change itself when the result shape \
-        and rows are the same and it is not slower; otherwise it waits for the user. Record \
-        pitfalls with `add_note` and field meanings with `describe_field`.
+        Before writing code that reads one of these services, `search` and `get_practice`: reuse \
+        the practice instead of writing a new client. Copy its code as given — the first line \
+        `# practices: <ref>@v<N>` is how the copy is tracked; keep it. Credentials: the code \
+        reads environment variables by name (`env_names` lists them); values are never available \
+        to you. The project gets them by running under `practicesctl run <service>… -- <command>`.
+
+        When you fix or improve a practice, or write a new one, send it with `update_practice`; \
+        when you learn that one service calls another, record it with `add_link`. Both are left \
+        as uncommitted changes the user reviews and accepts — say so, and do not treat them as \
+        versions yet. Pitfalls go to `add_note`, field meanings to `describe_field`; those are \
+        saved at once.
         """
 
     // MARK: Loop
@@ -81,7 +91,7 @@ public final class MCPServer: @unchecked Sendable {
             return .success([
                 "protocolVersion": requested,
                 "capabilities": ["tools": ["listChanged": false]],
-                "serverInfo": ["name": "practices", "version": "0.4.0"],
+                "serverInfo": ["name": "practices", "version": "0.5.0"],
                 "instructions": Self.instructions,
             ] as [String: Any])
         case "ping":
@@ -124,9 +134,11 @@ public final class MCPServer: @unchecked Sendable {
 
     func call(_ name: String, _ args: [String: Any]) async throws -> Any {
         switch name {
-        case "list_sources": return try listSources()
-        case "get_source": return try getSource(try Self.string(args, "id"))
-        case "list_practices": return try await listPractices(args["source"] as? String)
+        case "list_projects": return try listProjects()
+        case "get_project": return try getProject(try Self.string(args, "id"))
+        case "list_services": return try listServices(project: args["project"] as? String)
+        case "get_service": return try getService(try Self.string(args, "id"))
+        case "list_practices": return try await listPractices(args["service"] as? String)
         case "get_practice": return try await getPractice(try Self.string(args, "ref"), version: args["version"] as? Int)
         case "search":
             let query = try Self.string(args, "query")
@@ -138,26 +150,28 @@ public final class MCPServer: @unchecked Sendable {
         case "run_practice":
             return try await runPractice(try Self.string(args, "ref"), params: Self.params(args["params"]),
                                          envs: Self.params(args["envs"]), rows: args["rows"] as? Int ?? 20)
-        case "env_names": return try envNames(args["refs"] as? [String])
+        case "env_names": return try envNames(args["refs"] as? [String] ?? [])
         case "list_copies": return try encodable(await Copies.scan(store: store).filter { copy in
             (args["ref"] as? String).map { $0 == copy.ref } ?? true })
-        case "propose_update":
-            let proposal = try await ProposalReviewer(store: store).submit(
-                ref: try Self.string(args, "ref"), code: try Self.string(args, "code"), why: try Self.string(args, "why"),
-                params: args["params"].map(Self.params), origin: args["project"] as? String ?? origin)
-            return [
-                "status": proposal.status.rawValue, "verdict": proposal.verdict,
-                "version": proposal.acceptedVersion as Any,
-                "marker": proposal.acceptedVersion.map { Copies.markerLine(proposal.ref, version: $0) } as Any,
-                "checks": proposal.checks.map { ["name": $0.name, "ok": $0.ok, "detail": $0.detail] },
-                "id": proposal.id,
-            ] as [String: Any]
+        case "update_practice":
+            return try await updatePractice(try Self.string(args, "ref"), code: try Self.string(args, "code"),
+                                            project: args["project"] as? String)
+        case "add_link":
+            let names = Self.params(args["names"])
+            let link = Link(to: try Self.string(args, "to"), endpoint: args["endpoint"] as? String, env: args["env"] as? String,
+                            via: args["via"] as? String, what: args["what"] as? String, access: args["access"] as? String,
+                            why: args["why"] as? String, practice: args["practice"] as? String,
+                            names: names.isEmpty ? nil : names, file: args["file"] as? String,
+                            origin: args["origin"] as? String ?? "manual")
+            let file = try registry.addLink(link, from: try Self.string(args, "from"))
+            return ["written": true, "file": file.path, "pending": true,
+                    "note": "Left uncommitted: the user reviews and accepts it (practicesctl pending / accept)."]
         case "describe_field":
-            return try await describeField(source: try Self.string(args, "source"), path: try Self.string(args, "path"),
+            return try await describeField(service: try Self.string(args, "service"), path: try Self.string(args, "path"),
                                            meaning: try Self.string(args, "meaning"),
                                            values: Self.params(args["values"]), from: args["from"] as? String)
         case "add_note":
-            return try await addNote(source: try Self.string(args, "source"), text: try Self.string(args, "text"))
+            return try await addNote(service: try Self.string(args, "service"), text: try Self.string(args, "text"))
         default:
             throw ToolError(description: "unknown tool \(name)")
         }
@@ -169,35 +183,88 @@ public final class MCPServer: @unchecked Sendable {
         return try JSONSerialization.jsonObject(with: encoder.encode(value), options: [.fragmentsAllowed])
     }
 
-    func listSources() throws -> Any {
-        try registry.sources().map { source -> [String: Any] in
-            let status = (try? secrets.status(source: source)) ?? [:]
-            return [
-                "id": source.id, "name": source.name, "kind": source.kind, "description": source.description ?? "",
-                "tags": source.tags, "envs": source.envs, "guards": source.guards,
-                "keys": source.keys.map { key in
-                    ["name": key.name, "secret": key.secret,
-                     "set": Dictionary(uniqueKeysWithValues: source.envs.map { ($0, status[$0]?.contains(key.name) == true) })] as [String: Any]
-                },
-                "practices": store.list(source: source.id).map(\.ref),
-            ]
+    func listProjects() throws -> Any {
+        let services = try registry.services()
+        let projects = try registry.projects()
+        return Registry.tree(projects).map { project, _ -> [String: Any] in
+            ["id": project.id, "space": project.space, "name": project.name, "description": project.description ?? "",
+             "parent": project.parent as Any, "children": projects.filter { $0.parent == project.id }.map(\.id),
+             "repos": project.repos.map { ["repo": $0.repo.description, "role": $0.role ?? ""] },
+             "services": services.filter { $0.project == project.id }.map(\.id)]
         }
     }
 
-    func getSource(_ id: String) throws -> Any {
-        guard var card = try (listSources() as? [[String: Any]])?.first(where: { $0["id"] as? String == id }) else {
-            throw ToolError(description: "no source \(id)")
+    func getProject(_ id: String) throws -> Any {
+        let project = try registry.project(id)
+        let clones = Repos.clones(roots: registry.searchRoots)
+        return [
+            "id": project.id, "space": project.space, "name": project.name, "description": project.description ?? "",
+            "path": ([project.space] + registry.path(ofProject: id)).joined(separator: " / "),
+            "parent": project.parent as Any,
+            "children": try registry.projects(space: project.space).filter { $0.parent == id }.map(\.id),
+            "repos": project.repos.map { ["repo": $0.repo.description, "role": $0.role ?? "", "clone_url": $0.repo.sshURL,
+                                          "local_clone": clones[$0.repo] as Any] as [String: Any] },
+            "folders": project.folders.map { ["name": $0.name, "path": registry.local.folders[$0.name] as Any] as [String: Any] },
+            "services": try registry.services(project: id).map {
+                ["id": $0.id, "name": $0.name, "kind": $0.kind, "description": $0.description ?? "", "repo": $0.repo?.description as Any] as [String: Any]
+            },
+            "chains": store.chains(project: id).map(\.ref),
+        ] as [String: Any]
+    }
+
+    func card(_ service: Service) -> [String: Any] {
+        let status = (try? secrets.status(service: service)) ?? [:]
+        return [
+            "id": service.id, "space": service.space, "project": service.project,
+            "path": ([service.space] + registry.path(ofProject: service.project) + [service.id]).joined(separator: " / "),
+            "name": service.name, "kind": service.kind, "description": service.description ?? "",
+            "tags": service.tags, "repo": service.repo?.description as Any, "aliases": service.aliases,
+            "envs": service.envs, "guards": service.guards,
+            "keys": service.keys.map { key in
+                ["name": key.name, "secret": key.secret,
+                 "set": Dictionary(uniqueKeysWithValues: service.envs.map { ($0, status[$0]?.contains(key.name) == true) })] as [String: Any]
+            },
+            "practices": store.list(service: service.id).map(\.ref),
+        ]
+    }
+
+    func listServices(project: String?) throws -> Any {
+        try registry.services(project: project).map(card)
+    }
+
+    /// Conditions as the agent should read them before the first request: what, and what to do.
+    func conditions(of service: Service) -> [[String: Any]] {
+        service.conditionIDs.map { id in
+            let condition = registry.condition(id)
+            let endpoints = service.endpoints.filter { $0.requires.contains(id) }.map(\.id)
+            return ["id": id, "name": condition?.name ?? "(not declared)", "hint": condition?.hint ?? "",
+                    "applies_to": service.requires.contains(id) ? "the whole service" : "endpoints: " + endpoints.joined(separator: ", ")]
+        }
+    }
+
+    func getService(_ id: String) throws -> Any {
+        let service = try registry.service(id)
+        var card = card(service)
+        // Templates over key names: where each endpoint is, without any value.
+        card["endpoints"] = service.endpoints.map {
+            ["id": $0.id, "label": $0.label ?? "", "address": ($0.address ?? $0.url) ?? "", "requires": $0.requires] as [String: Any]
+        }
+        card["conditions"] = conditions(of: service)
+        card["links_out"] = try encodable(registry.links(of: id))
+        card["links_in"] = try registry.links(to: id).map { from, link -> Any in
+            var entry = try encodable(link) as? [String: Any] ?? [:]
+            entry["from"] = from
+            entry["to"] = nil
+            return entry
         }
         card["notes"] = registry.notes(of: id) ?? ""
         card["docs"] = try encodable(registry.docs(of: id))
         card["fields"] = try encodable(registry.fields(of: id))
-        card["names_in_projects"] = try encodable(Names.load(id, registry: registry))
-        card["names_note"] = "Other names a key's value has in project env files. When wiring a project, reuse one of these instead of inventing a new name."
         return card
     }
 
-    func listPractices(_ source: String?) async throws -> Any {
-        let list = source.map { store.list(source: $0) } ?? store.all()
+    func listPractices(_ service: String?) async throws -> Any {
+        let list = service.map { store.list(service: $0) } ?? store.all()
         let runs = try? RunsStore()
         var out: [[String: Any]] = []
         for p in list {
@@ -215,11 +282,10 @@ public final class MCPServer: @unchecked Sendable {
     func getPractice(_ ref: String, version: Int?) async throws -> Any {
         let practice = Practice(ref: ref)
         let versions = try await store.versions(of: practice)
-        guard !versions.isEmpty else { throw ToolError(description: "no practice \(ref) (or it was never saved)") }
+        guard !versions.isEmpty else { throw ToolError(description: "no practice \(ref) (or it has no accepted version yet)") }
         let v = min(max(version ?? versions.count, 1), versions.count)
         let code = try await store.code(of: practice, at: versions[v - 1])
-        let sources = store.sources(for: practice)
-        let keyNames = sources.flatMap { id in ((try? registry.source(id))?.keys ?? []).map(\.name) }
+        let services = store.services(for: practice).compactMap { try? registry.service($0) }
         var schema: Any = []
         if let last = (try? RunsStore())?.runs(of: ref, limit: 20).first(where: { $0.ok && $0.schema != nil }),
            let data = last.schema?.data(using: .utf8) {
@@ -229,9 +295,10 @@ public final class MCPServer: @unchecked Sendable {
             "ref": ref, "version": v, "latest": versions.count,
             "code": Copies.stamped(code, ref: ref, version: v),
             "copy_note": "Keep the first line: it marks the copy so updates can find it.",
+            "pending_change": await store.isDraft(practice),
             "uses": store.dependencies(of: practice).map(\.ref),
-            "sources": sources, "env_names": keyNames,
-            "parameter_sets": try encodable(store.sets(of: practice)),
+            "services": services.map(\.id), "env_names": services.flatMap { $0.keys.map(\.name) },
+            "conditions": services.flatMap(conditions(of:)),
             "result_fields": schema,
             "history": versions.reversed().prefix(10).map { ["version": $0.number, "message": $0.message,
                                                              "date": ISO8601DateFormatter().string(from: $0.date)] },
@@ -241,8 +308,7 @@ public final class MCPServer: @unchecked Sendable {
     func runPractice(_ ref: String, params: [String: String], envs: [String: String], rows: Int) async throws -> Any {
         let practice = Practice(ref: ref)
         let result = try await PracticeRunner(store: store, secrets: secrets).run(practice, params: params, envs: envs)
-        let sources = store.sources(for: practice)
-        let pii = sources.contains { ((try? registry.source($0))?.tags ?? []).contains("pii") }
+        let pii = store.services(for: practice).contains { ((try? registry.service($0))?.tags ?? []).contains("pii") }
         var out: [String: Any] = [
             "ok": result.ok, "ms": result.ms, "total": result.total as Any, "bytes": result.bytes as Any,
             "shape": result.shape as Any, "version": result.version as Any,
@@ -254,7 +320,7 @@ public final class MCPServer: @unchecked Sendable {
             out["traceback"] = String((result.traceback ?? "").suffix(3000))
         }
         if pii {
-            out["note"] = "a source is tagged pii: rows are not returned, only their shape"
+            out["note"] = "a service is tagged pii: rows are not returned, only their shape"
         } else {
             let limit = min(max(rows, 0), 200)
             out["columns"] = result.columns as Any
@@ -266,26 +332,34 @@ public final class MCPServer: @unchecked Sendable {
         return out
     }
 
-    func envNames(_ refs: [String]?) throws -> Any {
-        var list = (refs ?? []).map(SourceRef.init(parsing:))
-        if list.isEmpty, let found = ProjectManifest.find(from: URL(fileURLWithPath: origin)) { list = found.manifest.sources }
-        guard !list.isEmpty else { throw ToolError(description: "give refs like [\"xkdb\", \"kafka@dev\"], or add practices.yaml to the project") }
+    func envNames(_ refs: [String]) throws -> Any {
+        let list = refs.map(ServiceRef.init(parsing:))
+        guard !list.isEmpty else { throw ToolError(description: "give refs like [\"xkdb\", \"kafka@dev\"]") }
         let resolved = try RunEnvironment.resolve(list, registry: registry, store: secrets)
         return [
             "variables": resolved.values.keys.sorted(),
             "missing": resolved.missing,
             "run_with": "practicesctl run \(list.map(\.description).joined(separator: " ")) -- <command>",
             "write_file": "practicesctl connect \(list.map(\.description).joined(separator: " ")) --to .env [--as PROJECT_NAME=REGISTRY_KEY]",
-            "names_in_projects": Dictionary(uniqueKeysWithValues: list.map { ref in
-                (ref.source, Names.load(ref.source, registry: registry).mapValues { $0.map(\.name) })
-            }),
         ] as [String: Any]
     }
 
+    /// Writes the practice's file and leaves it uncommitted: the user reads the diff and
+    /// accepts it (DECISIONS 19). No version exists until then.
+    func updatePractice(_ ref: String, code: String, project: String?) async throws -> Any {
+        guard ref.range(of: #"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"#, options: .regularExpression) != nil else {
+            throw ToolError(description: "ref is service/name or chains/name")
+        }
+        let practice = Practice(ref: ref)
+        let file = try store.writeDraft(code, for: practice, project: project)
+        return ["written": true, "file": file.path, "pending": true,
+                "current_version": try await store.versions(of: practice).count,
+                "note": "Left uncommitted: it becomes a version when the user accepts it (practicesctl pending / accept). Keep the marker of the version you copied until then."] as [String: Any]
+    }
+
     /// Fills a gap directly; an existing meaning is not overwritten (it is returned instead).
-    func describeField(source: String, path: String, meaning: String, values: [String: String], from: String?) async throws -> Any {
-        guard (try? registry.source(source)) != nil else { throw ToolError(description: "no source \(source)") }
-        var fields = registry.fields(of: source)
+    func describeField(service: String, path: String, meaning: String, values: [String: String], from: String?) async throws -> Any {
+        var fields = registry.fields(of: service)
         if let i = fields.firstIndex(where: { $0.path == path }) {
             if let existing = fields[i].meaning, !existing.isEmpty {
                 return ["written": false, "reason": "already described; not overwritten", "meaning": existing]
@@ -297,19 +371,17 @@ public final class MCPServer: @unchecked Sendable {
             fields.append(FieldDoc(path: path, meaning: meaning, values: values.isEmpty ? nil : values, from: [from ?? origin]))
             fields.sort { $0.path < $1.path }
         }
-        try registry.saveFields(fields, of: source)
-        try await registry.commit("\(source): describe \(path) (agent, \(origin))")
+        // Its own file only: an unreviewed practice edit beside it must not be committed with it.
+        try await registry.commit("\(service): describe \(path) (agent, \(origin))", [try registry.saveFields(fields, of: service)])
         return ["written": true]
     }
 
-    func addNote(source: String, text: String) async throws -> Any {
-        guard (try? registry.source(source)) != nil else { throw ToolError(description: "no source \(source)") }
-        var notes = registry.notes(of: source) ?? ""
+    func addNote(service: String, text: String) async throws -> Any {
+        var notes = registry.notes(of: service) ?? ""
         if !notes.isEmpty && !notes.hasSuffix("\n") { notes += "\n" }
         let project = (origin as NSString).lastPathComponent
         notes += "- \(text.trimmingCharacters(in: .whitespacesAndNewlines)) _(агент, \(project), \(Date().formatted(date: .numeric, time: .omitted)))_\n"
-        try registry.saveNotes(notes, of: source)
-        try await registry.commit("\(source): note from agent (\(origin))")
+        try await registry.commit("\(service): note from agent (\(origin))", [try registry.saveNotes(notes, of: service)])
         return ["written": true]
     }
 
@@ -333,37 +405,54 @@ public final class MCPServer: @unchecked Sendable {
     }
 
     static var tools: [[String: Any]] { [
-        tool("list_sources", "Data sources in the registry: kind, environments, guards, names of their keys and whether each has a value. Never values."),
-        tool("get_source", "One source: keys, guards, notes (pitfalls), documents, dictionary of fields, practices.",
+        tool("list_projects", "Projects of every space, parents before their children: what each is, its parent and children, its repositories with roles, ids of its services."),
+        tool("get_project", "One project: its parent and children, repositories (role, clone URL, where the local clone is), folders, services, chains. A parent project may have no repositories of its own.",
+             ["id": ["type": "string"]], required: ["id"]),
+        tool("list_services", "Services (compose services and external systems): kind, project, repository, other names, environments, guards, names of their keys and whether each has a value. Never values.",
+             ["project": ["type": "string", "description": "only this project's services"]]),
+        tool("get_service", "One service: endpoints, conditions to know before the first request (e.g. a VPN), links in both directions (whom it calls, who calls it), keys, guards, notes (pitfalls), documents, dictionary of fields, practices.",
              ["id": ["type": "string"]], required: ["id"]),
         tool("list_practices", "Practices (run() functions) and chains, with a one-line summary and their last run.",
-             ["source": ["type": "string", "description": "only this source's practices"]]),
-        tool("get_practice", "A practice's code to copy (first line marks the copy — keep it), the env variable names it reads, practices it uses, parameter sets, fields of its result, history.",
-             ["ref": ["type": "string", "description": "source/name or chains/name"],
+             ["service": ["type": "string", "description": "only this service's practices"]]),
+        tool("get_practice", "A practice's code to copy (first line marks the copy — keep it), the env variable names it reads, conditions of its services, practices it uses, fields of its result, history.",
+             ["ref": ["type": "string", "description": "service/name or chains/name"],
               "version": ["type": "integer", "description": "defaults to the latest"]], required: ["ref"]),
-        tool("search", "Search by meaning: a field (e.g. acc_motion) in the source dictionaries, practices whose result has it, documents, notes and practice code.",
+        tool("search", "Search by meaning: a field (e.g. acc_motion) in the service dictionaries, practices whose result has it, documents, notes and practice code.",
              ["query": ["type": "string"]], required: ["query"]),
-        tool("run_practice", "Run a practice with the credentials of its sources and get the result: shape, first rows, fields, steps of a chain, timing.",
+        tool("run_practice", "Run a practice with the credentials of its services and get the result: shape, first rows, fields, steps of a chain, timing. Fails with the condition's hint when a condition does not hold.",
              ["ref": ["type": "string"],
               "params": ["type": "object", "description": "arguments of run(), as JSON values or strings"],
-              "envs": ["type": "object", "description": "environment per source, e.g. {\"kafka\": \"dev\"}"],
+              "envs": ["type": "object", "description": "environment per service, e.g. {\"kafka\": \"dev\"}"],
               "rows": ["type": "integer", "description": "rows to return, default 20, max 200"]], required: ["ref"]),
-        tool("env_names", "Names of the environment variables a set of sources provides (and which have no value), and the command that runs a program with them.",
-             ["refs": ["type": "array", "items": ["type": "string"], "description": "source or source@env; defaults to the project's practices.yaml"]]),
+        tool("env_names", "Names of the environment variables a set of services provides (and which have no value), and the command that runs a program with them.",
+             ["refs": ["type": "array", "items": ["type": "string"], "description": "service or service@env"]], required: ["refs"]),
         tool("list_copies", "Copies of practices found in ~/Projects by their marker line: current, outdated, or modified in the project and not sent back.",
              ["ref": ["type": "string"]]),
-        tool("propose_update", "Send a changed practice back. Practices runs the old and new code on the saved parameter sets and yours, and accepts it itself when fields and rows match and it is not slower by more than 5%; otherwise the user reviews it. Returns the verdict and, if accepted, the new marker line to put in the copy.",
-             ["ref": ["type": "string"], "code": ["type": "string", "description": "the whole new file of the practice"],
-              "why": ["type": "string", "description": "what changed and why, for the review"],
-              "params": ["type": "object", "description": "parameters you tried it on"],
-              "project": ["type": "string", "description": "project path; defaults to the server's working directory"]],
-             required: ["ref", "code", "why"]),
-        tool("describe_field", "Write what a field of a source's results means (and its values). Fills a missing description; an existing one is not overwritten.",
-             ["source": ["type": "string"], "path": ["type": "string", "description": "e.g. extra.acc_motion"],
+        tool("update_practice", "Send a changed or new practice. The file is written and left uncommitted: the user reviews the diff and accepts it; until then there is no new version.",
+             ["ref": ["type": "string", "description": "service/name or chains/name"],
+              "code": ["type": "string", "description": "the whole file of the practice"],
+              "project": ["type": "string", "description": "for a new chain: the project it belongs to"]],
+             required: ["ref", "code"]),
+        tool("add_link", "Record that one service calls another: kept at the caller, left uncommitted for the user to accept.",
+             ["from": ["type": "string", "description": "the calling service"],
+              "to": ["type": "string", "description": "the service it calls"],
+              "endpoint": ["type": "string", "description": "an endpoint id of the called service"],
+              "env": ["type": "string"],
+              "via": ["type": "string", "enum": Link.vias],
+              "what": ["type": "string", "description": "a topic, a table, a path"],
+              "access": ["type": "string", "enum": Link.accesses],
+              "why": ["type": "string"],
+              "practice": ["type": "string", "description": "the practice that does this call, service/name"],
+              "names": ["type": "object", "description": "the caller's variable → the called service's key"],
+              "file": ["type": "string", "description": "the env file in the caller's repository"],
+              "origin": ["type": "string", "description": "manual, or derived:<file it was derived from>"]],
+             required: ["from", "to"]),
+        tool("describe_field", "Write what a field of a service's results means (and its values). Fills a missing description; an existing one is not overwritten.",
+             ["service": ["type": "string"], "path": ["type": "string", "description": "e.g. extra.acc_motion"],
               "meaning": ["type": "string"], "values": ["type": "object", "description": "value → meaning"],
               "from": ["type": "string", "description": "where you learned it: a file or doc"]],
-             required: ["source", "path", "meaning"]),
-        tool("add_note", "Add a pitfall or a finding to a source's notes.",
-             ["source": ["type": "string"], "text": ["type": "string"]], required: ["source", "text"]),
+             required: ["service", "path", "meaning"]),
+        tool("add_note", "Add a pitfall or a finding to a service's notes.",
+             ["service": ["type": "string"], "text": ["type": "string"]], required: ["service", "text"]),
     ] }
 }
