@@ -65,7 +65,13 @@ enum DevRender {
                 registry.selection = .unassigned
                 if args.contains("--load") { await registry.loadUnassigned() }
             }
-            if args.contains("--map") { registry.selection = .map }
+            if args.contains("--map") {
+                // The map starts where a card's «Карта» button would put it.
+                if let j = args.firstIndex(of: "--service"), j + 1 < args.count { registry.map.focus(args[j + 1]) }
+                else if let j = args.firstIndex(of: "--project"), j + 1 < args.count { registry.map.open(project: args[j + 1]) }
+                else if let j = args.firstIndex(of: "--space"), j + 1 < args.count { registry.map.space = args[j + 1] }
+                registry.selection = .map
+            }
             // `--welcome`: «Начало» (with an empty `PRACTICES_HOME` it shows anyway); `--settings`: «Настройка».
             if args.contains("--welcome") {
                 // A selection first, so MainWindow's onAppear does not pick a space and hide «Начало».

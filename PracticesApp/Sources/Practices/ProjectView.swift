@@ -289,7 +289,7 @@ struct ProjectView: View {
 
     @ViewBuilder private var toolbar: some View {
         let dir = workdir
-        Button { registry.selection = .map } label: { Text(verbatim: "Карта") }
+        Button { registry.map.open(project: project.id); registry.selection = .map } label: { Text(verbatim: "Карта") }
         Button { if let dir { NSWorkspace.shared.open(dir) } } label: { Text(verbatim: "Finder") }
             .disabled(dir == nil).help("Show in Finder")
         if let terminal = Self.terminal {

@@ -51,7 +51,7 @@ struct ServiceView: View {
                 .disabled(registry.checking.contains(service.id))
             Button { connecting = true } label: { Text(verbatim: "Подключить к проекту…") }
                 .help("Write this service's values into a project's env file")
-            Button { registry.selection = .map } label: { Text(verbatim: "Карта") }
+            Button { registry.map.focus(service.id); registry.selection = .map } label: { Text(verbatim: "Карта") }
             Button { registry.revealService(service.id) } label: { Text(verbatim: "Finder") }
         }
         .sheet(isPresented: $connecting) { ConnectSheet(service: service) }

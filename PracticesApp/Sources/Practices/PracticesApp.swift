@@ -24,6 +24,8 @@ struct PracticesApp: App {
             // The label always exists (it is the menu-bar item), unlike the menu.
             Image(systemName: "books.vertical")
                 .modifier(OpensMainWindow())
+                // A menu-bar agent has no window at launch: the menu's counts load here.
+                .task { registry.reload(); await registry.refreshPending() }
         }
 
         Window("Practices", id: MainWindow.id) {

@@ -36,7 +36,7 @@ final class MapState {
 /// The map (DECISIONS 33–35): space → project → service, read-only.
 struct MapView: View {
     @Environment(RegistryModel.self) private var registry
-    @State private var state = MapState()
+    private var state: MapState { registry.map }
 
     var body: some View {
         Group {
@@ -49,22 +49,14 @@ struct MapView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .toolbarLeading { MapTitle(state: state) }
         .toolbarTrailing { ToolbarButton("Открыть карточку") { openCard() } }
-        .onAppear { load(); start() }
-        .onChange(of: registry.services) { load() }
+        .onAppear { start() }
     }
 
-    private func load() {
-        do { state.catalogue = try registry.registry.catalogue() } catch { registry.error = String(describing: error) }
-    }
-
-    /// The sidebar shows `.map` once the map is open, so the last card opened says where to start.
+    /// The first visit opens the first space; later ones return to where the map was. A card's
+    /// «Карта» button sets the level itself before coming here.
     private func start() {
-        guard state.space.isEmpty else { return }
-        switch registry.selection == .map ? registry.lastCard ?? registry.recent.first : registry.selection {
-        case .service(let id)? where state.lookup(id) != nil: state.focus(id)
-        case .project(let id)? where registry.project(id) != nil: state.open(project: id)
-        case .space(let id)?: state.space = id
-        default: state.space = registry.spaces.first?.id ?? ""
+        if state.space.isEmpty || !registry.spaces.contains(where: { $0.id == state.space }) {
+            state.space = registry.spaces.first?.id ?? ""
         }
     }
 
@@ -86,7 +78,22 @@ private struct MapTitle: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Breadcrumb(crumbs: crumbs, title: title)
+            if state.level == .space, registry.spaces.count > 1 {
+                // Which space the map shows, and the way to the others.
+                Menu {
+                    ForEach(registry.spaces, id: \.id) { s in
+                        Button { state.space = s.id; state.hub = nil } label: { Text(verbatim: "\(s.id) — \(s.name)") }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(verbatim: state.space).font(Theme.mono(15, .semibold)).foregroundStyle(Theme.Color.text)
+                        Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.Color.textMuted)
+                    }
+                }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            } else {
+                Breadcrumb(crumbs: crumbs, title: title)
+            }
             Text(verbatim: subtitle).font(Theme.ui(13)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
                 .layoutPriority(-1)
             levels.fixedSize()

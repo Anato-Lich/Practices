@@ -37,8 +37,8 @@ final class RegistryModel {
     /// The last three cards opened (sidebar «Недавние»); kept between launches.
     private(set) var recent: [MainWindow.SidebarItem] =
         (UserDefaults.standard.data(forKey: "recent")).flatMap { try? JSONDecoder().decode([MainWindow.SidebarItem].self, from: $0) } ?? []
-    /// The last space, project or service opened: where the map starts.
-    private(set) var lastCard: MainWindow.SidebarItem?
+    /// Where the map is; kept across visits, so «Карта» returns to the last level shown.
+    let map = MapState()
     /// space id → `git status` of the space's own repository (status bar).
     private(set) var spaceGit: [String: GitState] = [:]
     /// Projects and services whose rows are open in the sidebar.
@@ -106,6 +106,15 @@ final class RegistryModel {
             practices = Dictionary(services.map { ($0.id, practiceStore.list(service: $0.id)) }, uniquingKeysWith: first)
             loadChecks()
             chains = Dictionary(projects.map { ($0.id, practiceStore.chains(project: $0.id)) }, uniquingKeysWith: first)
+            map.catalogue = try registry.catalogue()
+            // A removed project or service stays remembered otherwise; its row would lead nowhere.
+            recent.removeAll { item in
+                switch item {
+                case .project(let id): project(id) == nil
+                case .service(let id): service(id) == nil
+                default: false
+                }
+            }
         } catch {
             fail("прочитать каталог", error)
         }
@@ -147,9 +156,7 @@ final class RegistryModel {
     private func remember() {
         guard let item = selection else { return }
         switch item {
-        case .space: lastCard = item; return
-        case .project, .service: lastCard = item
-        case .practice: break
+        case .project, .service, .practice: break
         default: return
         }
         recent = Array(([item] + recent.filter { $0 != item }).prefix(3))
