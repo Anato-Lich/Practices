@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — карта, уровень пространства</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="map" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: ui-monospace, 'SF Mono', Menlo, monospace">x-keeper</h1>
+      <span style="color: #A6A6AE">22 проекта · 167 связей · 40 связанных пар</span>
+      <div role="group" aria-label="Уровень карты" style="margin-left: auto; display: inline-flex; background: #2C2C30; border-radius: 7px; padding: 2px; border: 1px solid #3A3A3F">
+        <button type="button" aria-pressed="true" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: #0A84FF; color: #FFFFFF; cursor: pointer">Пространство</button>
+        <button type="button" aria-pressed="false" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: transparent; color: #F2F2F4; cursor: pointer">Проект</button>
+        <button type="button" aria-pressed="false" disabled style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: transparent; color: #6E6E76">Сервис</button>
+      </div>
+    </header>
+
+    <div style="flex: 1; min-height: 0; position: relative; overflow: hidden; padding: 20px">
+      <div style="position: relative; width: 980px; height: 660px">
+        <svg aria-hidden="true" width="980" height="660" viewBox="0 0 980 660" style="position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible">
+          <g fill="none" stroke="#9A9AA3" stroke-opacity="0.55" stroke-linecap="round">
+            <path d="M121,116 L401,292" stroke-width="4.7"></path>
+            <path d="M307,116 L440,292" stroke-width="3.6"></path>
+            <path d="M392,84 L620,84" stroke-width="3.6"></path>
+            <path d="M760,116 L870,160" stroke-width="3.6"></path>
+            <path d="M493,116 L470,292" stroke-width="3.3"></path>
+            <path d="M190,324 L316,324" stroke-width="3"></path>
+            <path d="M430,356 L800,404" stroke-width="3"></path>
+          </g>
+          <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#F2F2F4" text-anchor="middle" style="paint-order: stroke" stroke="#1C1C1E" stroke-width="5">
+            <text x="261" y="207">13</text><text x="373" y="207">6</text><text x="506" y="80">6</text><text x="815" y="141">6</text><text x="481" y="207">5</text><text x="253" y="320">4</text><text x="615" y="383">4</text>
+          </g>
+        </svg>
+
+        <div style="position: absolute; left: 20px; top: 20px; width: 566px; height: 192px; box-sizing: border-box; border: 1.5px dashed rgba(180,140,255,0.6); border-radius: 12px; background: rgba(180,140,255,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #B48CFF; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">analytics · 21</a></div>
+        <div style="position: absolute; left: 300px; top: 260px; width: 380px; height: 112px; box-sizing: border-box; border: 1.5px dashed rgba(90,169,255,0.6); border-radius: 12px; background: rgba(90,169,255,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #5AA9FF; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">platform · 17</a></div>
+        <div style="position: absolute; left: 300px; top: 420px; width: 380px; height: 192px; box-sizing: border-box; border: 1.5px dashed rgba(255,176,74,0.6); border-radius: 12px; background: rgba(255,176,74,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #FFB04A; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">x-factory · 5</a></div>
+
+        <sc-for list="{{cards}}" as="c" hint-placeholder-count="19">
+          <a href="MapProject.dc.html" style="{{c.style}}">
+            <span style="display: block; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.id}}</span>
+            <span style="display: flex; gap: 2px; height: 4px; margin: 4px 0 3px"><span style="{{c.s1}}"></span><span style="{{c.s2}}"></span><span style="{{c.s3}}"></span><span style="{{c.s4}}"></span><span style="{{c.s5}}"></span></span>
+            <span style="display: block; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92; white-space: nowrap">{{c.meta}}</span>
+          </a>
+        </sc-for>
+
+        <div style="position: absolute; left: 20px; top: 624px; display: flex; gap: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">
+          <span>линии — пары с ≥ 4 связями, толщина ∝ log₂</span>
+          <span>17 связей с SphereTele не показаны</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #4FD1D9; vertical-align: middle; margin-right: 4px"></i>front</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #5AA9FF; vertical-align: middle; margin-right: 4px"></i>api</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #4ED27A; vertical-align: middle; margin-right: 4px"></i>data</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #FFB04A; vertical-align: middle; margin-right: 4px"></i>bus</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #FF7AA2; vertical-align: middle; margin-right: 4px"></i>ext</span>
+        </div>
+      </div>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>карта: x-keeper</span><span>клик по карточке — уровень проекта · по рамке — проект-родитель</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const K = { api: '#5AA9FF', front: '#4FD1D9', data: '#4ED27A', bus: '#FFB04A', ext: '#FF7AA2', hw: '#E8C547', worker: '#B48CFF', other: '#9A9AA3' };
+    const card = (x, y, id, repos, comp) => {
+      const segs = Object.entries(comp), total = segs.reduce((a, [, n]) => a + n, 0);
+      const c = { id, meta: total + ' серв · ' + repos + ' репо', style: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: 170px; height: 64px; box-sizing: border-box; padding: 8px 10px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; color: #F2F2F4; text-decoration: none; display: flex; flex-direction: column; justify-content: center' };
+      for (let i = 0; i < 5; i++) c['s' + (i + 1)] = segs[i] ? 'flex: ' + segs[i][1] + '; border-radius: 2px; background: ' + K[segs[i][0]] : 'display: none';
+      return c;
+    };
+    return {
+      cards: [
+        card(36, 52, 'cabinet-analysis', 2, { front: 1, api: 3 }), card(222, 52, 'device-analysis', 2, { front: 1, api: 4, data: 2 }), card(408, 52, 'okk', 1, { api: 1, data: 1, bus: 1, other: 1 }),
+        card(36, 132, 'rnr', 1, { front: 1, api: 1, data: 1, bus: 1, other: 1 }), card(222, 132, 'x-analysis', 1, { api: 1 }),
+        card(620, 52, 'external', 0, { ext: 11 }), card(800, 160, 'xsm', 8, { front: 1, api: 3, data: 1, other: 4 }),
+        card(316, 292, 'platform', 3, { api: 6, data: 2, hw: 1, other: 6 }), card(502, 292, 'auth', 1, { api: 1, data: 1 }),
+        card(20, 292, 'warehouse', 1, { api: 1 }), card(20, 372, 'rma', 1, { front: 1, api: 1 }), card(20, 452, 'flyrelay', 1, { other: 1 }), card(20, 532, 'testers', 2, { api: 1, other: 1 }),
+        card(316, 452, 'scada', 1, { api: 1, bus: 1, other: 1 }), card(502, 452, 'erp', 1, { api: 1 }), card(316, 532, 'mes', 0, { other: 1 }),
+        card(800, 292, 'x-vision', 5, { front: 1, api: 4, data: 1, hw: 1, other: 1 }), card(800, 372, 'xmr', 2, { front: 1, api: 1 }), card(800, 452, 'x-scanners', 1, { api: 2, other: 1 }), card(800, 532, 'x-shopfloor', 1, { front: 1, api: 7, data: 2 }),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

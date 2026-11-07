@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — палитра перехода ⌘K</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="" query="pg" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225">
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #8A8A92">~/.practices/spaces/</span>
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: ui-monospace, 'SF Mono', Menlo, monospace">x-keeper</h1>
+    </header>
+    <div style="flex: 1"></div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>~/.practices/spaces/x-keeper</span><span style="margin-left: auto">esc — закрыть</span></div>
+  </main>
+
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,0.55)"></div>
+
+  <div role="dialog" aria-label="Перейти" style="position: absolute; left: 400px; top: 96px; width: 640px; box-sizing: border-box; border-radius: 12px; background: #26262A; border: 1px solid #45454B; box-shadow: 0 24px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden">
+    <label style="display: flex; align-items: center; gap: 10px; height: 48px; box-sizing: border-box; padding: 0 16px; border-bottom: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 15px">
+      <span style="color: #8A8A92">›</span>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Поиск по каталогу</span>
+      <input type="text" value="pg" style="flex: 1; border: 0; background: transparent; font: inherit; color: #F2F2F4; outline: none">
+      <span style="font-size: 11px; color: #8A8A92">7 сервисов · 2 практики · 3 действия</span>
+    </label>
+
+    <div style="padding: 6px; display: flex; flex-direction: column; gap: 1px">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+        <a href="{{r.href}}" style="{{r.style}}">
+          <span style="{{r.badge}}">{{r.kind}}</span>
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12.5px; min-width: 190px">{{r.id}}</span>
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: {{r.pathColor}}">{{r.path}}</span>
+          <span style="flex: 1; min-width: 0; font-size: 12px; color: {{r.nameColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right">{{r.name}}</span>
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: {{r.hintColor}}; min-width: 28px; text-align: right">{{r.hint}}</span>
+        </a>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 14px; height: 32px; box-sizing: border-box; padding: 0 16px; border-top: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">
+      <span>↑↓ выбрать</span><span>↩ открыть</span><span>⌘↩ карта</span><span>⌥↩ копировать id</span><span style="margin-left: auto">префиксы: <span style="color: #A6A6AE">s: p: pr: f:</span> — сервис, проект, практика, поле</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const K = { data: '#4ED27A', api: '#5AA9FF', pr: '#B48CFF', act: '#FFB04A', hdr: '#8A8A92' };
+    const RGB = { data: '78,210,122', api: '90,169,255', pr: '180,140,255', act: '255,176,74' };
+    const row = (kind, id, path, name, hint, href, selected) => ({
+      kind, id, path, name, hint, href,
+      badge: 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 10px; width: 46px; flex: none; text-align: center; padding: 1px 0; border-radius: 4px; background: rgba(' + RGB[kind] + ',' + (selected ? '0.3' : '0.16') + '); color: ' + (selected ? '#FFFFFF' : K[kind]),
+      pathColor: selected ? 'rgba(255,255,255,0.8)' : '#8A8A92', nameColor: selected ? 'rgba(255,255,255,0.9)' : '#A6A6AE', hintColor: selected ? 'rgba(255,255,255,0.8)' : '#5C5C64',
+      style: 'display: flex; align-items: center; gap: 10px; height: 30px; box-sizing: border-box; padding: 0 10px; border-radius: 6px; color: #F2F2F4; text-decoration: none; background: ' + (selected ? '#0A84FF' : 'transparent'),
+    });
+    const header = (label) => ({ kind: '', id: '', path: '', name: '', hint: '', href: 'Palette.dc.html', badge: 'display: none', pathColor: '#8A8A92', nameColor: '#8A8A92', hintColor: '#8A8A92',
+      style: 'display: flex; align-items: flex-end; height: 24px; box-sizing: border-box; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92; text-decoration: none' });
+    const h = (label) => Object.assign(header(label), { id: label });
+    return {
+      rows: [
+        h('Сервисы'),
+        row('data', 'xkeeper-pg', 'x-keeper/platform', 'X-Keeper Postgres · 9 практик · 7 вызывающих', '↩', 'Service.dc.html', true),
+        row('data', 'arm-pg', 'x-keeper/platform', 'ARM Postgres · invitest · 2 практики (черновики)', '', 'Service.dc.html'),
+        row('data', 'auth-db', 'x-keeper/auth', 'База auth (auth_account)', '', 'Service.dc.html'),
+        row('data', 'ble-anchors-pg', 'spheretele/ble', 'Postgres сервиса якорей (ble_anchors)', '', 'Service.dc.html'),
+        row('data', 'ble-panels-pg', 'spheretele/ble', 'Postgres панели BLE (ble_bff)', '', 'Service.dc.html'),
+        row('data', 'imu-sphere-pg', 'spheretele/imu-sphere', 'Postgres IMU-Sphere (imu_bff)', '', 'Service.dc.html'),
+        row('data', 'wifi-locator-pg', 'spheretele/wifi-locator', 'Postgres wifi-locator (wifi_db)', '', 'Service.dc.html'),
+        h('Практики'),
+        row('pr', 'xkeeper-pg/query', 'v4 · 95 ms', 'Произвольный SELECT, только чтение', '', 'Practice.dc.html'),
+        row('pr', 'arm-pg/query', 'draft', 'Ждёт приёмки · не запускалась', '', 'Pending.dc.html'),
+        h('Действия'),
+        row('act', 'Карта → platform', '', 'уровень проекта, подсветить xkeeper-pg', '⌘↩', 'MapService.dc.html'),
+        row('act', 'practicesctl service xkeeper-pg', '', 'скопировать команду', '⌥↩', 'Service.dc.html'),
+        row('act', 'Finder → …/services/xkeeper-pg', '', 'открыть папку карточки', '', 'Service.dc.html'),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

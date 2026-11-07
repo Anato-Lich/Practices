@@ -1,0 +1,21 @@
+{"v":3,"createdOnFiles":{"v":1,"at":"2026-11-07T12:00:00Z"},"title":"Practices Mockup","launch":{"view":"canvas"},"pages":[],
+"boards":{
+"Main.dc.html":{"x":0,"y":0,"w":1280,"h":860,"title":"Главное окно · обзор пространства","radius":11},
+"Palette.dc.html":{"x":1360,"y":0,"w":1280,"h":860,"title":"Палитра перехода ⌘K","radius":11},
+"Project.dc.html":{"x":2720,"y":0,"w":1280,"h":860,"title":"Проект","radius":11},
+"Service.dc.html":{"x":4080,"y":0,"w":1280,"h":860,"title":"Сервис","radius":11},
+"Practice.dc.html":{"x":5440,"y":0,"w":1280,"h":860,"title":"Практика","radius":11},
+"MapSpace.dc.html":{"x":0,"y":1240,"w":1280,"h":860,"title":"Карта · пространство","radius":11},
+"MapProject.dc.html":{"x":1360,"y":1240,"w":1280,"h":860,"title":"Карта · проект","radius":11},
+"MapService.dc.html":{"x":2720,"y":1240,"w":1280,"h":860,"title":"Карта · сервис","radius":11},
+"Pending.dc.html":{"x":0,"y":2740,"w":1280,"h":860,"title":"Ждут приёмки","radius":11},
+"Unassigned.dc.html":{"x":1360,"y":2740,"w":1280,"h":860,"title":"Не распределено","radius":11},
+"Sidebar.dc.html":{"x":2720,"y":2740,"w":260,"h":860,"title":"Боковая панель (компонент)"}
+},
+"order":["Main.dc.html","Palette.dc.html","Project.dc.html","Service.dc.html","Practice.dc.html","MapSpace.dc.html","MapProject.dc.html","MapService.dc.html","Pending.dc.html","Unassigned.dc.html","Sidebar.dc.html"],
+"notes":{
+"t1":{"kind":"title1","x":0,"y":-300,"text":"Каталог: окно, палитра ⌘K, карточки","maxW":6720},
+"t2":{"kind":"title1","x":0,"y":940,"text":"Карта: три уровня и «общие» сервисы (решение 35)","maxW":4000},
+"t3":{"kind":"title1","x":0,"y":2440,"text":"Очереди и компонент боковой панели","maxW":2640}
+},
+"designSystems":[]}

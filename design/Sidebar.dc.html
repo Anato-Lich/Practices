@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Боковая панель каталога</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<nav aria-label="Каталог" style="width: 260px; height: 860px; box-sizing: border-box; display: flex; flex-direction: column; background: #262629; border-right: 1px solid #3A3A3F; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4; overflow: hidden">
+  <div style="height: 52px; box-sizing: border-box; padding: 0 14px; display: flex; align-items: center; gap: 8px; flex: none">
+    <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
+    <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
+    <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
+    <button type="button" aria-label="Скрыть боковую панель" style="margin-left: auto; width: 28px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: #8A8A92; display: flex; align-items: center; justify-content: center; cursor: pointer">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg>
+    </button>
+  </div>
+  <label style="display: flex; align-items: center; margin: 0 10px 6px; height: 28px; box-sizing: border-box; padding: 0 8px; border: 1px solid #3A3A3F; border-radius: 6px; background: #1C1C1E; gap: 6px; flex: none">
+    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A8A92" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+    <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Поиск и переход</span>
+    <input type="search" value="{{query}}" placeholder="Перейти…" style="flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; color: #F2F2F4; outline: none">
+    <span aria-hidden="true" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92; padding: 0 5px; border: 1px solid #3A3A3F; border-radius: 4px">⌘K</span>
+  </label>
+  <div style="flex: 1; overflow: hidden; padding: 0 8px">
+    <div style="margin-top: {{offset}}; display: flex; flex-direction: column">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="20">
+        <div style="{{r.style}}">
+          <span aria-hidden="true" style="width: 12px; flex: none; font-size: 10px; text-align: center; opacity: 0.7">{{r.disc}}</span>
+          <span aria-hidden="true" style="{{r.dot}}"></span>
+          <span style="{{r.labelStyle}}">{{r.label}}</span>
+          <span style="flex: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; font-variant-numeric: tabular-nums; color: {{r.countColor}}">{{r.count}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; padding: 0 12px; border-top: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">2 пространства · 31 проект · 145 сервисов</div>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"selected":{"editor":"text","default":"space:x-keeper","section":"Состояние"},"scroll":{"editor":"int","default":0,"min":0,"max":1400,"unit":"px","section":"Состояние"},"query":{"editor":"text","default":"","section":"Состояние"},"$preview":{"width":260,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const selected = this.props.selected ?? 'space:x-keeper';
+    const K = { api: '#5AA9FF', front: '#4FD1D9', data: '#4ED27A', bus: '#FFB04A', ext: '#FF7AA2', hw: '#E8C547', worker: '#B48CFF', other: '#9A9AA3' };
+    const rows = [];
+    const add = (key, label, depth, opts = {}) => {
+      const sel = key === selected, mono = opts.mono;
+      rows.push({
+        key, label, disc: opts.disc || '', count: opts.count || '',
+        countColor: sel ? 'rgba(255,255,255,0.85)' : (opts.countColor || '#8A8A92'),
+        dot: opts.kind ? 'width: 7px; height: 7px; border-radius: 50%; flex: none; background: ' + (sel ? '#FFFFFF' : K[opts.kind]) : 'display: none',
+        labelStyle: 'flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap' + (mono ? '; font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 12px' : ''),
+        style: 'height: 24px; box-sizing: border-box; padding: 0 8px 0 ' + (8 + depth * 16) + 'px; display: flex; align-items: center; gap: 6px; border-radius: 5px; white-space: nowrap; background: ' + (sel ? '#0A84FF' : 'transparent') + '; color: ' + (sel ? '#FFFFFF' : '#F2F2F4'),
+      });
+    };
+    const header = (label) => rows.push({ key: '', label, disc: '', count: '', countColor: '#8A8A92', dot: 'display: none', labelStyle: '',
+      style: 'height: 26px; box-sizing: border-box; padding: 10px 8px 0; display: flex; align-items: flex-end; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em' });
+    header('Недавние');
+    add('service:xkeeper-pg', 'xkeeper-pg', 0, { kind: 'data', mono: true });
+    add('practice:xkeeper-pg/device-meta', 'xkeeper-pg/device-meta', 0, { disc: '‹›', mono: true });
+    add('project:device-analysis', 'device-analysis', 0, { disc: '▸', mono: true });
+    header('');
+    add('pending', 'Ждут приёмки', 0, { count: '12  ⌘1', countColor: '#FFB04A' });
+    add('unassigned', 'Не распределено', 0, { count: '⌘2' });
+    add('map', 'Карта', 0, { count: '⌘3' });
+    header('X-Keeper');
+    add('space:x-keeper', 'Обзор', 0, { count: '22 · 92' });
+    add('project:analytics', 'analytics', 0, { disc: '▾', mono: true, count: '21' });
+    add('project:cabinet-analysis', 'cabinet-analysis', 1, { disc: '▸', mono: true, count: '4' });
+    add('project:device-analysis', 'device-analysis', 1, { disc: '▾', mono: true, count: '7' });
+    for (const [id, kind] of [['analysis-tiles', 'api'], ['device-analysis-api', 'api'], ['device-analysis-bff', 'api'], ['device-analysis-clickhouse', 'data'], ['device-analysis-redis', 'data'], ['device-analysis-web', 'front'], ['osrm', 'api']]) add('service:' + id, id, 2, { kind, mono: true });
+    add('project:okk', 'okk', 1, { disc: '▸', mono: true, count: '4' });
+    add('project:rnr', 'rnr', 1, { disc: '▸', mono: true, count: '5' });
+    add('project:x-analysis', 'x-analysis', 1, { disc: '▸', mono: true, count: '1' });
+    add('project:external', 'external', 0, { disc: '▸', mono: true, count: '11' });
+    add('project:flyrelay', 'flyrelay', 0, { disc: '▸', mono: true, count: '1' });
+    add('project:platform', 'platform', 0, { disc: '▾', mono: true, count: '17' });
+    add('project:auth', 'auth', 1, { disc: '▸', mono: true, count: '2' });
+    for (const [id, kind, disc] of [['api-static', 'api'], ['arm-pg', 'data', '▸'], ['ci-workflows-templates', 'other'], ['codex-plugin-xkeeper-devices', 'other'], ['devices-api', 'api', '▸'], ['gitlab-rnd', 'other'], ['nexus-registry', 'other'], ['server-monitoring', 'other'], ['system-api', 'api', '▸'], ['system-dev-nginx', 'other'], ['tiles-service', 'api'], ['wifi-location-api', 'api'], ['xkdb', 'hw', '▸'], ['xkeeper-mcp', 'api']]) add('service:' + id, id, 1, { kind, mono: true, disc: disc || '' });
+    add('service:xkeeper-pg', 'xkeeper-pg', 1, { kind: 'data', mono: true, disc: '▾', count: '9' });
+    for (const p of ['cabinet-devices', 'device-meta', 'device-second-sim', 'group-by-server', 'live-snapshot', 'model-catalog', 'printer-checks', 'query', 'resolve-device-ids']) add('practice:xkeeper-pg/' + p, p, 2, { disc: '‹›', mono: true });
+    for (const [id, n] of [['rma', 2], ['testers', 2], ['warehouse', 1], ['x-factory', 5], ['x-scanners', 3], ['x-shopfloor', 10], ['x-vision', 8], ['xmr', 2], ['xsm', 9]]) add('project:' + id, id, 0, { disc: '▸', mono: true, count: String(n) });
+    header('SphereTele');
+    add('space:spheretele', 'Обзор', 0, { count: '9 · 53' });
+    for (const [id, n] of [['ble', 14], ['hyper-imu', 18], ['imu-sphere', 5], ['nn-mapmatch', 1], ['pakz-crypto', 1], ['route-verdict', 3], ['skillhub', 2], ['sphere-external', 3], ['wifi-locator', 6]]) add('project:' + id, id, 0, { disc: '▸', mono: true, count: String(n) });
+    header('');
+    add('doctor', 'Doctor', 0, { count: '3', countColor: '#FFB04A' });
+    return { rows, query: this.props.query ?? '', offset: '-' + (this.props.scroll ?? 0) + 'px' };
+  }
+}
+</script>
+</body>
+</html>

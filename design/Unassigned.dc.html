@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — не распределено</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="unassigned" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600">Не распределено</h1>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #A6A6AE">gh: 2 организации · glab: 1 группа · клоны: ~/Projects/X-Keeper, ~/Projects/SphereTele</span>
+      <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer"><input type="checkbox" checked style="width: 14px; height: 14px; margin: 0; accent-color: #0A84FF">Показывать игнорируемые</label>
+      <button type="button" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v5h-5"></path></svg>Обновить</button>
+    </header>
+
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid #38383D"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1; color: #4ED27A">0</span><span style="font-size: 11px; color: #A6A6AE">без проекта — всё распределено</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid #38383D"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1">21</span><span style="font-size: 11px; color: #A6A6AE">игнорируется · форки, архив, не тронутое с 2024</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid #38383D"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1; color: #FFB04A">3</span><span style="font-size: 11px; color: #A6A6AE">папки без git в SphereTele никуда не отнесены</span></div>
+      </div>
+
+      <section style="box-sizing: border-box; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; overflow: hidden">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #38383D; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92"><span>Игнорируемые · показаны 3 из 21</span></div>
+        <sc-for list="{{repos}}" as="r" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid #2E2E33">
+            <span style="{{r.hostStyle}}">{{r.host}}</span>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">{{r.repo}}</span><span style="{{r.tag1Style}}">{{r.tag1}}</span><span style="{{r.tag2Style}}">{{r.tag2}}</span></div>
+              <span style="font-size: 12px; color: #A6A6AE">{{r.desc}}</span>
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">{{r.meta}}</span>
+            </div>
+            <button type="button" style="height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; font-size: 12px; color: #F2F2F4; cursor: pointer">В проект <span aria-hidden="true" style="font-size: 9px">▾</span></button>
+            <button type="button" style="height: 26px; padding: 0 10px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; font-size: 12px; color: #F2F2F4; cursor: pointer">Не игнорировать</button>
+            <a href="{{r.url}}" aria-label="Открыть на хостинге" style="height: 26px; width: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none">↗</a>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(255,176,74,0.05); border: 1px solid rgba(255,176,74,0.35); display: flex; flex-direction: column; gap: 6px">
+        <h2 style="margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #FFB04A">Папки без git · local.yaml</h2>
+        <sc-for list="{{folders}}" as="f" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 12px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px"><span>{{f.path}}</span><span style="color: #8A8A92">{{f.hint}}</span><button type="button" style="margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #F2F2F4; cursor: pointer">В проект ▾</button></div>
+        </sc-for>
+      </section>
+      <span style="font-size: 11px; color: #8A8A92">Список ничего не решает (DECISIONS 15): проект назначаете вы, подгруппа GitLab — только подсказка имени. gh и glab вызываются только по кнопке «Обновить».</span>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>gh repo list X-Keeper · imux-team</span><span>glab repo list -g x-keeper-rnd</span><span>обновлено 14:02</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mono = 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; ';
+    const chip = (text, color) => text ? { text, style: mono + 'font-size: 10.5px; padding: 1px 6px; border-radius: 4px; color: ' + color + '; border: 1px solid ' + color } : { text: '', style: 'display: none' };
+    const repo = (host, repo, url, tag1, tag2, desc, meta) => {
+      const a = chip(tag1, tag1 === 'archived' ? '#FFB04A' : '#8A8A92'), b = chip(tag2, '#8A8A92');
+      return { host, repo, url, desc, meta, tag1: a.text, tag1Style: a.style, tag2: b.text, tag2Style: b.style,
+        hostStyle: mono + 'font-size: 10px; width: 52px; flex: none; text-align: center; padding: 2px 0; border-radius: 4px; background: rgba(' + (host === 'gitlab' ? '255,176,74' : '154,154,163') + ',0.16); color: ' + (host === 'gitlab' ? '#FFB04A' : '#C9C9D0') };
+    };
+    return {
+      repos: [
+        repo('gitlab', 'gitlab.rnd.x-keeper.net/x-keeper-rnd/kanban', 'https://gitlab.rnd.x-keeper.net/x-keeper-rnd/kanban', 'ignored', '', 'Канбан-доска; к проектам каталога не относится', 'активен [дата из glab] · подгруппа: — · клона нет'),
+        repo('github', 'github.com/x-keeper/analytics-for-large-offices', 'https://github.com/x-keeper/analytics-for-large-offices', 'ignored', '', 'Пустой репозиторий', 'активен [дата из gh] · клона нет'),
+        repo('github', 'github.com/x-keeper/x-vision', 'https://github.com/x-keeper/x-vision', 'archived', 'ignored', 'Старый X-Vision на GitHub; историю продолжает x-vision-stopper в GitLab', 'активен [дата из gh] · предложено: x-vision'),
+      ],
+      folders: [
+        { path: '~/Projects/SphereTele/rework', hint: 'make-dev-keys.sh — пара ключей координат (условие coords-keypair)' },
+        { path: '~/Projects/SphereTele/Разное', hint: '' },
+        { path: '~/Projects/SphereTele/deep_compare', hint: '' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

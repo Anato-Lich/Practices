@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — практика xkeeper-pg/device-meta</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="practice:xkeeper-pg/device-meta" scroll="{{scroll}}" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+      <a href="Main.dc.html" style="text-decoration: none">x-keeper</a><span style="color: #8A8A92">/</span><a href="Project.dc.html" style="text-decoration: none; color: #5AA9FF">platform</a><span style="color: #8A8A92">/</span><a href="Service.dc.html" style="text-decoration: none; color: #4ED27A">xkeeper-pg</a><span style="color: #8A8A92">/</span>
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: inherit">device-meta</h1>
+      <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(154,154,163,0.16); color: #C9C9D0">v3</span>
+      <span style="margin-left: auto; display: flex; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
+        <button type="button" disabled style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #38383D; border-radius: 6px; background: #26262A; font: inherit; color: #6E6E76">Сохранить версию <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px">⌘S</span></button>
+        <button type="button" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #0A84FF; border-radius: 6px; background: #0A84FF; font: inherit; color: #FFFFFF; cursor: pointer"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4v16l14-8z"></path></svg>Запустить <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; opacity: 0.85">⌘↩</span></button>
+      </span>
+    </header>
+
+    <div style="flex: 1; min-height: 0; display: flex">
+      <div style="flex: 1; min-width: 560px; display: flex; flex-direction: column; border-right: 1px solid #3A3A3F">
+        <div style="height: 34px; box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 10px; flex: none; border-bottom: 1px solid #3A3A3F; font-size: 12px">
+          <span style="color: #A6A6AE">Метаданные прибора по IMEI: модель, дата создания, сервер.</span>
+          <span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92">practices/device-meta.py · psycopg · читает XK_PG_*</span>
+        </div>
+
+        <div style="flex: none; height: 318px; display: flex; overflow: hidden; background: #161618; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 19px">
+          <pre aria-hidden="true" style="margin: 0; padding: 10px 0; width: 40px; flex: none; text-align: right; color: #5C5C64; background: #19191B; border-right: 1px solid #2A2A2E; font: inherit">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16</pre>
+<pre style="margin: 0; padding: 10px 14px; flex: 1; overflow: hidden; font: inherit; color: #E6E6EA"><span style="color: #6E6E76"># practices: xkeeper-pg/device-meta@v3</span>
+<span style="color: #C792EA">import</span> os, psycopg
+
+<span style="color: #C792EA">def</span> <span style="color: #82AAFF">run</span>(imei: <span style="color: #4FD1D9">str</span>):
+    <span style="color: #C3E88D">"""Метаданные прибора по IMEI: модель, дата создания, сервер."""</span>
+    dsn = (<span style="color: #C3E88D">f"host={os.environ['XK_PG_HOST']} port={os.environ['XK_PG_PORT_DEVICES']} "</span>
+           <span style="color: #C3E88D">f"dbname=x-keeper_devices user={os.environ['XK_PG_USER']} "</span>
+           <span style="color: #C3E88D">f"password={os.environ['XK_PG_PASSWORD']} sslmode=verify-ca"</span>)
+    <span style="color: #C792EA">with</span> psycopg.connect(dsn, options=<span style="color: #C3E88D">"-c default_transaction_read_only=on"</span>) <span style="color: #C792EA">as</span> conn:
+        row = conn.execute(<span style="color: #C3E88D">"""
+            SELECT d.imei, d.model_id, d.create_dt, d.server_id
+            FROM devices d
+            WHERE d.imei = %s
+        """</span>, (imei,)).fetchone()
+    <span style="color: #C792EA">return</span> <span style="color: #C792EA">None</span> <span style="color: #C792EA">if</span> row <span style="color: #C792EA">is</span> <span style="color: #C792EA">None</span> <span style="color: #C792EA">else</span> <span style="color: #4FD1D9">dict</span>(<span style="color: #4FD1D9">zip</span>((<span style="color: #C3E88D">"imei"</span>, <span style="color: #C3E88D">"model_id"</span>, <span style="color: #C3E88D">"create_dt"</span>, <span style="color: #C3E88D">"server_id"</span>), row))</pre>
+        </div>
+
+        <div style="height: 6px; flex: none; border-top: 1px solid #3A3A3F; border-bottom: 1px solid #3A3A3F; background: #222225"></div>
+
+        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column">
+          <div style="padding: 8px 12px; display: flex; align-items: center; gap: 12px; flex: none; border-bottom: 1px solid #3A3A3F">
+            <label style="display: flex; align-items: center; gap: 6px"><span style="font-size: 11px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #8A8A92">imei</span><input type="text" placeholder="str" style="width: 240px; height: 24px; box-sizing: border-box; padding: 0 8px; border: 1px solid #3A3A3F; border-radius: 5px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; background: #1C1C1E"></label>
+            <span style="font-size: 11px; color: #8A8A92">⌘↩ запускает с ключами xkeeper-pg@prod</span>
+          </div>
+          <div style="padding: 6px 12px; display: flex; align-items: center; gap: 12px; font-size: 11px; flex: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace">
+            <span style="color: #4ED27A">● готово</span>
+            <span style="color: #A6A6AE">212 ms · 1 row · 318 B</span>
+            <span style="margin-left: auto; color: #8A8A92">xkeeper-pg@prod · corp-network ✓</span>
+          </div>
+          <div style="flex: 1; min-height: 0; overflow: hidden; padding: 0 12px 12px">
+            <table style="border-collapse: collapse; width: 100%; font-size: 12px; font-family: ui-monospace, 'SF Mono', Menlo, monospace">
+              <thead><tr>
+                <th scope="col" style="text-align: left; padding: 5px 8px; border-bottom: 1px solid #3A3A3F; color: #8A8A92; font-weight: 500">поле</th>
+                <th scope="col" style="text-align: left; padding: 5px 8px; border-bottom: 1px solid #3A3A3F; color: #8A8A92; font-weight: 500">тип</th>
+                <th scope="col" style="text-align: left; padding: 5px 8px; border-bottom: 1px solid #3A3A3F; color: #8A8A92; font-weight: 500">значение</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{result}}" as="r" hint-placeholder-count="4">
+                  <tr><td style="padding: 5px 8px; border-bottom: 1px solid #2A2A2E">{{r.key}}</td><td style="padding: 5px 8px; border-bottom: 1px solid #2A2A2E; color: #4FD1D9">{{r.type}}</td><td style="padding: 5px 8px; border-bottom: 1px solid #2A2A2E; color: #A6A6AE">{{r.value}}</td></tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <aside aria-label="Инспектор" style="width: 270px; flex: none; box-sizing: border-box; padding: 12px 10px; background: #222225; display: flex; flex-direction: column; gap: 16px; font-size: 12px">
+        <section style="display: flex; flex-direction: column; gap: 8px">
+          <h2 style="margin: 0 0 2px 6px; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em">Версии · медиана</h2>
+          <sc-for list="{{versions}}" as="v" hint-placeholder-count="3">
+            <div style="padding: 4px 6px; display: flex; flex-direction: column; gap: 3px">
+              <div style="display: flex; align-items: baseline; font-family: ui-monospace, 'SF Mono', Menlo, monospace"><span>{{v.name}}</span><span style="margin-left: 8px; font-size: 10.5px; color: #8A8A92">{{v.date}}</span><span style="margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; color: {{v.color}}">{{v.median}}</span></div>
+              <div style="height: 4px; border-radius: 2px; background: {{v.color}}; opacity: 0.7; width: {{v.bar}}"></div>
+              <span style="font-size: 10px; color: #8A8A92">{{v.runs}}</span>
+            </div>
+          </sc-for>
+        </section>
+        <section style="display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0 0 2px 6px; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em">Поля в результате</h2>
+          <sc-for list="{{fields}}" as="f" hint-placeholder-count="4">
+            <div style="padding: 2px 6px; display: flex; align-items: baseline; gap: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace"><span style="font-size: 11px">{{f.path}}</span><span style="margin-left: auto; font-size: 10px; color: #4FD1D9">{{f.type}}</span></div>
+          </sc-for>
+        </section>
+        <section style="display: flex; flex-direction: column; gap: 4px">
+          <h2 style="margin: 0 0 2px 6px; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em">Копии · 1</h2>
+          <div style="padding: 2px 6px; display: flex; flex-direction: column; gap: 1px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">cabinet_analysis-api/…/xkeeper_pg.py</span><span style="color: #4ED27A">v3 · актуальна</span></div>
+        </section>
+        <section style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px 6px; border-radius: 6px; background: #161618; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #A6A6AE">
+          <span style="color: #8A8A92">скопировать для агента</span>
+          <span>get_practice xkeeper-pg/device-meta</span>
+          <span>practicesctl try xkeeper-pg/device-meta imei=…</span>
+        </section>
+      </aside>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>…/xkeeper-pg/practices/device-meta.py</span><span>python 3.12 · psycopg 3</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"scroll":{"editor":"int","default":560,"min":0,"max":1400,"unit":"px","section":"Боковая панель"},"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      scroll: String(this.props.scroll ?? 560),
+      result: [
+        { key: 'imei', type: 'string', value: '[IMEI]' }, { key: 'model_id', type: 'int', value: '[model_id]' }, { key: 'create_dt', type: 'datetime', value: '[create_dt]' }, { key: 'server_id', type: 'int', value: '[server_id]' },
+      ],
+      versions: [
+        { name: 'v3', date: '7 нояб.', median: '212 ms', color: '#4ED27A', bar: '18%', runs: '7 запусков' },
+        { name: 'v2', date: '5 нояб.', median: '340 ms', color: '#A6A6AE', bar: '28%', runs: '4 запуска, 1 с ошибкой' },
+        { name: 'v1', date: '3 нояб.', median: '1.2 s', color: '#FFB04A', bar: '100%', runs: '3 запуска' },
+      ],
+      fields: [
+        { path: 'imei', type: 'string' }, { path: 'model_id', type: 'int' }, { path: 'create_dt', type: 'datetime' }, { path: 'server_id', type: 'int' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

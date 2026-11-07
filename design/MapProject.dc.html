@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — карта, уровень проекта</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="map" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+      <a href="MapSpace.dc.html" style="text-decoration: none">x-keeper</a><span style="color: #8A8A92">/</span><a href="MapProject.dc.html" style="text-decoration: none; color: #B48CFF">analytics</a><span style="color: #8A8A92">/</span>
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: inherit">device-analysis</h1>
+      <span style="margin-left: 8px; color: #A6A6AE; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">7 сервисов · 17 связей линиями · 4 общих · 13 внешних</span>
+      <div role="group" aria-label="Уровень карты" style="margin-left: auto; display: inline-flex; background: #2C2C30; border-radius: 7px; padding: 2px; border: 1px solid #3A3A3F; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
+        <button type="button" aria-pressed="false" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: transparent; color: #F2F2F4; cursor: pointer">Пространство</button>
+        <button type="button" aria-pressed="true" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: #0A84FF; color: #FFFFFF; cursor: pointer">Проект</button>
+        <button type="button" aria-pressed="false" disabled style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: transparent; color: #6E6E76">Сервис</button>
+      </div>
+    </header>
+
+    <div style="flex: 1; min-height: 0; position: relative; overflow: hidden; padding: 20px">
+      <div style="position: relative; width: 980px; height: 680px">
+        <div aria-hidden="true" style="position: absolute; left: 10px; top: 44px; width: 220px; height: 500px; border-radius: 10px; background: rgba(79,209,217,0.05); border: 1px solid rgba(79,209,217,0.25)"></div>
+        <div aria-hidden="true" style="position: absolute; left: 280px; top: 44px; width: 220px; height: 500px; border-radius: 10px; background: rgba(90,169,255,0.05); border: 1px solid rgba(90,169,255,0.25)"></div>
+        <div aria-hidden="true" style="position: absolute; left: 550px; top: 44px; width: 220px; height: 500px; border-radius: 10px; background: rgba(78,210,122,0.05); border: 1px solid rgba(78,210,122,0.25)"></div>
+        <div aria-hidden="true" style="position: absolute; left: 792px; top: 44px; width: 188px; height: 500px; border-radius: 10px; background: rgba(255,122,162,0.04); border: 1px dashed rgba(255,122,162,0.3)"></div>
+
+        <svg aria-hidden="true" width="980" height="680" viewBox="0 0 980 680" style="position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible">
+          <defs>
+            <marker id="m-http" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#5AA9FF"></path></marker>
+            <marker id="m-db" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#4ED27A"></path></marker>
+            <marker id="m-net" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#9A9AA3"></path></marker>
+            <marker id="m-build" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#B48CFF"></path></marker>
+          </defs>
+          <g fill="none" stroke-width="1.4" stroke-opacity="0.75">
+            <g stroke="#5AA9FF" marker-end="url(#m-http)">
+              <path d="M490,122 C530,122 530,230 490,230"></path>
+              <path d="M490,230 C530,230 530,446 490,446"></path>
+              <path d="M490,230 C645,230 645,117 802,117"></path>
+              <path d="M490,230 C645,230 645,139 802,139"></path>
+              <path d="M490,230 C645,230 645,277 802,277"></path>
+              <path d="M490,230 C645,230 645,299 802,299"></path>
+              <path d="M490,230 C645,230 645,321 802,321"></path>
+              <path d="M490,230 C645,230 645,343 802,343"></path>
+              <path d="M490,230 C645,230 645,387 802,387"></path>
+              <path d="M490,230 C645,230 645,459 802,459"></path>
+              <path d="M802,531 C520,531 120,420 120,168"></path>
+            </g>
+            <g stroke="#4ED27A" marker-end="url(#m-db)">
+              <path d="M490,230 C525,230 525,122 560,122"></path>
+              <path d="M490,230 L560,230"></path>
+            </g>
+            <g stroke="#9A9AA3" marker-end="url(#m-net)">
+              <path d="M220,122 C510,122 510,161 802,161"></path>
+              <path d="M490,230 C645,230 645,365 802,365"></path>
+            </g>
+            <g stroke="#B48CFF" marker-end="url(#m-build)">
+              <path d="M220,122 C510,122 510,183 802,183"></path>
+              <path d="M220,122 C510,122 510,205 802,205"></path>
+            </g>
+          </g>
+        </svg>
+
+        <div style="position: absolute; left: 0; top: 0; display: flex; gap: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #5AA9FF"></i>http</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #FFB04A"></i>topic</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #4ED27A"></i>db</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #9A9AA3"></i>network</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #B48CFF"></i>build</span>
+          <span style="margin-left: 10px">⚑ условие · чип «→ имя» — связь с общим сервисом</span>
+        </div>
+
+        <h2 style="position: absolute; left: 20px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #4FD1D9">Фронты · 1</h2>
+        <h2 style="position: absolute; left: 290px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #5AA9FF">API и воркеры · 4</h2>
+        <h2 style="position: absolute; left: 560px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #4ED27A">Данные · 2</h2>
+        <h2 style="position: absolute; left: 802px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #FF7AA2">Внешние · 13</h2>
+
+        <sc-for list="{{cards}}" as="c" hint-placeholder-count="7">
+          <a href="MapService.dc.html" title="{{c.desc}}" style="{{c.style}}">
+            <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="{{c.dot}}"></span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.id}}</span><span style="{{c.condStyle}}">⚑</span></span>
+            <span style="display: block; font-size: 11px; color: #A6A6AE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</span>
+            <span style="display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto"><span style="{{c.kindStyle}}">{{c.kind}}</span><span style="{{c.chip1Style}}">{{c.chip1}}</span><span style="{{c.chip2Style}}">{{c.chip2}}</span><span style="{{c.chip3Style}}">{{c.chip3}}</span></span>
+          </a>
+        </sc-for>
+
+        <div style="position: absolute; left: 802px; top: 76px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+          <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #5AA9FF; text-decoration: none; margin-bottom: 2px; line-height: 16px">platform · 5</a>
+          <sc-for list="{{platform}}" as="x" hint-placeholder-count="5"><a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{x.id}}</span><span style="{{x.kindStyle}}">{{x.kind}}</span></a></sc-for>
+        </div>
+        <div style="position: absolute; left: 802px; top: 236px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+          <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #FF7AA2; text-decoration: none; margin-bottom: 2px; line-height: 16px">external · 6</a>
+          <sc-for list="{{external}}" as="x" hint-placeholder-count="6"><a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{x.id}}</span><span style="{{x.kindStyle}}">{{x.kind}}</span></a></sc-for>
+        </div>
+        <div style="position: absolute; left: 802px; top: 418px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+          <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #FF7AA2; text-decoration: none; margin-bottom: 2px; line-height: 16px">sphere-external · 1</a>
+          <a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span>yandex-locator</span><span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(255,122,162,0.16); color: #FF7AA2">ext</span></a>
+        </div>
+        <div style="position: absolute; left: 802px; top: 490px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+          <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #B48CFF; text-decoration: none; margin-bottom: 2px; line-height: 16px">cabinet-analysis · 1</a>
+          <a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">cabinet-analysis-frontend</span><span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(79,209,217,0.16); color: #4FD1D9">front</span></a>
+        </div>
+
+        <div style="position: absolute; left: 0; top: 572px; width: 980px; box-sizing: border-box; padding-top: 10px; border-top: 1px solid #3A3A3F; display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <h2 style="margin: 0 8px 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #8A8A92">Общие · линии скрыты</h2>
+          <sc-for list="{{hubs}}" as="h" hint-placeholder-count="4">
+            <span title="{{h.title}}" style="display: inline-flex; align-items: center; gap: 6px; background: #26262A; border: 1px solid #38383D; border-radius: 12px; padding: 2px 4px 2px 10px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+              <span>{{h.id}}</span><span style="font-size: 11px; color: #A6A6AE">{{h.count}}</span><span style="{{h.kindStyle}}">{{h.kind}}</span>
+              <a href="MapService.dc.html" aria-label="Открыть сервис" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: #8A8A92; text-decoration: none">›</a>
+            </span>
+          </sc-for>
+          <span style="font-size: 11px; color: #8A8A92; margin-left: 8px">наведение на плашку подсвечивает вызывающих; ⌥-клик открывает карту сервиса</span>
+        </div>
+      </div>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>карта: device-analysis</span><span>scan_links device-analysis — 22 связи из кода, 0 новых</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const K = { api: '#5AA9FF', front: '#4FD1D9', data: '#4ED27A', bus: '#FFB04A', ext: '#FF7AA2', hw: '#E8C547', worker: '#B48CFF', other: '#9A9AA3' };
+    const RGB = { api: '90,169,255', front: '79,209,217', data: '78,210,122', bus: '255,176,74', ext: '255,122,162', hw: '232,197,71', worker: '180,140,255', other: '154,154,163' };
+    const badge = (k) => 'font-size: 10.5px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-family: ui-monospace, \'SF Mono\', Menlo, monospace; background: rgba(' + RGB[k] + ',0.16); color: ' + K[k];
+    const VIA = { http: '#5AA9FF', topic: '#FFB04A', network: '#9A9AA3' };
+    const chip = (label, via) => ({ label, style: 'font-size: 10px; padding: 0 5px; border-radius: 3px; border: 1px solid ' + VIA[via] + '; color: ' + VIA[via] + '; white-space: nowrap; font-family: ui-monospace, \'SF Mono\', Menlo, monospace' });
+    const none = { label: '', style: 'display: none' };
+    const card = (x, y, id, name, kind, cls, desc, cond, chips) => {
+      const c = [chips[0] || none, chips[1] || none, chips[2] || none];
+      return {
+        id, name, kind, desc, kindStyle: badge(cls), dot: 'width: 7px; height: 7px; border-radius: 50%; flex: none; background: ' + K[cls],
+        condStyle: cond ? 'margin-left: auto; color: #FFB04A; font-size: 11px' : 'display: none',
+        chip1: c[0].label, chip1Style: c[0].style, chip2: c[1].label, chip2Style: c[1].style, chip3: c[2].label, chip3Style: c[2].style,
+        style: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: 200px; height: 92px; box-sizing: border-box; padding: 8px 10px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; color: #F2F2F4; text-decoration: none; overflow: hidden; display: flex; flex-direction: column; gap: 2px',
+      };
+    };
+    const row = (id, cls) => ({ id, kind: cls, kindStyle: badge(cls) });
+    return {
+      cards: [
+        card(20, 76, 'device-analysis-web', 'SPA + BFF · analysis.x-keeper.net', 'http', 'front', 'SPA анализа приборов и BFF-шлюз; отдаёт встраиваемые виджеты.', false, [chip('→ sso', 'http')]),
+        card(290, 76, 'device-analysis-bff', 'X-SID по JWKS, роли, прокси', 'http', 'api', 'Node/Express BFF — проверяет X-SID по JWKS, применяет роли, проксирует в бэкенд.', false, [chip('→ sso', 'http'), chip('→ wifi-db', 'http')]),
+        card(290, 184, 'device-analysis-api', 'FastAPI, только через BFF', 'http', 'api', 'FastAPI-бэкенд анализа приборов; снаружи недоступен.', true, [chip('→ sso', 'http'), chip('→ xkdb', 'network'), chip('→ kafka', 'topic')]),
+        card(290, 292, 'analysis-tiles', 'analysis-tiles', 'http', 'api', '', false, []),
+        card(290, 400, 'osrm', 'osrm-routed (ЦФО), внутри compose', 'http', 'api', 'Локальный osrm-routed для привязки треков к дорогам.', false, []),
+        card(560, 76, 'device-analysis-clickhouse', 'device_analysis · raw_device_data', 'clickhouse', 'data', 'Собственный ClickHouse бэкенда; не hyper_imu.', true, []),
+        card(560, 184, 'device-analysis-redis', 'токены System API, кэш кабинетов', 'redis', 'data', 'Пара токенов System API, пользовательские токены и кэш кабинетов операторов.', true, []),
+      ],
+      platform: [row('system-api', 'api'), row('wifi-location-api', 'api'), row('tiles-service', 'api'), row('nexus-registry', 'other'), row('ci-workflows-templates', 'other')],
+      external: [row('github', 'ext'), row('beeline-iot', 'ext'), row('mts-iot', 'ext'), row('glonass-api', 'ext'), row('smtp-yandex', 'ext'), row('telegram-bot-api', 'ext')],
+      hubs: [
+        { id: 'sso', count: '3', kind: 'api', kindStyle: badge('api'), title: 'SSO · login.x-keeper.net · 24 вызывающих во всём пространстве' },
+        { id: 'kafka', count: '1', kind: 'bus', kindStyle: badge('bus'), title: 'Kafka (hyper-imu) · 23 топика · 22 клиента' },
+        { id: 'xkdb', count: '1', kind: 'hw', kindStyle: badge('hw'), title: 'XKDB · телеметрия · 13 вызывающих' },
+        { id: 'wifi-db', count: '1', kind: 'api', kindStyle: badge('api'), title: 'WiFi DB · локатор · 19 вызывающих' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

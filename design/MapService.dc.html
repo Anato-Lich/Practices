@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — карта, уровень сервиса</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="map" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+      <a href="MapSpace.dc.html" style="text-decoration: none">x-keeper</a><span style="color: #8A8A92">/</span><a href="MapProject.dc.html" style="text-decoration: none; color: #5AA9FF">platform</a><span style="color: #8A8A92">/</span>
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: inherit">xkeeper-pg</h1>
+      <span style="margin-left: 8px; color: #A6A6AE; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">7 вызывающих из 6 проектов · 16 связей · 0 зависимостей</span>
+      <a href="Service.dc.html" style="margin-left: auto; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">Карточка сервиса</a>
+      <div role="group" aria-label="Уровень карты" style="display: inline-flex; background: #2C2C30; border-radius: 7px; padding: 2px; border: 1px solid #3A3A3F; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
+        <button type="button" aria-pressed="false" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: transparent; color: #F2F2F4; cursor: pointer">Пространство</button>
+        <button type="button" aria-pressed="false" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: transparent; color: #F2F2F4; cursor: pointer">Проект</button>
+        <button type="button" aria-pressed="true" style="font: inherit; border: 0; padding: 3px 14px; border-radius: 5px; background: #0A84FF; color: #FFFFFF; cursor: pointer">Сервис</button>
+      </div>
+    </header>
+
+    <div style="flex: 1; min-height: 0; position: relative; overflow: hidden; padding: 20px">
+      <div style="position: relative; width: 980px; height: 780px">
+        <svg aria-hidden="true" width="980" height="780" viewBox="0 0 980 780" style="position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible">
+          <defs><marker id="m-db" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#4ED27A"></path></marker><marker id="m-w" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#FFB04A"></path></marker></defs>
+          <g fill="none" stroke="#4ED27A" stroke-width="1.6" stroke-opacity="0.75" marker-end="url(#m-db)">
+            <path d="M230,108 C335,108 335,324 440,324"></path>
+            <path d="M230,180 C335,180 335,324 440,324"></path>
+            <path d="M230,324 L440,324"></path>
+            <path d="M230,396 C335,396 335,324 440,324"></path>
+            <path d="M230,468 C335,468 335,324 440,324"></path>
+            <path d="M230,540 C335,540 335,324 440,324"></path>
+          </g>
+          <g fill="none" stroke="#FFB04A" stroke-width="1.8" stroke-opacity="0.9" marker-end="url(#m-w)"><path d="M230,252 C335,252 335,324 440,324"></path></g>
+          <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#F2F2F4" text-anchor="middle" style="paint-order: stroke" stroke="#1C1C1E" stroke-width="5">
+            <text x="320" y="219">panel · devices · logistic — 3 связи (read)</text>
+            <text x="320" y="255">devices · panel · logistic — 3 связи (read)</text>
+            <text x="320" y="291" fill="#FFB04A">devices — read + WRITE retranslation_device</text>
+            <text x="320" y="320">logistic · devices · accounts · panel (read)</text>
+            <text x="320" y="363">logistic — проверки принтеров (read)</text>
+            <text x="320" y="399">panel — objects (sim1) (read)</text>
+            <text x="320" y="435">logistic — printer checks (read, не подтверждено)</text>
+          </g>
+        </svg>
+
+        <div style="position: absolute; left: 0; top: 0; display: flex; gap: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #4ED27A"></i>db read</span>
+          <span><i aria-hidden="true" style="display: inline-block; width: 16px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; background: #FFB04A"></i>db write</span>
+          <span>цвет чипа проекта — зона: <span style="color: #B48CFF">analytics</span> · <span style="color: #9A9AA3">отдельный</span></span>
+        </div>
+
+        <h2 style="position: absolute; left: 20px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #8A8A92">Вызывают · 7</h2>
+        <h2 style="position: absolute; left: 790px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #8A8A92">Вызывает · 0</h2>
+        <span style="position: absolute; left: 790px; top: 80px; color: #8A8A92; font-size: 12px">база никуда не ходит</span>
+
+        <sc-for list="{{callers}}" as="c" hint-placeholder-count="7">
+          <a href="MapService.dc.html" style="{{c.style}}">
+            <span style="display: flex; align-items: center; gap: 6px"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.id}}</span><span style="{{c.kindStyle}}">{{c.kind}}</span></span>
+            <span style="display: flex; align-items: center; gap: 6px; margin-top: auto"><span style="{{c.zone}}">{{c.project}}</span><span style="font-size: 10.5px; color: #8A8A92">{{c.n}}</span></span>
+          </a>
+        </sc-for>
+
+        <div style="position: absolute; left: 440px; top: 264px; width: 260px; height: 120px; box-sizing: border-box; padding: 12px 14px; border: 2px solid #4ED27A; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 3px">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 15px; font-weight: 600">xkeeper-pg</span>
+          <span style="font-size: 11.5px; color: #A6A6AE">X-Keeper Postgres · platform</span>
+          <span style="display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px">
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(78,210,122,0.16); color: #4ED27A">postgres</span>
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(255,176,74,0.16); color: #FFB04A">read-only</span>
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; border: 1px solid #FFB04A; color: #FFB04A">⚑ corp-network</span>
+          </span>
+        </div>
+
+        <div style="position: absolute; left: 0; top: 620px; width: 980px; box-sizing: border-box; padding: 10px 14px; border: 1px solid #38383D; border-radius: 8px; background: #161618; display: grid; grid-template-columns: 90px 1fr; gap: 4px 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; line-height: 1.5">
+          <span style="color: #8A8A92">endpoints</span><span>logistic <span style="color: #8A8A92">web_admin</span> · panel <span style="color: #8A8A92">api_panel</span> · accounts · devices <span style="color: #8A8A92">x-keeper_devices</span></span>
+          <span style="color: #8A8A92">aliases</span><span>x_logistic · x_devices · x_accounts · x_panel</span>
+          <span style="color: #8A8A92">guards</span><span>default_transaction_read_only = on · ReadOnlyViolation до соединения · api_panel только через devices-api · повторять OperationalError</span>
+          <span style="color: #8A8A92">practices</span><span style="color: #A6A6AE">cabinet-devices · device-meta · device-second-sim · group-by-server · live-snapshot · model-catalog · printer-checks · query · resolve-device-ids</span>
+        </div>
+      </div>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>карта: xkeeper-pg</span><span>get_service xkeeper-pg — связи в обе стороны</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const K = { api: '#5AA9FF', other: '#9A9AA3' }, RGB = { api: '90,169,255', other: '154,154,163' };
+    const badge = (k) => 'font-size: 10.5px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-family: ui-monospace, \'SF Mono\', Menlo, monospace; background: rgba(' + RGB[k] + ',0.16); color: ' + K[k];
+    const ZONE = { 'cabinet-analysis': '#B48CFF', okk: '#B48CFF', 'x-analysis': '#B48CFF', flyrelay: '#9A9AA3', testers: '#9A9AA3', xmr: '#9A9AA3' };
+    const card = (i, id, kind, project, n) => ({ id, kind, project, n, kindStyle: badge(kind),
+      zone: 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 10px; padding: 0 6px; border-radius: 3px; border: 1px solid ' + ZONE[project] + '; color: ' + ZONE[project],
+      style: 'position: absolute; left: 20px; top: ' + (76 + i * 72) + 'px; width: 210px; height: 64px; box-sizing: border-box; padding: 7px 10px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; color: #F2F2F4; text-decoration: none; overflow: hidden; display: flex; flex-direction: column; gap: 3px' });
+    return {
+      callers: [
+        card(0, 'cabinet-analysis-api', 'api', 'cabinet-analysis', '3 связи'),
+        card(1, 'export-engine', 'api', 'cabinet-analysis', '3 связи'),
+        card(2, 'flyrelay', 'other', 'flyrelay', '3 связи · 1 write'),
+        card(3, 'okk-analysis-service', 'other', 'okk', '4 связи'),
+        card(4, 'x-testers', 'other', 'testers', '1 связь'),
+        card(5, 'x-analysis-backend', 'api', 'x-analysis', '1 связь'),
+        card(6, 'xmr-backend', 'api', 'xmr', '1 связь · manual'),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

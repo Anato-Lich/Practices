@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — ждут приёмки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="pending" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600">Ждут приёмки</h1>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #A6A6AE">12 файлов · 2 пространства · <span style="color: #4ED27A">11 новых</span> · <span style="color: #FFB04A">1 изменён</span></span>
+      <button type="button" style="margin-left: auto; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v5h-5"></path></svg>Обновить</button>
+      <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Принять всё</button>
+    </header>
+
+    <div style="flex: 1; min-height: 0; display: flex">
+      <div style="width: 360px; flex: none; box-sizing: border-box; padding: 8px; overflow: hidden; border-right: 1px solid #3A3A3F; display: flex; flex-direction: column; gap: 1px">
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+          <button type="button" style="{{r.style}}">
+            <span style="{{r.kindStyle}}">{{r.kind}}</span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; text-align: left">
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.file}}</span>
+              <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.dir}}</span>
+            </span>
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: {{r.stateColor}}">{{r.state}}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+        <div style="height: 40px; box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 10px; flex: none; border-bottom: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+          <a href="Service.dc.html" style="text-decoration: none; color: #4ED27A">arm-pg</a><span style="color: #8A8A92">/</span><span>practices/query.py</span>
+          <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(78,210,122,0.16); color: #4ED27A">new · +18</span>
+          <span style="color: #8A8A92">черновик агента · не запускалась · DECISIONS 20</span>
+          <span style="margin-left: auto; display: flex; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
+            <a href="Practice.dc.html" style="height: 26px; padding: 0 10px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none">Открыть практику</a>
+            <button type="button" style="height: 26px; padding: 0 10px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Отклонить</button>
+            <button type="button" style="height: 26px; padding: 0 12px; border: 1px solid #0A84FF; border-radius: 6px; background: #0A84FF; font: inherit; color: #FFFFFF; cursor: pointer">Принять</button>
+          </span>
+        </div>
+        <div style="flex: 1; min-height: 0; overflow: hidden; background: #161618; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 19px">
+          <sc-for list="{{diff}}" as="d" hint-placeholder-count="20">
+            <div style="{{d.style}}"><span style="width: 36px; flex: none; text-align: right; padding-right: 10px; color: #5C5C64">{{d.n}}</span><span style="width: 14px; flex: none; color: {{d.signColor}}">{{d.sign}}</span><span style="white-space: pre">{{d.text}}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>x-keeper: main · 8 файлов не закоммичены</span><span>spheretele: main · 4 файла</span><span>«Принять» = git commit только этого файла</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const KIND = { py: 'background: rgba(180,140,255,0.16); color: #B48CFF', yaml: 'background: rgba(90,169,255,0.16); color: #5AA9FF' };
+    const base = 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 10px; width: 34px; flex: none; text-align: center; padding: 1px 0; border-radius: 4px; ';
+    const row = (dir, file, state, selected) => ({
+      file, dir, kind: file.endsWith('.py') ? 'py' : 'yaml', kindStyle: base + (file.endsWith('.py') ? KIND.py : KIND.yaml),
+      state: state === 'new' ? 'new' : 'mod', stateColor: state === 'new' ? '#4ED27A' : '#FFB04A',
+      style: 'display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; padding: 5px 8px; border: 0; border-radius: 6px; font: inherit; color: #F2F2F4; text-align: left; cursor: pointer; background: ' + (selected ? 'rgba(10,132,255,0.22)' : 'transparent'),
+    });
+    const header = (label) => ({ file: label, dir: '', kind: '', kindStyle: 'display: none', state: '', stateColor: '#8A8A92',
+      style: 'display: flex; align-items: flex-end; height: 26px; box-sizing: border-box; padding: 8px 8px 0; border: 0; background: transparent; font: inherit; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em' });
+    const line = (n, sign, text) => ({ n: n ? String(n) : '', sign, text,
+      signColor: sign === '+' ? '#4ED27A' : sign === '-' ? '#FF6B6B' : '#5C5C64',
+      style: 'display: flex; padding: 0 12px 0 0; color: ' + (sign === '@' ? '#8A8A92' : '#E6E6EA') + '; background: ' + (sign === '+' ? 'rgba(78,210,122,0.10)' : 'transparent') });
+    const code = [
+      '# practices: arm-pg/query@draft', 'import os, psycopg', '', 'def run(sql: str, limit: int = 200):', '    """Произвольный SELECT к ARM Postgres (invitest); только чтение."""',
+      '    if not sql.lstrip().lower().startswith("select"):', '        raise ValueError("only SELECT")',
+      '    dsn = (f"host={os.environ[\'ARM_PG_HOST\']} port={os.environ[\'ARM_PG_PORT\']} "', '           f"dbname={os.environ[\'ARM_PG_DB\']} user={os.environ[\'ARM_PG_USER\']} "', '           f"password={os.environ[\'ARM_PG_PASSWORD\']}")',
+      '    with psycopg.connect(dsn, options="-c default_transaction_read_only=on") as conn:', '        cur = conn.execute(sql)', '        cols = [c.name for c in cur.description]',
+      '        return [dict(zip(cols, row)) for row in cur.fetchmany(limit)]', '', '# Черновик агента по коду invitest/db.py: не запускалась (DECISIONS 20).',
+    ];
+    return {
+      rows: [
+        header('x-keeper · 8'),
+        row('projects/platform/services/arm-pg/practices', 'query.py', 'new', true),
+        row('projects/platform/services/arm-pg/practices', 'electrotest-by-imei.py', 'new'),
+        row('projects/platform/services/devices-api/practices', 'panel-objects.py', 'new'),
+        row('projects/platform/services/system-api/practices', 'electro-release-checks.py', 'new'),
+        row('projects/platform/services/xkeeper-pg', 'links.yaml', 'modified'),
+        row('projects/warehouse/services/warehouse-api/practices', 'orders-by-sims.py', 'new'),
+        row('projects/xsm/services/xsm-intra-api/practices', 'pending-tasks.py', 'new'),
+        row('projects/scada/services/scada/practices', 'lookup.py', 'new'),
+        header('spheretele · 4'),
+        row('projects/ble/services/ble-anchors/practices', 'resolve.py', 'new'),
+        row('projects/route-verdict/services/route-verdict/practices', 'days.py', 'new'),
+        row('projects/wifi-locator/services/wifi-db/practices', 'mac-batch.py', 'new'),
+        row('projects/hyper-imu/services/kafka/practices', 'topics.py', 'new'),
+      ],
+      diff: [line(0, '@', '@@ -0,0 +1,16 @@  new file mode 100644'), ...code.map((t, i) => line(i + 1, '+', t))],
+    };
+  }
+}
+</script>
+</body>
+</html>
