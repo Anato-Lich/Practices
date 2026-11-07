@@ -116,6 +116,13 @@ private struct PaletteDialog: View {
             focused = true
             for s in registry.services { for link in registry.links(of: s.id) { callers[link.to, default: 0] += 1 } }
         }
+        .onAppear {
+            #if DEBUG
+            // `--palette <text>` (DevRender): the query the off-screen render opens with.
+            let args = CommandLine.arguments
+            if let i = args.firstIndex(of: "--palette"), i + 1 < args.count { query = args[i + 1] }
+            #endif
+        }
         .onChange(of: query) { index = 0 }
         .task(id: query) {
             let (scope, term) = Self.parse(query)

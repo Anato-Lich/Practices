@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 /// `Practices --render-window out.png [--space id | --project id | --service id | --practice ref |
-/// --pending | --unassigned | --map | --search text | --doctor] [--expand project,…] [--wait seconds]`:
+/// --pending | --unassigned | --map | --search text | --palette text | --doctor] [--expand project,…] [--wait seconds]`:
 /// renders the main window offscreen and exits. Lets the layout be checked without clicking.
 @MainActor
 enum DevRender {
@@ -61,6 +61,7 @@ enum DevRender {
             if args.contains("--unassigned") { registry.selection = .unassigned }
             if args.contains("--map") { registry.selection = .map }
             if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
+            if args.contains("--palette") { registry.paletteShown = true }
             // The design's size; the traffic lights a real window draws, so the PNG compares with it.
             let view = MainWindow().environment(registry).frame(width: 1280, height: 860)
                 .overlay(alignment: .topLeading) {
