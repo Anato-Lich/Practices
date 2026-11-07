@@ -25,7 +25,8 @@ import Foundation
         #expect(AgentInstructions.state(of: file) == "absent")
         try AgentInstructions.write(to: file)
         #expect(AgentInstructions.state(of: file) == "current")
-        #expect(try String(contentsOf: file, encoding: .utf8).contains("practicesctl setup status"))
+        #expect(try String(contentsOf: file, encoding: .utf8).contains("Проекты ваших пространств описаны"))
+        #expect(try String(contentsOf: file, encoding: .utf8).contains("`get_conventions`"))
 
         try "# Mine\nkeep me\n\n<!-- practices:begin v0 -->\nold\n<!-- practices:end -->\nafter\n".write(to: file, atomically: true, encoding: .utf8)
         #expect(AgentInstructions.state(of: file) == "outdated(v0)")
@@ -40,6 +41,16 @@ import Foundation
         try "no newline".write(to: file, atomically: true, encoding: .utf8)
         try AgentInstructions.write(to: file)
         #expect(try String(contentsOf: file, encoding: .utf8).hasPrefix("no newline\n\n<!-- practices:begin"))
+    }
+
+    @Test func spacesAreNamedInTheBlock() throws {
+        #expect(AgentInstructions.block(spaces: ["X-Keeper", "SphereTele"]).contains("Проекты пространств X-Keeper и SphereTele описаны"))
+        #expect(AgentInstructions.block(spaces: ["A", "B", "C"]).contains("пространств A, B и C описаны"))
+        #expect(AgentInstructions.block(spaces: []).contains("Проекты ваших пространств описаны"))
+        #expect(!AgentInstructions.block(spaces: []).contains("{{"))
+        let file = TempHome().url.appendingPathComponent("CLAUDE.md")
+        try "<!-- practices:begin v3 -->\nold\n<!-- practices:end -->\n".write(to: file, atomically: true, encoding: .utf8)
+        #expect(AgentInstructions.state(of: file) == "outdated(v3)")
     }
 
     @Test func mcpRegistrationKeepsOtherServers() throws {

@@ -58,7 +58,7 @@ public struct Pending: Codable, Hashable, Sendable {
 /// The registry: every space under `~/.practices/spaces/` (or where `local.yaml` says), each a
 /// git repository of its own:
 ///
-///     <space>/space.yaml, conditions.yaml
+///     <space>/space.yaml, conditions.yaml, conventions.md, templates/…
 ///     <space>/projects/<project>/project.yaml, chains/<name>.py
 ///     <space>/projects/<project>/services/<service>/{service.yaml, links.yaml, rejected.yaml,
 ///                                                    notes.md, fields.yaml, docs.yaml, practices/<name>.py}
@@ -237,6 +237,39 @@ public struct Registry: Sendable {
         spaceIDs().lazy.flatMap { conditions(space: $0) }.first { $0.id == id }
     }
 
+    /// The servers a project is deployed on: conditions of its own space, in the project's order.
+    public func setHosts(_ ids: [String], of project: String) async throws {
+        var project = try self.project(project)
+        let known = conditions(space: project.space).map(\.id)
+        if let unknown = ids.first(where: { !known.contains($0) }) {
+            throw Failure("no condition \(unknown) in space \(project.space); it has " + known.joined(separator: ", "))
+        }
+        project.hosts = ids
+        try await commit("\(project.id): hosts " + (ids.isEmpty ? "none" : ids.joined(separator: ", ")), [try save(project)])
+    }
+
+    // MARK: Conventions
+
+    /// The owner's rules for laying out repositories: `conventions.md` at the space's root.
+    public func conventions(of space: String) -> String? {
+        try? String(contentsOf: dir(ofSpace: space).appendingPathComponent("conventions.md"), encoding: .utf8)
+    }
+
+    /// Files under the space's `templates/`, by relative path; files that are not UTF-8 text or
+    /// are over 64 KiB are left out.
+    public func templates(of space: String) -> [(path: String, text: String)] {
+        let base = dir(ofSpace: space).appendingPathComponent("templates").resolvingSymlinksInPath()
+        guard let walk = FileManager.default.enumerator(at: base, includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey]) else { return [] }
+        var out: [(path: String, text: String)] = []
+        for case let url as URL in walk {
+            guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]), values.isRegularFile == true,
+                  (values.fileSize ?? 0) <= 64 * 1024, url.lastPathComponent != ".DS_Store",
+                  let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            out.append((String(url.resolvingSymlinksInPath().path.dropFirst(base.path.count + 1)), text))
+        }
+        return out.sorted { $0.path < $1.path }
+    }
+
     // MARK: Repositories
 
     /// Every repository that is in a project, with the project.
@@ -310,7 +343,21 @@ public struct Registry: Sendable {
         try write(Self.yaml(space), to: file)
         // Finder leaves `.DS_Store` in every folder it shows; it is nobody's pending change.
         let ignore = try write(".DS_Store\n", to: dir(ofSpace: space.id).appendingPathComponent(".gitignore"))
-        try await commit("Space \(space.name)", [file, ignore])
+        try await commit("Space \(space.name)", [file, ignore] + (try defaultConventions(in: dir(ofSpace: space.id))))
+    }
+
+    /// The package's `conventions.md` and `templates/` for a new space, where it has none yet.
+    private func defaultConventions(in dir: URL) throws -> [URL] {
+        let fm = FileManager.default
+        var files: [URL] = []
+        if let source = Bundle.module.url(forResource: "Conventions", withExtension: "md"), !exists(dir.appendingPathComponent("conventions.md")) {
+            files.append(try write(String(contentsOf: source, encoding: .utf8), to: dir.appendingPathComponent("conventions.md")))
+        }
+        if let source = Bundle.module.url(forResource: "templates", withExtension: nil), !exists(dir.appendingPathComponent("templates")) {
+            try fm.copyItem(at: source, to: dir.appendingPathComponent("templates"))
+            files.append(dir.appendingPathComponent("templates"))
+        }
+        return files
     }
 
     public func add(_ project: Project) async throws {

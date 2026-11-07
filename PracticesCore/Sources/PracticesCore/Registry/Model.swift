@@ -89,6 +89,8 @@ public struct Project: Codable, Identifiable, Hashable, Sendable {
     public var repos: [Repo]
     /// Code without git, by folder name; where the folder is on this machine — `local.yaml`.
     public var folders: [Folder]
+    /// Ids of the space's conditions that stand for the servers its services are deployed on.
+    public var hosts: [String]
 
     public struct Repo: Codable, Hashable, Sendable {
         public var repo: RepoID
@@ -102,12 +104,12 @@ public struct Project: Codable, Identifiable, Hashable, Sendable {
     }
 
     public init(id: String, space: String, name: String, parent: String? = nil, description: String? = nil,
-                repos: [Repo] = [], folders: [Folder] = []) {
+                repos: [Repo] = [], folders: [Folder] = [], hosts: [String] = []) {
         self.id = id; self.space = space; self.name = name; self.parent = parent; self.description = description
-        self.repos = repos; self.folders = folders
+        self.repos = repos; self.folders = folders; self.hosts = hosts
     }
 
-    enum CodingKeys: String, CodingKey { case name, parent, description, repos, folders }
+    enum CodingKeys: String, CodingKey { case name, parent, description, repos, folders, hosts }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -116,6 +118,17 @@ public struct Project: Codable, Identifiable, Hashable, Sendable {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         repos = try c.decodeIfPresent([Repo].self, forKey: .repos) ?? []
         folders = try c.decodeIfPresent([Folder].self, forKey: .folders) ?? []
+        hosts = try c.decodeIfPresent([String].self, forKey: .hosts) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(parent, forKey: .parent)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encode(repos, forKey: .repos)
+        try c.encode(folders, forKey: .folders)
+        if !hosts.isEmpty { try c.encode(hosts, forKey: .hosts) }
     }
 }
 

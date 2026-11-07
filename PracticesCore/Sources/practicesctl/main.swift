@@ -14,6 +14,10 @@ let usage = """
       projects [space]              the tree of projects with their repositories and services
       project <id>                  one project: repositories (role, local clone), services, chains
       project add <space>/<id> [--parent <project>] [--name N] [--description D]
+      project hosts <id> [<condition>…]   the servers it is deployed on: conditions of its space
+                                    (none given — clears the list)
+      conventions <space> [--templates]   the owner's rules for repositories (conventions.md) and
+                                    the paths of templates/ (--templates: with their contents)
       repos [--all]                 not assigned to any project: from gh / glab by the spaces'
                                     hosting, plus local clones (--all: ignored ones too)
       assign <repo> <project> [--role r]     repo = a remote address in any form
@@ -303,6 +307,11 @@ case "project":
         print("project " + ([space] + registry.path(ofProject: parts.last!)).joined(separator: "/"))
         break
     }
+    if rest.count >= 3, rest[1] == "hosts" {
+        do { try await registry.setHosts(Array(rest.dropFirst(3)), of: rest[2]) } catch { fail("practices: \(error)") }
+        print("\(rest[2]) hosts: " + (rest.count > 3 ? rest.dropFirst(3).joined(separator: ", ") : "none"))
+        break
+    }
     guard rest.count == 2 else { print(usage); exit(2) }
     let project: Project
     do { project = try registry.project(rest[1]) } catch { fail("\(error)") }
@@ -312,6 +321,9 @@ case "project":
     let clones = Repos.clones(roots: registry.searchRoots)
     let children = try registry.projects(space: project.space).filter { $0.parent == project.id }.map(\.id)
     if !children.isEmpty { print("contains: " + children.joined(separator: ", ")) }
+    if !project.hosts.isEmpty {
+        print("hosts: " + project.hosts.map { id in registry.condition(id).map { "\($0.name) (\(id))" } ?? "\(id) (not declared)" }.joined(separator: ", "))
+    }
     if !project.repos.isEmpty { print("\nrepositories") }
     for r in project.repos {
         print("  " + pad(r.repo.description, 58) + pad(r.role ?? "", 12) + (clones[r.repo].map(home) ?? "not cloned"))
@@ -323,6 +335,15 @@ case "project":
     for s in services { print("  " + pad(s.id, 26) + pad(s.kind, 12) + s.name) }
     let chains = PracticeStore(registry: registry).chains(project: project.id)
     if !chains.isEmpty { print("\nchains\n  " + chains.map(\.ref).joined(separator: "  ")) }
+
+case "conventions":
+    guard positional.count == 2 else { print(usage); exit(2) }
+    let registry = Registry(), space = positional[1]
+    guard registry.spaceIDs().contains(space) else { fail("no space \(space)") }
+    let templates = registry.templates(of: space)
+    print(registry.conventions(of: space) ?? "no conventions.md in \(home(registry.dir(ofSpace: space).path))")
+    if !templates.isEmpty { print("\ntemplates/") }
+    for t in templates { print(args.contains("--templates") ? "\n-- \(t.path)\n" + t.text : "  " + t.path) }
 
 case "repos":
     let (repos, problems) = try await Repos.unassigned()

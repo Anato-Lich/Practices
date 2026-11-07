@@ -159,6 +159,11 @@ struct TempHome {
         #expect(project.repos.map(\.repo.description) == ["github.com/x-keeper/device_analysis", "github.com/x-keeper/device_analysis-api"])
         #expect(project.repos[1].role == "backend" && project.folders == [.init(name: "export_engine")] && project.parent == "x-factory")
         #expect(try roundTrip(project))
+        #expect(try project.hosts.isEmpty && !Registry.yaml(project).contains("hosts"))
+        var hosted = project
+        hosted.hosts = ["prod-vm", "stage-vm"]
+        #expect(try Registry.yaml(hosted).contains("hosts:\n- prod-vm\n- stage-vm\n"))
+        #expect(try roundTrip(hosted))
 
         let space = try YAMLDecoder().decode(Space.self, from: """
             name: X-Keeper
@@ -319,6 +324,57 @@ struct TempHome {
         #expect(throws: Registry.Failure.self) { try registry.addLink(Link(to: "pg", via: "pigeon"), from: "api") }
         #expect(throws: Registry.Failure.self) { try registry.addLink(Link(to: "missing"), from: "api") }
         #expect(throws: Registry.Failure.self) { try registry.addLink(Link(to: "pg"), from: "missing") }
+    }
+}
+
+@Suite struct HostsAndConventionsTests {
+    @Test func hostsAreConditionsOfTheProjectsSpace() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        try await registry.add(Space(id: "sp", name: "Space"))
+        try await registry.add(Space(id: "other", name: "Other"))
+        try await registry.add(Project(id: "pr", space: "sp", name: "pr"))
+        try await registry.add(Condition(id: "prod-vm", name: "Прод-сервер", hint: "ssh prod", reachable: "${HOST}:22"), to: "sp")
+        try await registry.add(Condition(id: "elsewhere", name: "Чужой"), to: "other")
+
+        try await registry.setHosts(["prod-vm"], of: "pr")
+        #expect(try registry.project("pr").hosts == ["prod-vm"])
+        await #expect(throws: Registry.Failure.self) { try await registry.setHosts(["elsewhere"], of: "pr") }
+        await #expect(throws: Registry.Failure.self) { try await registry.setHosts(["nope"], of: "pr") }
+        #expect(await registry.pending().isEmpty)
+
+        let hosts = (try MCPServer(registry: registry).getProject("pr") as! [String: Any])["hosts"] as! [[String: Any]]
+        #expect(hosts.count == 1 && hosts[0]["name"] as? String == "Прод-сервер" && hosts[0]["hint"] as? String == "ssh prod")
+        #expect(hosts[0]["reachable"] == nil)
+
+        try await registry.setHosts([], of: "pr")
+        #expect(try registry.project("pr").hosts.isEmpty)
+    }
+
+    @Test func aNewSpaceGetsTheDefaultConventionsAndAnExistingOneKeepsItsOwn() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        try await registry.add(Space(id: "sp", name: "Space"))
+        #expect(registry.conventions(of: "sp")?.contains("docker-compose.dev.yml") == true)
+        #expect(registry.templates(of: "sp").map(\.path) == ["vscode/tasks.json"])
+        #expect(registry.templates(of: "sp")[0].text.contains("docker compose -f docker-compose.dev.yml"))
+        #expect(await registry.pending().isEmpty)
+
+        // A space made by hand: what it has is read as is; big and binary files are left out.
+        try home.write("name: own\n", "spaces/own/space.yaml")
+        #expect(registry.conventions(of: "own") == nil && registry.templates(of: "own").isEmpty)
+        try home.write("# Мои правила\n", "spaces/own/conventions.md")
+        try home.write("services: {}\n", "spaces/own/templates/compose/docker-compose.yml")
+        try home.write("A=1\n", "spaces/own/templates/.default.env")
+        try home.write(String(repeating: "x", count: 65 * 1024), "spaces/own/templates/big.txt")
+        try Data([0xff, 0xfe, 0x00, 0xd8]).write(to: home.url.appendingPathComponent("spaces/own/templates/logo.bin"))
+        #expect(registry.conventions(of: "own") == "# Мои правила\n")
+        #expect(registry.templates(of: "own").map(\.path) == [".default.env", "compose/docker-compose.yml"])
+
+        let out = try await MCPServer(registry: registry).call("get_conventions", ["space": "own"]) as! [String: Any]
+        #expect(out["space"] as? String == "own" && out["conventions"] as? String == "# Мои правила\n")
+        #expect((out["templates"] as! [[String: Any]]).map { $0["path"] as! String } == [".default.env", "compose/docker-compose.yml"])
+        await #expect(throws: (any Error).self) { _ = try await MCPServer(registry: registry).call("get_conventions", ["space": "nope"]) }
     }
 }
 

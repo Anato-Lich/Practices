@@ -46,7 +46,7 @@ public struct AgentHome: Sendable {
 /// The instruction block written into agents' CLAUDE.md / AGENTS.md between markers.
 public enum AgentInstructions {
     /// Bump when the text of `Resources/AgentInstructions.md` changes: older blocks show as outdated.
-    public static let version = 3
+    public static let version = 4
     public static let projectFiles = ["CLAUDE.md", "AGENTS.md"]
 
     public static var text: String {
@@ -54,8 +54,12 @@ public enum AgentInstructions {
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
 
-    public static var block: String {
-        "<!-- practices:begin v\(version) -->\n" + text.trimmingCharacters(in: .newlines) + "\n<!-- practices:end -->\n"
+    /// `{{spaces}}` names the spaces at the time of writing: «пространств X-Keeper и SphereTele».
+    public static func block(spaces: [String]) -> String {
+        let names = spaces.isEmpty ? "ваших пространств"
+            : "пространств " + (spaces.count == 1 ? spaces[0] : spaces.dropLast().joined(separator: ", ") + " и " + spaces.last!)
+        return "<!-- practices:begin v\(version) -->\n" + text.trimmingCharacters(in: .newlines).replacingOccurrences(of: "{{spaces}}", with: names)
+            + "\n<!-- practices:end -->\n"
     }
 
     static let pattern = try! NSRegularExpression(pattern: #"<!-- practices:begin v(\d+) -->[\s\S]*?<!-- practices:end -->\n?"#)
@@ -70,13 +74,14 @@ public enum AgentInstructions {
     }
 
     /// Replaces the block of any version, or appends it after a blank line; creates the file if needed.
-    public static func write(to file: URL) throws {
+    public static func write(to file: URL, spaces: [String] = []) throws {
+        let ours = block(spaces: spaces)
         var text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
         if let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), let range = Range(match.range, in: text) {
-            text.replaceSubrange(range, with: block)
+            text.replaceSubrange(range, with: ours)
         } else {
             if !text.isEmpty { text += text.hasSuffix("\n") ? "\n" : "\n\n" }
-            text += block
+            text += ours
         }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try text.write(to: file, atomically: true, encoding: .utf8)
@@ -221,6 +226,7 @@ public enum Setup {
         if instructions && scope == .projects && clones.isEmpty {
             throw Registry.Failure("no local clone of any project's repositories under the roots")
         }
+        let spaces = try registry.spaces().map(\.name)
         var done: [SetupWrite] = []
         for tool in tools ?? AgentTool.allCases {
             guard home.found(tool) else { done.append(.init(target: tool.rawValue, file: home.dir(tool).path, state: "not found")); continue }
@@ -229,10 +235,10 @@ public enum Setup {
                 done.append(.init(target: tool.rawValue, file: home.mcpConfig(tool).path, state: "registered"))
             }
             if instructions, scope == .global, let file = home.instructions(tool) {
-                done.append(try write(file, target: tool.rawValue))
+                done.append(try write(file, target: tool.rawValue, spaces: spaces))
             }
         }
-        return done + (try write(clones))
+        return done + (try write(clones, spaces: spaces))
     }
 
     /// The block into CLAUDE.md and AGENTS.md of every local clone of the project's repositories.
@@ -240,22 +246,22 @@ public enum Setup {
         let clones = try projectClones(registry: registry).filter { $0.project == id }
         guard try registry.project(id).repos.count > 0 else { throw Registry.Failure("project \(id) has no repositories") }
         guard !clones.isEmpty else { throw Registry.Failure("no local clone of \(id)'s repositories under the roots") }
-        return try write(clones)
+        return try write(clones, spaces: try registry.spaces().map(\.name))
     }
 
-    static func write(_ clones: [(project: String, clone: String)]) throws -> [SetupWrite] {
+    static func write(_ clones: [(project: String, clone: String)], spaces: [String]) throws -> [SetupWrite] {
         var done: [SetupWrite] = []
         for (project, clone) in clones {
             for name in AgentInstructions.projectFiles {
-                done.append(try write(URL(fileURLWithPath: clone).appendingPathComponent(name), target: project))
+                done.append(try write(URL(fileURLWithPath: clone).appendingPathComponent(name), target: project, spaces: spaces))
             }
         }
         return done
     }
 
-    static func write(_ file: URL, target: String) throws -> SetupWrite {
+    static func write(_ file: URL, target: String, spaces: [String]) throws -> SetupWrite {
         let before = AgentInstructions.state(of: file)
-        try AgentInstructions.write(to: file)
+        try AgentInstructions.write(to: file, spaces: spaces)
         return SetupWrite(target: target, file: file.path, state: before == "absent" ? "written" : "updated")
     }
 

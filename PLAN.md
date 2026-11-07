@@ -310,6 +310,11 @@ guards:
   `<!-- practices:begin vN -->` и `<!-- practices:end -->` (ресурс `AgentInstructions.md`,
   версия в коде); MCP-инструменты `setup_status`, `setup_agents`. `PRACTICES_AGENT_HOME`
   подменяет домашнюю папку инструментов (рендеры и тесты).
+- [x] Решение 37: `hosts:` у проекта (`project hosts <id> <condition>…`, `hosts` в `get_project` /
+  `list_projects` / карточках сервисов, строка «Серверы:» на странице проекта); `conventions.md` и
+  `templates/` пространства (`conventions <space> [--templates]`, MCP `get_conventions`, блок
+  «Соглашения» на обзоре пространства; `space add` кладёт умолчания из ресурсов); блок инструкций
+  v4 с `{{spaces}}`, абзац о настройке новому человеку перенесён в README.
 - [ ] Когда логика шага 7 отлажена: `practicesctl setup agents --global` на машине пользователя —
   ручной блок в `~/.claude/CLAUDE.md` (7 ноября, без маркеров) заменяется помеченным
   (решение пользователя 7 ноября: глобально).

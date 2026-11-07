@@ -6,13 +6,16 @@ import Foundation
 /// (DECISIONS 4). Services tagged `pii` return shapes, not rows.
 public final class MCPServer: @unchecked Sendable {
 
-    let registry = Registry()
+    let registry: Registry
     let secrets = SecretStore()
     lazy var store = PracticeStore(registry: registry)
     /// The directory the agent's project is in (the server's cwd), named in notes it leaves.
     let origin: String
 
-    public init(origin: String = FileManager.default.currentDirectoryPath) { self.origin = origin }
+    public init(origin: String = FileManager.default.currentDirectoryPath, registry: Registry = Registry()) {
+        self.origin = origin
+        self.registry = registry
+    }
 
     static let instructions = """
         Practices is the user's catalogue of their projects: *spaces* (an organisation) hold \
@@ -27,7 +30,9 @@ public final class MCPServer: @unchecked Sendable {
 
         Start here instead of walking GitLab, GitHub and local folders: `list_projects` / \
         `get_project` for what belongs where and where the clones are, `get_service` for how a \
-        service is reached and who uses it, `search` for a field or an operation.
+        service is reached and who uses it, `search` for a field or an operation. Before a new \
+        project or service, or a change to compose, env files or IDE tasks, read the space's \
+        `get_conventions`: the owner's file names, modules, ports and templates.
 
         Before writing code that reads one of these services, `search` and `get_practice`: reuse \
         the practice instead of writing a new client. Copy its code as given — the first line \
@@ -138,6 +143,11 @@ public final class MCPServer: @unchecked Sendable {
         case "list_projects": return try listProjects()
         case "get_project": return try getProject(try Self.string(args, "id"))
         case "list_services": return try listServices(project: args["project"] as? String)
+        case "get_conventions":
+            let space = try Self.string(args, "space")
+            _ = try registry.space(space)
+            return ["space": space, "conventions": registry.conventions(of: space) as Any,
+                    "templates": registry.templates(of: space).map { ["path": $0.path, "text": $0.text] }] as [String: Any]
         case "get_service": return try getService(try Self.string(args, "id"))
         case "list_practices": return try await listPractices(args["service"] as? String)
         case "get_practice": return try await getPractice(try Self.string(args, "ref"), version: args["version"] as? Int)
@@ -215,7 +225,7 @@ public final class MCPServer: @unchecked Sendable {
             ["id": project.id, "space": project.space, "name": project.name, "description": project.description ?? "",
              "parent": project.parent as Any, "children": projects.filter { $0.parent == project.id }.map(\.id),
              "repos": project.repos.map { ["repo": $0.repo.description, "role": $0.role ?? ""] },
-             "folders": project.folders.map(\.name),
+             "folders": project.folders.map(\.name), "hosts": hosts(of: project),
              "services": services.filter { $0.project == project.id }.map(\.id)]
         }
     }
@@ -231,11 +241,20 @@ public final class MCPServer: @unchecked Sendable {
             "repos": project.repos.map { ["repo": $0.repo.description, "role": $0.role ?? "", "clone_url": $0.repo.sshURL,
                                           "local_clone": clones[$0.repo] as Any] as [String: Any] },
             "folders": project.folders.map { ["name": $0.name, "path": registry.local.folders[$0.name] as Any] as [String: Any] },
+            "hosts": hosts(of: project),
             "services": try registry.services(project: id).map {
                 ["id": $0.id, "name": $0.name, "kind": $0.kind, "description": $0.description ?? "", "repo": $0.repo?.description as Any] as [String: Any]
             },
             "chains": store.chains(project: id).map(\.ref),
         ] as [String: Any]
+    }
+
+    /// The servers a project is deployed on, as the conditions name them; a template, never a value.
+    func hosts(of project: Project) -> [[String: Any]] {
+        project.hosts.map { id in
+            let condition = registry.condition(id)
+            return ["id": id, "name": condition?.name ?? "(not declared)", "hint": condition?.hint ?? ""]
+        }
     }
 
     func card(_ service: Service) -> [String: Any] {
@@ -251,6 +270,7 @@ public final class MCPServer: @unchecked Sendable {
                  "set": Dictionary(uniqueKeysWithValues: service.envs.map { ($0, status[$0]?.contains(key.name) == true) })] as [String: Any]
             },
             "practices": store.list(service: service.id).map(\.ref),
+            "hosts": (try? registry.project(service.project)).map(hosts(of:)) ?? [],
         ]
     }
 
@@ -435,12 +455,14 @@ public final class MCPServer: @unchecked Sendable {
 
     static var tools: [[String: Any]] { [
         tool("list_projects", "Projects of every space, parents before their children: what each is, its parent and children, its repositories with roles, ids of its services."),
-        tool("get_project", "One project: its parent and children, repositories (role, clone URL, where the local clone is), folders, services, chains. A parent project may have no repositories of its own.",
+        tool("get_project", "One project: its parent and children, repositories (role, clone URL, where the local clone is), folders, hosts (the servers it is deployed on: name, hint), services, chains. A parent project may have no repositories of its own.",
              ["id": ["type": "string"]], required: ["id"]),
         tool("list_services", "Services (compose services and external systems): kind, project, repository, other names, environments, guards, names of their keys and whether each has a value. Never values.",
              ["project": ["type": "string", "description": "only this project's services"]]),
         tool("get_service", "One service: endpoints, conditions to know before the first request (e.g. a VPN), links in both directions (whom it calls, who calls it), keys, guards, notes (pitfalls), documents, dictionary of fields, practices.",
              ["id": ["type": "string"]], required: ["id"]),
+        tool("get_conventions", "Личные соглашения пространства: как устроены репозитории (модули, compose, env, порты, задачи IDE, локальные домены) и файлы-шаблоны. Читать перед созданием проекта/сервиса или правкой окружения.",
+             ["space": ["type": "string", "description": "id пространства"]], required: ["space"]),
         tool("list_practices", "Practices (run() functions) and chains, with a one-line summary and their last run.",
              ["service": ["type": "string", "description": "only this service's practices"]]),
         tool("get_practice", "A practice's code to copy (first line marks the copy — keep it), the env variable names it reads, conditions of its services, practices it uses, fields of its result, history.",

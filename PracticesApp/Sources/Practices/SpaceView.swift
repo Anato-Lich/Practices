@@ -41,6 +41,7 @@ struct SpaceView: View {
                         hubsCard(hubs)
                         conditionsCard
                         hostingCard
+                        conventionsCard
                     }
                     .frame(width: 300)
                 }
@@ -215,6 +216,27 @@ struct SpaceView: View {
                 .buttonStyle(.plain)
             }
             if space.hosting.isEmpty { empty("нет") }
+        }
+    }
+
+    /// The first lines of the space's `conventions.md`: the owner's rules agents read through `get_conventions`.
+    private var conventionsCard: some View {
+        let file = registry.registry.dir(ofSpace: space.id).appendingPathComponent("conventions.md")
+        let lines = registry.registry.conventions(of: space.id).map { text in
+            // The card is titled already: the `# …` title goes, and the preview is plain text.
+            text.split(separator: "\n").drop { $0.hasPrefix("# ") }
+                .map { $0.drop { "#- ".contains($0) }.replacingOccurrences(of: "`", with: "") }
+                .filter { !$0.isEmpty }.prefix(6)
+        }
+        return SectionCard("Соглашения", spacing: 6) {
+            if let lines {
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    Text(verbatim: line).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1).truncationMode(.tail)
+                }
+                StateButton("Открыть") { NSWorkspace.shared.open(file) }.padding(.top, 2)
+            } else {
+                empty("нет — practicesctl conventions \(space.id)")
+            }
         }
     }
 

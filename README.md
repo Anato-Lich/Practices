@@ -53,6 +53,8 @@ Catalogue (`~/.practices/spaces/<space>`):
 ```
 practicesctl spaces | space add <id> [--hosting host/owner …]
 practicesctl projects [space] | project <id> | project add <space>/<id> [--parent p]
+practicesctl project hosts <id> [<condition>…]     # servers it is deployed on: conditions of its space
+practicesctl conventions <space> [--templates]     # the space's conventions.md and templates/
 practicesctl repos [--all] | assign <repo> <project> [--role r] | unassign <repo> | ignore <repo>
 practicesctl services [project] | service <id> | service add <id> --project <p> …
 practicesctl links [service] | link add <from> <to> [--via db] [--why …]
@@ -102,5 +104,10 @@ practicesctl setup status                          # что уже настро�
 practicesctl setup roots ~/Projects/…              # где лежат клоны
 practicesctl space add <id> [--name N] [--hosting host/owner]   # своё пространство
 practicesctl scan <project> --write                # сервисы и связи из клонов, ждут `accept`
-practicesctl setup agents                          # MCP и блок инструкций для Claude Code, Codex, Cursor
+practicesctl setup agents --global | --projects    # MCP и блок инструкций для Claude Code, Codex, Cursor
 ```
+
+Куда писать инструкции агентам — глобально (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`) или в
+каждый проект (CLAUDE.md и AGENTS.md клонов) — решает пользователь; агент спрашивает, прежде чем
+вызывать. Новое пространство получает `conventions.md` и `templates/` по умолчанию — правила
+ведения репозиториев, которые агенты читают через `get_conventions`; правьте их под себя.

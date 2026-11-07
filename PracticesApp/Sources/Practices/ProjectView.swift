@@ -26,6 +26,7 @@ struct ProjectView: View {
                 kv(services)
                 nested
                 repositories
+                servers
                 columns(services)
             }
             .padding(.horizontal, 20).padding(.vertical, 16)
@@ -165,6 +166,27 @@ struct ProjectView: View {
                            text: "Проект описан, но к нему не привязан ни один клон. Заберите репозиторий из «Не распределено».",
                            code: "practicesctl assign <repo> \(project.id)") {
                     StateButton("Не распределено") { registry.selection = .unassigned }
+                }
+            }
+        }
+    }
+
+    /// `Серверы: <name> · <hint>` for each condition in `hosts:`.
+    @ViewBuilder private var servers: some View {
+        if !project.hosts.isEmpty {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(verbatim: "Серверы:").font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(project.hosts, id: \.self) { id in
+                        let condition = registry.condition(id)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(verbatim: condition?.name ?? id).font(Theme.mono(12)).foregroundStyle(condition == nil ? Theme.Color.warn : Theme.Color.text)
+                            if let hint = condition?.hint {
+                                Text(verbatim: "· " + hint).font(Theme.ui(11)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
+                            }
+                        }
+                        .help(id)
+                    }
                 }
             }
         }

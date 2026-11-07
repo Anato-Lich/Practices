@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "test", "type": "shell", "command": "uv run pytest", "options": { "cwd": "${workspaceFolder}/backend" }, "group": "test" },
+    { "label": "lint", "type": "shell", "command": "uv run ruff check .", "options": { "cwd": "${workspaceFolder}/backend" } },
+    { "label": "fix", "type": "shell", "command": "uv run ruff check --fix . && uv run ruff format .", "options": { "cwd": "${workspaceFolder}/backend" } },
+    { "label": "typecheck", "type": "shell", "command": "uv run mypy .", "options": { "cwd": "${workspaceFolder}/backend" } },
+    { "label": "frontend: lint", "type": "shell", "command": "npm run lint && npm run typecheck", "options": { "cwd": "${workspaceFolder}/frontend" } },
+    { "label": "dev: up", "type": "shell", "command": "docker compose -f docker-compose.dev.yml up -d --build" },
+    { "label": "dev: down", "type": "shell", "command": "docker compose -f docker-compose.dev.yml down" },
+    { "label": "dev: logs", "type": "shell", "command": "docker compose -f docker-compose.dev.yml logs -f --tail 200", "isBackground": true },
+    { "label": "prod: up", "type": "shell", "command": "docker compose -f docker-compose.yml up -d --build" },
+    { "label": "check: всё", "dependsOrder": "sequence", "dependsOn": ["lint", "typecheck", "frontend: lint", "test"], "group": { "kind": "build", "isDefault": true } }
+  ]
+}
