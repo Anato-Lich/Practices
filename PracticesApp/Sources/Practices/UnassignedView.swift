@@ -16,14 +16,11 @@ struct UnassignedView: View {
             } else if let repos = registry.unassigned {
                 content(repos)
             } else {
-                ContentUnavailableView {
-                    Label { Text(verbatim: "Не распределено") } icon: { Image(systemName: "questionmark.folder") }
-                } description: {
-                    Text(verbatim: "Репозитории хостинга пространств (через gh и glab) и локальные клоны, которых нет ни в одном проекте. Ничего не спрашивается, пока вы не нажмёте «Обновить».")
-                } actions: {
-                    Button { Task { await registry.loadUnassigned() } } label: { Text(verbatim: "Обновить") }
-                        .buttonStyle(ToolbarButtonStyle())
+                EmptyState(glyph: "?", tint: Theme.Color.link, title: "Не распределено",
+                           text: "Репозитории хостинга пространств (через gh и glab) и локальные клоны, которых нет ни в одном проекте. Ничего не спрашивается, пока вы не нажмёте «Обновить».") {
+                    StateButton("Обновить", prominent: true) { Task { await registry.loadUnassigned() } }
                 }
+                .padding(.horizontal, 20).padding(.vertical, 16)
             }
         }
         .toolbarLeading { title }
@@ -68,20 +65,24 @@ struct UnassignedView: View {
                              color: folders.isEmpty ? Theme.Color.text : Theme.Color.warn)
                 }
 
-                VStack(alignment: .leading, spacing: 0) {
-                    SectionTitle("\(heading) · показаны \(shown.count) из \(repos.count)")
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(alignment: .bottom) { Theme.Color.borderCard.frame(height: 1) }
-                    ForEach(shown, id: \.repo) { row($0) }
-                    if shown.isEmpty {
-                        Text(verbatim: "Каждый репозиторий в проекте или игнорируется").font(Theme.ui(12))
-                            .foregroundStyle(Theme.Color.textMuted).padding(.horizontal, 14).padding(.vertical, 10)
+                if shown.isEmpty {
+                    EmptyState(glyph: "✓", tint: Theme.Color.ok, title: "Всё распределено",
+                               text: "Каждый репозиторий gh и glab относится к проекту или помечен ignore. Список ничего не решает (DECISIONS 15).") {
+                        if ignored > 0 { StateButton("Показать игнорируемые · \(ignored)") { showIgnored = true } }
                     }
+                    .frame(minHeight: 220)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionTitle("\(heading) · показаны \(shown.count) из \(repos.count)")
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .overlay(alignment: .bottom) { Theme.Color.borderCard.frame(height: 1) }
+                        ForEach(shown, id: \.repo) { row($0) }
+                    }
+                    .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.Color.borderCard))
                 }
-                .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 10))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.Color.borderCard))
 
                 ForEach(registry.unassignedProblems, id: \.self) { problem in
                     Text(verbatim: "Не удалось получить список: " + problem).font(Theme.mono(11)).foregroundStyle(Theme.Color.warn)

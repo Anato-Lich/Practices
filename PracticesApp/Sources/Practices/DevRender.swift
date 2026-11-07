@@ -31,7 +31,10 @@ enum DevRender {
         Task { @MainActor in
             let registry = RegistryModel()
             registry.reload()
-            if args.contains("--doctor") { await registry.runDoctor() }
+            if args.contains("--doctor") {
+                registry.selection = .doctor
+                await registry.runDoctor()
+            }
             if let j = args.firstIndex(of: "--practice"), j + 1 < args.count {
                 let ref = args[j + 1]
                 registry.selection = .practice(ref)
@@ -58,7 +61,10 @@ enum DevRender {
                     for service in registry.services where service.project == id { registry.expanded.insert(.service(service.id)) }
                 }
             }
-            if args.contains("--unassigned") { registry.selection = .unassigned }
+            if args.contains("--unassigned") {
+                registry.selection = .unassigned
+                if args.contains("--load") { await registry.loadUnassigned() }
+            }
             if args.contains("--map") { registry.selection = .map }
             if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
             if args.contains("--palette") { registry.paletteShown = true }
