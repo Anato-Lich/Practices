@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 /// `Practices --render-window out.png [--space id | --project id | --service id | --practice ref |
-/// --pending | --search text | --doctor] [--expand project,…] [--wait seconds] [--light]`:
+/// --pending | --unassigned | --map | --search text | --doctor] [--expand project,…] [--wait seconds]`:
 /// renders the main window offscreen and exits. Lets the layout be checked without clicking.
 @MainActor
 enum DevRender {
@@ -58,17 +58,25 @@ enum DevRender {
                     for service in registry.services where service.project == id { registry.expanded.insert(.service(service.id)) }
                 }
             }
+            if args.contains("--unassigned") { registry.selection = .unassigned }
+            if args.contains("--map") { registry.selection = .map }
             if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
-            let view = MainWindow().environment(registry).frame(width: 1200, height: 780)
-                .background(Color(nsColor: .windowBackgroundColor))
-                .environment(\.colorScheme, args.contains("--light") ? .light : .dark)
+            // The design's size; the traffic lights a real window draws, so the PNG compares with it.
+            let view = MainWindow().environment(registry).frame(width: 1280, height: 860)
+                .overlay(alignment: .topLeading) {
+                    HStack(spacing: 8) {
+                        ForEach([0xFF5F57, 0xFEBC2E, 0x28C840] as [UInt32], id: \.self) { Circle().fill(Color(hex: $0)).frame(width: 12, height: 12) }
+                    }
+                    .padding(.leading, 14).frame(height: 52)
+                }
+                .environment(\.colorScheme, .dark)
             // ImageRenderer leaves ScrollView and AppKit-backed controls blank, so the view
             // is hosted in a window that is never ordered on screen and cached from there.
             let host = NSHostingView(rootView: view)
             host.frame = NSRect(origin: .zero, size: host.fittingSize)
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless],
                                   backing: .buffered, defer: false)
-            window.appearance = NSAppearance(named: args.contains("--light") ? .aqua : .darkAqua)
+            window.appearance = NSAppearance(named: .darkAqua)
             window.contentView = host
             host.layoutSubtreeIfNeeded()
             try? await Task.sleep(for: .milliseconds(300))

@@ -30,7 +30,9 @@ struct PracticesApp: App {
             MainWindow()
                 .environment(registry)
         }
-        .defaultSize(width: 1200, height: 780)
+        // The design draws its own toolbar (MainWindow): no title bar, the traffic lights over the sidebar.
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1280, height: 860)
     }
 }
 

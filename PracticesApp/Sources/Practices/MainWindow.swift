@@ -2,82 +2,45 @@ import SwiftUI
 import AppKit
 import PracticesCore
 
-/// The main window: the catalogue on the left — spaces, their projects (nested), services and
-/// practices — and a card on the right. The app lives in the menu bar; while this window is
-/// open it also shows in the Dock and ⌘Tab.
+/// The main window (`design/Main.dc.html`): the sidebar, then a 52-high toolbar with the
+/// breadcrumb and the screen's buttons, the card, a 24-high status bar. The app lives in the
+/// menu bar; while this window is open it also shows in the Dock and ⌘Tab.
 struct MainWindow: View {
     static let id = "main"
 
     @Environment(RegistryModel.self) private var registry
-    enum SidebarItem: Hashable {
+    @State private var sidebarShown = true
+
+    enum SidebarItem: Hashable, Codable {
         case space(String)
         case project(String)
         case service(String)
         case practice(String)
         case pending
         case unassigned
+        case map
         case doctor
     }
 
     var body: some View {
-        @Bindable var registry = registry
-        NavigationSplitView {
-            List(selection: $registry.selection) {
-                // Above the tree: with a few dozen projects the end of the list is off screen,
-                // and what waits for the user must not be.
-                Section {
-                    counted("Pending", "tray.and.arrow.down", registry.pending.count).tag(SidebarItem.pending)
-                    counted("Unassigned", "questionmark.folder", registry.unassigned?.filter { !$0.ignored }.count ?? 0).tag(SidebarItem.unassigned)
-                }
-                ForEach(registry.spaces) { space in
-                    Section {
-                        Label("Overview", systemImage: "square.grid.2x2").tag(SidebarItem.space(space.id))
-                        ForEach(registry.topProjects.filter { $0.space == space.id }) { ProjectRows(project: $0) }
-                    } header: {
-                        Text(verbatim: space.name)
-                    }
-                }
-                Section {
-                    counted("Doctor", "stethoscope", registry.findings?.count ?? 0).tag(SidebarItem.doctor)
-                }
+        HStack(spacing: 0) {
+            if sidebarShown {
+                Sidebar(shown: $sidebarShown)
+                Theme.Color.border.frame(width: 1)
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
-        } detail: {
-            if registry.searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
-                SearchView(query: registry.searchText) { item in
-                    registry.searchText = ""
-                    registry.selection = item
-                }
-            } else {
-                switch registry.selection {
-                case .space(let id):
-                    if let space = registry.spaces.first(where: { $0.id == id }) { SpaceView(space: space) } else { placeholder }
-                case .project(let id):
-                    if let project = registry.project(id) { ProjectView(project: project) } else { placeholder }
-                case .service(let id):
-                    if let service = registry.service(id) { ServiceView(service: service) } else { placeholder }
-                case .practice(let ref):
-                    PracticeView(model: registry.model(for: ref)).id(ref)
-                case .pending:
-                    PendingView()
-                case .unassigned:
-                    UnassignedView()
-                case .doctor:
-                    DoctorView()
-                case nil:
-                    placeholder
-                }
+            VStack(spacing: 0) {
+                Color.clear.frame(height: 52)
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.Color.windowBg)
+                StatusBar(items: statusItems)
             }
+            .overlayPreferenceValue(ShellToolbarKey.self, alignment: .top) { toolbar($0) }
         }
-        .searchable(text: $registry.searchText, placement: .sidebar, prompt: Text("Fields, practices, docs"))
-        .toolbar {
-            ToolbarItem {
-                Button { Task { await registry.checkAll() } } label: {
-                    Label("Check all", systemImage: "checkmark.circle")
-                }
-                .help("Check conditions and endpoints of every service — nothing is checked without asking")
-            }
-        }
+        .background(Theme.Color.windowBg)
+        .foregroundStyle(Theme.Color.text)
+        .ignoresSafeArea(.container, edges: .top)
+        .preferredColorScheme(.dark)
         .alert(Text(verbatim: "Practices"), isPresented: Binding(get: { registry.error != nil }, set: { if !$0 { registry.error = nil } })) {
         } message: {
             Text(verbatim: registry.error ?? "")
@@ -100,17 +63,132 @@ struct MainWindow: View {
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }
 
-    private func counted(_ title: LocalizedStringKey, _ icon: String, _ count: Int) -> some View {
-        Label {
-            HStack {
-                Text(title)
-                Spacer()
-                if count > 0 { Text(verbatim: String(count)).foregroundStyle(.orange).font(.caption) }
+    @ViewBuilder private var detail: some View {
+        if registry.searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
+            SearchView(query: registry.searchText) { item in
+                registry.searchText = ""
+                registry.selection = item
             }
-        } icon: {
-            Image(systemName: icon)
+        } else {
+            switch registry.selection {
+            case .space(let id):
+                if let space = registry.spaces.first(where: { $0.id == id }) { SpaceView(space: space) } else { placeholder }
+            case .project(let id):
+                if let project = registry.project(id) { ProjectView(project: project) } else { placeholder }
+            case .service(let id):
+                if let service = registry.service(id) { ServiceView(service: service) } else { placeholder }
+            case .practice(let ref):
+                PracticeView(model: registry.model(for: ref)).id(ref)
+            case .pending:
+                PendingView()
+            case .unassigned:
+                UnassignedView()
+            case .map:
+                Text(verbatim: "Карта").font(Theme.ui(13)).foregroundStyle(Theme.Color.textMuted)
+            case .doctor:
+                DoctorView()
+            case nil:
+                placeholder
+            }
         }
     }
+
+    // MARK: Toolbar
+
+    private func toolbar(_ slots: ShellToolbar) -> some View {
+        HStack(spacing: 10) {
+            if !sidebarShown { SidebarToggle(shown: $sidebarShown) }
+            if let leading = slots.leading { leading } else { breadcrumb }
+            Spacer(minLength: 10)
+            HStack(spacing: 6) {
+                if let trailing = slots.trailing { trailing } else { defaultTrailing }
+            }
+            .buttonStyle(ToolbarButtonStyle())
+            .labelStyle(GapLabelStyle())
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 52)
+        .background(Theme.Color.toolbarBg.gesture(WindowDragGesture()))
+        .overlay(alignment: .bottom) { Theme.Color.border.frame(height: 1) }
+    }
+
+    /// `~/.practices/spaces/` **x-keeper**; `space / project / ` **id** — each part a link, projects in their zone colour.
+    @ViewBuilder private var breadcrumb: some View {
+        if registry.searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
+            Breadcrumb(title: "Поиск", monoTitle: false)
+        } else {
+            switch registry.selection {
+            case .space(let id):
+                Breadcrumb(prefix: abbreviated(registry.registry.dir(ofSpace: id).deletingLastPathComponent()) + "/", title: id)
+            case .project(let id):
+                Breadcrumb(crumbs: crumbs(space: registry.project(id)?.space, project: registry.project(id)?.parent), title: id)
+            case .service(let id):
+                Breadcrumb(crumbs: crumbs(space: registry.service(id)?.space, project: registry.service(id)?.project), title: id)
+            case .practice(let ref):
+                let practice = Practice(ref: ref)
+                if let service = practice.service.flatMap(registry.service) {
+                    Breadcrumb(crumbs: crumbs(space: service.space, project: service.project)
+                               + [Crumb(label: service.id, color: ServiceClass(for: service).color) { registry.selection = .service(service.id) }],
+                               title: practice.name)
+                } else {
+                    let project = registry.chains.first { $0.value.contains(practice) }?.key
+                    Breadcrumb(crumbs: crumbs(space: project.flatMap(registry.project)?.space, project: project), title: practice.name)
+                }
+            case .pending: Breadcrumb(title: "Ждут приёмки", monoTitle: false)
+            case .unassigned: Breadcrumb(title: "Не распределено", monoTitle: false)
+            case .map: Breadcrumb(title: "Карта", monoTitle: false)
+            case .doctor: Breadcrumb(title: "Doctor", monoTitle: false)
+            case nil: EmptyView()
+            }
+        }
+    }
+
+    /// The space, then the project and its ancestors, outermost first.
+    private func crumbs(space: String?, project: String?) -> [Crumb] {
+        let spaceCrumb = space.map { id in Crumb(label: id) { registry.selection = .space(id) } }
+        let projects = project.map(registry.path(of:)) ?? []
+        return [spaceCrumb].compactMap { $0 }
+            + projects.map { p in Crumb(label: p.id, color: registry.zoneColor(of: p.id)) { registry.selection = .project(p.id) } }
+    }
+
+    @ViewBuilder private var defaultTrailing: some View {
+        if case .space = registry.selection {
+            Button { registry.selection = .map } label: { Label { Text(verbatim: "Карта") } icon: { Image(systemName: "point.3.connected.trianglepath.dotted") } }
+            Button { Task { await registry.checkAll() } } label: { Label { Text(verbatim: "Проверить всё") } icon: { Image(systemName: "checkmark.circle") } }
+                .help("Check conditions and endpoints of every service — nothing is checked without asking")
+        }
+    }
+
+    // MARK: Status bar
+
+    /// The selected card's file and its space's git state; elsewhere the git state of every space.
+    private var statusItems: [String] {
+        let r = registry.registry
+        func underSpace(_ url: URL?, _ space: String) -> String? {
+            guard let url else { return nil }
+            let root = r.dir(ofSpace: space).path
+            return url.path.hasPrefix(root) ? "…" + url.path.dropFirst(root.count) : abbreviated(url)
+        }
+        let (path, space): (String?, String?) = switch registry.selection {
+        case .space(let id): (abbreviated(r.dir(ofSpace: id)), id)
+        case .project(let id): (r.dir(ofProject: id).map(abbreviated), registry.project(id)?.space)
+        case .service(let id):
+            (registry.service(id).flatMap { underSpace(r.dir(of: $0.id)?.appendingPathComponent("service.yaml"), $0.space) }, registry.service(id)?.space)
+        case .practice(let ref):
+            Practice(ref: ref).service.flatMap(registry.service).map { service in
+                (underSpace(r.dir(of: service.id)?.appendingPathComponent("practices/\(Practice(ref: ref).name).py"), service.space), service.space)
+            } ?? (nil, nil)
+        default: (nil, nil)
+        }
+        if let space { return [path, registry.spaceGit[space].map(gitLabel)].compactMap { $0 } }
+        return registry.spaces.compactMap { s in registry.spaceGit[s.id].map { "\(s.id): " + gitLabel($0) } }
+    }
+
+    private func gitLabel(_ git: GitState) -> String {
+        (git.branch ?? "HEAD") + " · " + (git.uncommitted == 0 ? "чисто" : ru(git.uncommitted, "незакоммиченный", "незакоммиченных", "незакоммиченных"))
+    }
+
+    private func abbreviated(_ url: URL) -> String { (url.path as NSString).abbreviatingWithTildeInPath }
 
     private var placeholder: some View {
         ContentUnavailableView {
@@ -118,68 +196,6 @@ struct MainWindow: View {
         } description: {
             Text("Add one with `practicesctl service add <id> --project <project>`.")
         }
-    }
-}
-
-/// A project in the sidebar: the projects inside it, its services — each opening to its
-/// practices — and its chains.
-struct ProjectRows: View {
-    @Environment(RegistryModel.self) private var registry
-    let project: Project
-
-    var body: some View {
-        let children = registry.childProjects[project.id] ?? []
-        let services = registry.services(of: project)
-        let chains = registry.chains[project.id] ?? []
-        if children.isEmpty && services.isEmpty && chains.isEmpty {
-            label
-        } else {
-            DisclosureGroup(isExpanded: expanded(.project(project.id))) {
-                ForEach(children) { ProjectRows(project: $0) }
-                ForEach(services) { service in
-                    let practices = registry.practices[service.id] ?? []
-                    if practices.isEmpty {
-                        serviceRow(service)
-                    } else {
-                        DisclosureGroup(isExpanded: expanded(.service(service.id))) {
-                            ForEach(practices) { practiceRow($0, "chevron.left.forwardslash.chevron.right") }
-                        } label: {
-                            serviceRow(service)
-                        }
-                    }
-                }
-                ForEach(chains) { practiceRow($0, "point.3.connected.trianglepath.dotted") }
-            } label: {
-                label
-            }
-        }
-    }
-
-    private func expanded(_ item: MainWindow.SidebarItem) -> Binding<Bool> {
-        Binding(get: { registry.expanded.contains(item) },
-                set: { if $0 { registry.expanded.insert(item) } else { registry.expanded.remove(item) } })
-    }
-
-    private var label: some View {
-        Label { Text(verbatim: project.name).lineLimit(1) } icon: { Image(systemName: "folder") }
-            .tag(MainWindow.SidebarItem.project(project.id))
-    }
-
-    private func practiceRow(_ practice: Practice, _ icon: String) -> some View {
-        Label { Text(verbatim: practice.name).lineLimit(1) } icon: { Image(systemName: icon).foregroundStyle(.secondary) }
-            .tag(MainWindow.SidebarItem.practice(practice.ref))
-    }
-
-    private func serviceRow(_ service: Service) -> some View {
-        HStack(spacing: 8) {
-            HealthDot(health: registry.health(of: service.id))
-                .help(registry.lastCheck[service.id].map { String(localized: "Last check \($0.formatted(date: .abbreviated, time: .shortened))") }
-                      ?? String(localized: "Not checked yet"))
-            Text(verbatim: service.name).lineLimit(1)
-            Spacer()
-            if registry.checking.contains(service.id) { ProgressView().controlSize(.mini) }
-        }
-        .tag(MainWindow.SidebarItem.service(service.id))
     }
 }
 

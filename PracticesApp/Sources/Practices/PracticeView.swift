@@ -28,20 +28,18 @@ struct PracticeView: View {
                 .frame(width: 270)
         }
         .navigationTitle(model.practice.ref)
-        .toolbar {
-            ToolbarItemGroup {
-                Button { Task { await model.save() } } label: { Label("Save version", systemImage: "square.and.arrow.down") }
-                    .keyboardShortcut("s", modifiers: .command)
-                    .disabled(!model.dirty)
-                    .help("Save as a new version (⌘S)")
-                if model.running {
-                    Button { model.stop() } label: { Label("Stop", systemImage: "stop.fill") }
-                        .keyboardShortcut(".", modifiers: .command)
-                } else {
-                    Button { model.run() } label: { Label("Run", systemImage: "play.fill") }
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .help("Run (⌘↩)")
-                }
+        .toolbarTrailing {
+            Button { Task { await model.save() } } label: { Label("Save version", systemImage: "square.and.arrow.down") }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(!model.dirty)
+                .help("Save as a new version (⌘S)")
+            if model.running {
+                Button { model.stop() } label: { Label("Stop", systemImage: "stop.fill") }
+                    .keyboardShortcut(".", modifiers: .command)
+            } else {
+                Button { model.run() } label: { Label("Run", systemImage: "play.fill") }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help("Run (⌘↩)")
             }
         }
     }

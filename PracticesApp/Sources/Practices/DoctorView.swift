@@ -40,11 +40,9 @@ struct DoctorView: View {
             }
         }
         .navigationTitle("Doctor")
-        .toolbar {
-            ToolbarItem {
-                Button { Task { await registry.runDoctor() } } label: { Label("Run again", systemImage: "arrow.clockwise") }
-                    .disabled(registry.doctorRunning)
-            }
+        .toolbarTrailing {
+            Button { Task { await registry.runDoctor() } } label: { Label("Run again", systemImage: "arrow.clockwise") }
+                .disabled(registry.doctorRunning)
         }
     }
 

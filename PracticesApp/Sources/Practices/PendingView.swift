@@ -43,13 +43,9 @@ struct PendingView: View {
             }
         }
         .navigationTitle("Pending")
-        .toolbar {
-            ToolbarItem {
-                Button { Task { await registry.refreshPending() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-            }
-            ToolbarItem {
-                Button("Accept all") { Task { await registry.accept() } }.disabled(registry.pending.isEmpty)
-            }
+        .toolbarTrailing {
+            Button { Task { await registry.refreshPending() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+            Button("Accept all") { Task { await registry.accept() } }.disabled(registry.pending.isEmpty)
         }
         .task(id: registry.pending) {
             if let selected, registry.pending.contains(selected) { return }

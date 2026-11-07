@@ -37,14 +37,10 @@ struct UnassignedView: View {
             }
         }
         .navigationTitle("Unassigned")
-        .toolbar {
-            ToolbarItem {
-                Toggle("Show ignored", isOn: $showIgnored).toggleStyle(.checkbox)
-            }
-            ToolbarItem {
-                Button { Task { await registry.loadUnassigned() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                    .disabled(registry.loadingUnassigned)
-            }
+        .toolbarTrailing {
+            Toggle("Show ignored", isOn: $showIgnored).toggleStyle(.checkbox)
+            Button { Task { await registry.loadUnassigned() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .disabled(registry.loadingUnassigned)
         }
     }
 

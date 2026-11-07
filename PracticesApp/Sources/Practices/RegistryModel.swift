@@ -33,7 +33,12 @@ final class RegistryModel {
     private(set) var unassignedProblems: [String] = []
     private(set) var loadingUnassigned = false
     /// What the window shows; views set it to open a project, a service or a practice.
-    var selection: MainWindow.SidebarItem? { didSet { reveal() } }
+    var selection: MainWindow.SidebarItem? { didSet { reveal(); remember() } }
+    /// The last three cards opened (sidebar «Недавние»); kept between launches.
+    private(set) var recent: [MainWindow.SidebarItem] =
+        (UserDefaults.standard.data(forKey: "recent")).flatMap { try? JSONDecoder().decode([MainWindow.SidebarItem].self, from: $0) } ?? []
+    /// space id → `git status` of the space's own repository (status bar).
+    private(set) var spaceGit: [String: GitState] = [:]
     /// Projects and services whose rows are open in the sidebar.
     var expanded: Set<MainWindow.SidebarItem> = []
     var searchText = ""
@@ -116,6 +121,18 @@ final class RegistryModel {
         for ancestor in project.map(path(of:)) ?? [] { expanded.insert(.project(ancestor.id)) }
     }
 
+    private func remember() {
+        guard let item = selection else { return }
+        switch item {
+        case .project, .service, .practice: break
+        default: return
+        }
+        recent = Array(([item] + recent.filter { $0 != item }).prefix(3))
+        // A render must not change what the user's sidebar shows.
+        guard !CommandLine.arguments.contains("--render-window") else { return }
+        UserDefaults.standard.set(try? JSONEncoder().encode(recent), forKey: "recent")
+    }
+
     // MARK: Repositories
 
     /// Where the project's repositories are cloned (a walk of the search roots, off the main
@@ -156,7 +173,10 @@ final class RegistryModel {
 
     // MARK: Pending
 
-    func refreshPending() async { pending = await registry.pending() }
+    func refreshPending() async {
+        pending = await registry.pending()
+        for space in spaces { spaceGit[space.id] = await Repos.gitState(ofClone: registry.dir(ofSpace: space.id).path) }
+    }
 
     func diff(of change: Pending) async -> String { await registry.diff(of: change) }
 

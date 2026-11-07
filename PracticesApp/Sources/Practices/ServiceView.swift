@@ -41,20 +41,14 @@ struct ServiceView: View {
             .frame(maxWidth: 1100, alignment: .leading)
         }
         .navigationTitle(service.name)
-        .toolbar {
-            ToolbarItem {
-                Button { Task { await registry.check(service.id) } } label: {
-                    Label("Check", systemImage: "arrow.clockwise")
-                }
-                .disabled(registry.checking.contains(service.id))
+        .toolbarTrailing {
+            Button { Task { await registry.check(service.id) } } label: {
+                Label("Check", systemImage: "arrow.clockwise")
             }
-            ToolbarItem {
-                Button { connecting = true } label: { Label("Connect to project…", systemImage: "arrow.right.doc.on.clipboard") }
-                    .help("Write this service's values into a project's env file")
-            }
-            ToolbarItem {
-                Button { registry.revealService(service.id) } label: { Label("Show in Finder", systemImage: "folder") }
-            }
+            .disabled(registry.checking.contains(service.id))
+            Button { connecting = true } label: { Label("Connect to project…", systemImage: "arrow.right.doc.on.clipboard") }
+                .help("Write this service's values into a project's env file")
+            Button { registry.revealService(service.id) } label: { Label("Show in Finder", systemImage: "folder") }
         }
         .sheet(isPresented: $connecting) { ConnectSheet(service: service) }
         .sheet(item: $editing) { edit in
@@ -410,18 +404,5 @@ struct Card<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator.opacity(0.6)))
-    }
-}
-
-struct Chip: View {
-    let text: String
-    var mono = false
-    var tint: Color? = nil
-    var body: some View {
-        Text(verbatim: text)
-            .font(mono ? .caption.monospaced() : .caption)
-            .foregroundStyle(tint ?? .secondary)
-            .padding(.horizontal, 7).padding(.vertical, 2)
-            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder((tint ?? .secondary).opacity(0.5)))
     }
 }
