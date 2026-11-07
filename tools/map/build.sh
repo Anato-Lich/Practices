@@ -6,6 +6,7 @@ ruby dump.rb > ../../build/map/data.json
 python3 - <<'PY'
 import json
 d = open('../../build/map/data.json').read(); json.loads(d)
-open('../../build/map/map.html', 'w').write(open('template.html').read().replace('__DATA__', d.replace('</', '<\\/')))
+for src, dst in [('template.html', 'map.html'), ('levels.html', 'levels.html')]:
+    open('../../build/map/' + dst, 'w').write(open(src).read().replace('__DATA__', d.replace('</', '<\\/')))
 PY
-echo "build/map/map.html"
+echo "build/map/map.html build/map/levels.html"

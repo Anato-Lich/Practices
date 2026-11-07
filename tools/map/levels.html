@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Карта сервисов — уровни (макет)</title>
+<style>
+/* Mock-up of the in-app map (macOS window): sidebar of spaces → projects, a segmented control
+   switching three levels of detail of the same catalogue. Edges are SVG over HTML cards. */
+:root { --accent:#007aff; --ink:#1d1d1f; --muted:#86868b; --line:#d2d2d7; --card:#fff; --bg:#f5f5f7;
+  --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; --mono:ui-monospace, "SF Mono", Menlo, monospace; }
+* { box-sizing:border-box; }
+body { margin:0; background:#c9ccd3; font:13px/1.35 var(--sans); color:var(--ink); }
+.window { position:fixed; inset:14px; display:flex; flex-direction:column; background:var(--bg); border-radius:11px;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.25), 0 22px 60px rgba(0,0,0,.28); overflow:hidden; }
+.titlebar { height:38px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; background:#ececee; border-bottom:1px solid var(--line); }
+.titlebar i { width:12px; height:12px; border-radius:50%; background:#ff5f57; } .titlebar i:nth-child(2){background:#febc2e} .titlebar i:nth-child(3){background:#28c840}
+.titlebar b { margin-left:60px; font-weight:600; }
+.body { flex:1; display:flex; min-height:0; }
+aside { width:230px; flex:none; background:#e9e9ec; border-right:1px solid var(--line); overflow:auto; padding:10px 8px; }
+aside .sp { font-size:11px; font-weight:600; color:var(--muted); padding:10px 8px 4px; cursor:default; }
+aside .row { display:flex; justify-content:space-between; padding:3px 8px; border-radius:6px; cursor:default; white-space:nowrap; }
+aside .row span:last-child { color:var(--muted); font-size:11px; }
+aside .row:hover { background:rgba(0,0,0,.05); }
+aside .sel, aside .sel:hover { background:var(--accent); color:#fff; } aside .sel span:last-child { color:rgba(255,255,255,.8); }
+aside .sp.sel { color:#fff; border-radius:6px; }
+main { flex:1; display:flex; flex-direction:column; min-width:0; }
+.toolbar { flex:none; display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); background:#fafafa; }
+.toolbar h1 { font-size:15px; margin:0; font-weight:600; } .toolbar .sub { color:var(--muted); }
+.seg { display:inline-flex; background:#e3e3e8; border-radius:7px; padding:2px; margin-left:auto; }
+.seg button { font:inherit; border:0; background:none; padding:3px 14px; border-radius:5px; color:var(--ink); }
+.seg button.on { background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.18); }
+.seg button:disabled { color:#b0b0b5; }
+.back { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:2px 10px; }
+#scroll { flex:1; overflow:auto; }
+#canvas { position:relative; padding:20px; min-width:max-content; }
+#edges { position:absolute; left:0; top:0; pointer-events:none; overflow:visible; }
+#edges path { fill:none; opacity:.55; } #edges text { font:10.5px var(--sans); fill:#3a3a3c; paint-order:stroke; stroke:var(--bg); stroke-width:4px; }
+#edges.focus path:not(.on), #edges.focus text:not(.on) { opacity:.07; } #edges.focus path.on { opacity:1; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px 10px; cursor:default; }
+.card:hover { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,122,255,.15); }
+.meta { color:var(--muted); font-size:11.5px; }
+.badge { display:inline-block; font-size:10.5px; padding:0 6px; border-radius:4px; margin:3px 3px 0 0; background:#e8e8ed; color:#3a3a3c; }
+.badge.k-data { background:#e3f6e8; color:#1e7d36; } .badge.k-bus { background:#fff1dc; color:#a35a00; } .badge.k-http { background:#e5f0ff; color:#0050b3; }
+.badge.cond { background:none; border:1px solid #ff9f0a; color:#a35a00; }
+/* level 1 */
+.space { display:flex; flex-wrap:wrap; gap:28px; align-items:flex-start; max-width:1200px; }
+.pcard { width:170px; } .pcard b { display:block; }
+.frame { border:1.5px dashed #aeaeb2; border-radius:12px; padding:8px 12px 12px; background:rgba(0,0,0,.02); }
+.frame > .ft { font-weight:600; color:var(--muted); margin-bottom:8px; cursor:default; } .frame > div:last-child { display:flex; flex-wrap:wrap; gap:16px; }
+/* level 2 */
+.cols { display:flex; gap:90px; align-items:flex-start; }
+.col { width:220px; display:flex; flex-direction:column; gap:8px; } .col.ext { width:230px; padding-left:20px; border-left:1px solid var(--line); }
+.col h3 { margin:0 0 2px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.col h4 { margin:8px 0 0; font-size:11.5px; color:var(--accent); cursor:default; }
+.scard .n { font-weight:500; } .scard .id { font:10.5px var(--mono); color:var(--muted); }
+.scard.ext { opacity:.62; background:#fbfbfd; } .scard.planned { border-style:dashed; }
+.legend { display:flex; gap:14px; margin-bottom:16px; color:var(--muted); font-size:11.5px; } .legend i { display:inline-block; width:16px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+.note { color:var(--muted); font-size:11.5px; margin-top:18px; }
+/* level 3 */
+.focus3 { display:flex; gap:260px; align-items:center; }
+.focus3 .col { width:210px; } .center { width:260px; border:2px solid var(--accent); padding:12px 14px; } .center .n { font-size:15px; font-weight:600; }
+.detail { margin-top:28px; max-width:900px; background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 16px; display:grid; grid-template-columns:120px 1fr; gap:6px 14px; }
+.detail dt { color:var(--muted); } .detail dd { margin:0; } .detail code { font:11.5px var(--mono); }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar"><i></i><i></i><i></i><b>Practices</b></div>
+  <div class="body">
+    <aside id="side"></aside>
+    <main>
+      <div class="toolbar"><span id="backslot"></span><h1 id="title"></h1><span class="sub" id="sub"></span>
+        <div class="seg" id="seg"><button data-l="1">Пространство</button><button data-l="2">Проект</button><button data-l="3">Сервис</button></div></div>
+      <div id="scroll"><div id="canvas"><svg id="edges"></svg><div id="view"></div></div></div>
+    </main>
+  </div>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const $ = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+const svc = Object.fromEntries(D.services.map(s => [s.id, s]));
+const proj = Object.fromEntries(D.projects.map(p => [p.id, p]));
+const cond = Object.fromEntries(D.conditions.map(c => [c.id, c]));
+const L = D.links.filter(l => svc[l.from] && svc[l.to]);
+const VIA = { http: '#007aff', topic: '#ff9500', db: '#34c759', network: '#8e8e93', build: '#af52de' };
+const kids = id => D.projects.filter(p => p.parent === id);
+const tree = id => [id, ...kids(id).flatMap(k => tree(k.id))];
+const ownOf = ids => D.services.filter(s => ids.includes(s.project));
+const conds = s => [...new Set([...(s.requires || []), ...(s.endpoints || []).flatMap(e => e.requires || [])])];
+const plural = (n, a, b, c) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? a : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? b : c}`;
+const DATA = /postgres|clickhouse|redis|mysql|sqlite|s3|influx|smtp|socket|other/, BUS = /kafka|rabbit|mq|nats/;
+const kindClass = k => BUS.test(k) ? 'k-bus' : DATA.test(k) ? 'k-data' : /http|worker/.test(k) ? 'k-http' : '';
+const column = s => s.kind === 'frontend' || s.tags.includes('frontend') || /front|(^|[-_ ])(ui|web)([-_ ]|$)/i.test(s.id + ' ' + s.name) ? 0
+  : /http|worker|tool|script|monitor|firmware/.test(s.kind) ? 1 : 2;
+const cut = (t, n) => t && t.length > n ? t.slice(0, n - 1) + '…' : t || '';
+
+let st = { level: 2, space: 'x-keeper', project: 'platform', service: null };
+let E = []; // edges of the current view: {a, b, ka, kb, color, w, label, title, mode}
+const go = p => { Object.assign(st, p); render(); };
+const view = document.getElementById('view'), svg = document.getElementById('edges'), canvas = document.getElementById('canvas');
+
+function sidebar() {
+  const side = document.getElementById('side'); side.innerHTML = '';
+  for (const sp of D.spaces) {
+    const h = $('div', 'sp' + (st.level === 1 && st.space === sp.id ? ' sel' : ''), sp.name.toUpperCase());
+    h.onclick = () => go({ level: 1, space: sp.id }); side.append(h);
+    const add = (p, depth) => {
+      const r = $('div', 'row' + (st.level > 1 && st.project === p.id ? ' sel' : ''));
+      r.style.paddingLeft = 8 + depth * 14 + 'px';
+      r.append($('span', '', (kids(p.id).length ? '▾ ' : '') + p.name), $('span', '', ownOf(tree(p.id)).length || ''));
+      r.onclick = () => go({ level: 2, project: p.id, space: p.space }); side.append(r);
+      kids(p.id).forEach(k => add(k, depth + 1));
+    };
+    D.projects.filter(p => p.space === sp.id && !p.parent).forEach(p => add(p, 0));
+  }
+}
+
+function svcCard(s, ext) {
+  const c = $('div', 'card scard' + (ext ? ' ext' : '') + (s.tags.includes('planned') ? ' planned' : ''));
+  c.dataset.k = s.id; c.title = s.description || '';
+  c.append($('div', 'n', s.name), $('div', 'id', s.id));
+  const b = $('div'); b.append($('span', 'badge ' + kindClass(s.kind), s.kind));
+  conds(s).forEach(id => { const x = $('span', 'badge cond', '⚑ ' + (cond[id]?.name || id)); x.title = cond[id]?.hint || ''; b.append(x); });
+  c.append(b); c.onclick = () => go({ level: 3, service: s.id, project: s.project, space: s.space });
+  return c;
+}
+
+function level1() {
+  const el = {}, sp = D.spaces.find(s => s.id === st.space);
+  const node = p => {
+    const n = ownOf([p.id]).length, r = p.repos.length + p.folders.length;
+    const c = $('div', 'card pcard'); c.dataset.k = p.id; el[p.id] = c;
+    c.append($('b', '', p.name), $('div', 'meta', `${plural(n, 'сервис', 'сервиса', 'сервисов')} · ${plural(r, 'репозиторий', 'репозитория', 'репозиториев')}`));
+    c.onclick = () => go({ level: 2, project: p.id }); return c;
+  };
+  const block = p => {
+    if (!kids(p.id).length) return node(p);
+    const f = $('div', 'frame'), t = $('div', 'ft', `${p.name} · ${ownOf(tree(p.id)).length}`), inner = $('div');
+    t.onclick = () => go({ level: 2, project: p.id });
+    if (ownOf([p.id]).length || p.repos.length) inner.append(node(p));
+    kids(p.id).forEach(k => inner.append(block(k)));
+    f.append(t, inner); return f;
+  };
+  const wrap = $('div', 'space'); D.projects.filter(p => p.space === st.space && !p.parent).forEach(p => wrap.append(block(p)));
+  view.append(wrap);
+  const agg = {}; let cross = 0;
+  for (const l of L) {
+    const a = svc[l.from], b = svc[l.to];
+    if (a.project === b.project) continue;
+    if (a.space !== b.space) { if (a.space === st.space || b.space === st.space) cross++; continue; }
+    if (a.space !== st.space) continue;
+    const k = [a.project, b.project].sort().join('|'); agg[k] = (agg[k] || 0) + 1;
+  }
+  E = Object.entries(agg).map(([k, n]) => { const [a, b] = k.split('|');
+    return { a: el[a], b: el[b], ka: a, kb: b, color: '#636366', w: 1 + Math.log2(n) * 1.3, label: String(n), title: `${proj[a].name} ↔ ${proj[b].name}: ${n}`, mode: 'center' }; });
+  view.append($('div', 'note', `${Object.keys(agg).length} пар проектов связаны · ${cross} связей с другим пространством не показаны`));
+  return [sp.name, `${plural(D.projects.filter(p => p.space === st.space).length, 'проект', 'проекта', 'проектов')}`];
+}
+
+function legend() {
+  const g = $('div', 'legend');
+  Object.entries(VIA).forEach(([k, c]) => { const s = $('span'), i = $('i'); i.style.background = c; s.append(i, k); g.append(s); });
+  return g;
+}
+
+function level2() {
+  const ids = tree(st.project), own = ownOf(ids), el = {};
+  const ls = L.filter(l => ids.includes(svc[l.from].project) || ids.includes(svc[l.to].project));
+  const ext = [...new Set(ls.flatMap(l => [l.from, l.to]))].map(id => svc[id]).filter(s => !ids.includes(s.project));
+  view.append(legend());
+  const cols = $('div', 'cols');
+  ['Фронты', 'API и воркеры', 'Данные'].forEach((h, i) => {
+    const c = $('div', 'col'); c.append($('h3', '', h));
+    own.filter(s => column(s) === i).forEach(s => c.append(el[s.id] = svcCard(s)));
+    if (c.children.length > 1) cols.append(c);
+  });
+  if (ext.length) {
+    const c = $('div', 'col ext'); c.append($('h3', '', `Внешние · ${ext.length}`));
+    for (const pid of [...new Set(ext.map(s => s.project))]) {
+      const h = $('h4', '', proj[pid].name); h.onclick = () => go({ level: 2, project: pid, space: proj[pid].space }); c.append(h);
+      ext.filter(s => s.project === pid).forEach(s => c.append(el[s.id] = svcCard(s, true)));
+    }
+    cols.append(c);
+  }
+  view.append(cols);
+  E = ls.map(l => ({ a: el[l.from], b: el[l.to], ka: l.from, kb: l.to, color: VIA[l.via] || '#8e8e93', w: 1.4, arrow: true,
+    title: `${l.from} → ${l.to} (${l.via}): ${l.what || ''}` }));
+  const p = proj[st.project];
+  return [p.name, `${plural(own.length, 'сервис', 'сервиса', 'сервисов')} · ${plural(ls.length, 'связь', 'связи', 'связей')} · ${plural(ext.length, 'внешний', 'внешних', 'внешних')}`];
+}
+
+function level3() {
+  const s = svc[st.service], el = {};
+  const group = (ls, other) => { const m = {}; ls.forEach(l => (m[l[other]] ||= []).push(l)); return m; };
+  const callers = group(L.filter(l => l.to === s.id), 'from'), callees = group(L.filter(l => l.from === s.id), 'to');
+  const label = ls => cut(ls.map(l => (l.what || l.endpoint || l.via) + (l.access ? ` (${l.access})` : '')).join(' · '), 46);
+  const row = $('div', 'focus3'), left = $('div', 'col'), right = $('div', 'col'), mid = $('div', 'card center');
+  left.append($('h3', '', `Вызывают · ${Object.keys(callers).length}`)); right.append($('h3', '', `Вызывает · ${Object.keys(callees).length}`));
+  Object.keys(callers).forEach(id => left.append(el[id] = svcCard(svc[id], svc[id].project !== s.project)));
+  Object.keys(callees).forEach(id => right.append(el[id] = svcCard(svc[id], svc[id].project !== s.project)));
+  mid.dataset.k = s.id; mid.append($('div', 'n', s.name), $('div', 'meta', `${s.id} · ${proj[s.project].name}`));
+  const b = $('div'); b.append($('span', 'badge ' + kindClass(s.kind), s.kind)); conds(s).forEach(id => b.append($('span', 'badge cond', '⚑ ' + (cond[id]?.name || id)))); mid.append(b);
+  row.append(left, mid, right); view.append(legend(), row);
+  const edge = (ls, a, b, ka, kb) => ({ a, b, ka, kb, color: VIA[ls[0].via] || '#8e8e93', w: 1.6, arrow: true, label: label(ls), title: ls.map(l => l.what).join('\n') });
+  E = [...Object.entries(callers).map(([id, ls]) => edge(ls, el[id], mid, id, s.id)), ...Object.entries(callees).map(([id, ls]) => edge(ls, mid, el[id], s.id, id))];
+  const d = $('dl', 'detail'), add = (k, v) => { if (!v || (Array.isArray(v) && !v.length)) return; const dd = $('dd'); dd.append(...[].concat(v)); d.append($('dt', '', k), dd); };
+  const code = xs => xs.map(x => { const c = $('code', '', x); return [c, ' ']; }).flat();
+  add('Описание', s.description); add('Алиасы', code(s.aliases)); add('Окружения', s.envs.join(', '));
+  add('Требует', conds(s).map(id => { const x = $('div'); x.append($('b', '', cond[id]?.name || id), ' — ' + (cond[id]?.hint || '')); return x; }));
+  add('Осторожно', s.guards.map(g => $('div', '', g))); add('Практики', code(s.practices)); add('Репозиторий', s.repo && $('code', '', s.repo));
+  add('Теги', s.tags.join(', ')); view.append(d);
+  return [s.name, `${plural(Object.keys(callers).length, 'вызывающий', 'вызывающих', 'вызывающих')} · ${plural(Object.keys(callees).length, 'зависимость', 'зависимости', 'зависимостей')}`];
+}
+
+function draw() {
+  const base = canvas.getBoundingClientRect();
+  svg.setAttribute('width', canvas.scrollWidth); svg.setAttribute('height', canvas.scrollHeight);
+  svg.innerHTML = '<defs>' + Object.entries(VIA).concat([['x', '#8e8e93']]).map(([k, c]) =>
+    `<marker id="m-${k}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('') + '</defs>';
+  const rel = e => { const r = e.getBoundingClientRect(); return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top, cx: (r.left + r.right) / 2 - base.left, cy: (r.top + r.bottom) / 2 - base.top }; };
+  const NS = 'http://www.w3.org/2000/svg';
+  for (const e of E) {
+    if (!e.a || !e.b) continue;
+    const A = rel(e.a), B = rel(e.b); let d, mx, my;
+    if (e.mode === 'center') { // clip the centre-to-centre line to both card borders
+      const clip = (R, dx, dy) => { const t = Math.min((R.r - R.l) / 2 / Math.abs(dx || 1e-9), (R.b - R.t) / 2 / Math.abs(dy || 1e-9)); return [R.cx + dx * t, R.cy + dy * t]; };
+      const dx = B.cx - A.cx, dy = B.cy - A.cy, [x1, y1] = clip(A, dx, dy), [x2, y2] = clip(B, -dx, -dy);
+      mx = (x1 + x2) / 2 - dy * .08; my = (y1 + y2) / 2 + dx * .08;
+      d = `M${x1},${y1} Q${(x1 + x2) / 2 - dy * .16},${(y1 + y2) / 2 + dx * .16} ${x2},${y2}`;
+    } else if (Math.abs(A.l - B.l) < 5) { // same column: bulge out to the right
+      const x = A.r, k = 40; d = `M${x},${A.cy} C${x + k},${A.cy} ${x + k},${B.cy} ${x},${B.cy}`; mx = x + k * .75; my = (A.cy + B.cy) / 2;
+    } else {
+      const fw = B.l > A.l, x1 = fw ? A.r : A.l, x2 = fw ? B.l : B.r, k = (x2 - x1) * .45;
+      d = `M${x1},${A.cy} C${x1 + k},${A.cy} ${x2 - k},${B.cy} ${x2},${B.cy}`; mx = (x1 + x2) / 2; my = (A.cy + B.cy) / 2;
+    }
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', d); p.setAttribute('stroke', e.color); p.setAttribute('stroke-width', e.w); p.dataset.k = e.ka + ' ' + e.kb;
+    if (e.arrow) p.setAttribute('marker-end', `url(#m-${Object.keys(VIA).find(k => VIA[k] === e.color) || 'x'})`);
+    const t = document.createElementNS(NS, 'title'); t.textContent = e.title || ''; p.append(t); svg.append(p);
+    if (e.label) { const x = document.createElementNS(NS, 'text'); x.setAttribute('x', mx); x.setAttribute('y', my + 3); x.setAttribute('text-anchor', 'middle'); x.dataset.k = p.dataset.k; x.textContent = e.label; svg.append(x); }
+  }
+}
+
+canvas.onmouseover = ev => {
+  const c = ev.target.closest('[data-k]'), k = c && c.dataset.k;
+  svg.classList.toggle('focus', !!k);
+  svg.querySelectorAll('path[data-k],text').forEach(p => p.classList.toggle('on', !!k && p.dataset.k.split(' ').includes(k)));
+};
+document.getElementById('seg').onclick = ev => { const l = +ev.target.dataset.l; if (l) go({ level: l }); };
+
+function render() {
+  view.innerHTML = ''; E = [];
+  const [title, sub] = [null, level1, level2, level3][st.level]();
+  document.getElementById('title').textContent = title; document.getElementById('sub').textContent = sub;
+  document.querySelectorAll('#seg button').forEach(b => { b.classList.toggle('on', +b.dataset.l === st.level); b.disabled = +b.dataset.l === 3 && !st.service; });
+  const slot = document.getElementById('backslot'); slot.innerHTML = '';
+  if (st.level === 3) { const b = $('button', 'back', '‹ ' + proj[st.project].name); b.onclick = () => go({ level: 2 }); slot.append(b); }
+  sidebar(); document.getElementById('scroll').scrollTo(0, 0); requestAnimationFrame(draw);
+}
+addEventListener('resize', () => requestAnimationFrame(draw));
+render();
+</script>
+</body>
+</html>
