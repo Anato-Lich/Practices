@@ -8,6 +8,7 @@ struct PendingView: View {
     @Environment(RegistryModel.self) private var registry
     @State private var selected: Pending?
     @State private var diff = ""
+    @State private var discarding: Pending?
 
     var body: some View {
         Group {
@@ -40,6 +41,12 @@ struct PendingView: View {
         }
         .task(id: selected) {
             if let selected { diff = await registry.diff(of: selected) } else { diff = "" }
+        }
+        // A rejected draft is gone for good (nothing was committed), so one question first.
+        .confirmationDialog(discarding.map { "Отклонить \(($0.path as NSString).lastPathComponent)?" } ?? "", isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } }), titleVisibility: .visible, presenting: discarding) { change in
+            Button(change.state == "new" ? "Удалить файл" : "Вернуть как было", role: .destructive) { Task { await registry.discard(change) } }
+        } message: { change in
+            Text(verbatim: change.state == "new" ? "Файл агента удалится; в истории каталога его нет." : "Правка агента отменится, файл вернётся к последнему принятому состоянию.")
         }
     }
 
@@ -162,7 +169,8 @@ struct PendingView: View {
                     Button { registry.selection = .practice(practice.ref) } label: { Text(verbatim: "Открыть практику") }
                         .buttonStyle(CompactButtonStyle())
                 }
-                // No «Отклонить»: Registry has no API to discard a pending file yet.
+                Button { discarding = change } label: { Text(verbatim: "Отклонить") }
+                    .buttonStyle(CompactButtonStyle())
                 Button { Task { await registry.accept(change) } } label: { Text(verbatim: "Принять") }
                     .buttonStyle(CompactButtonStyle(prominent: true))
             }

@@ -367,6 +367,28 @@ struct TempHome {
         #expect(await registry.pending().isEmpty)
         #expect(try await store.versions(of: Practice(ref: "s/new")).count == 1)
     }
+
+    @Test func discardDropsANewFileAndRestoresAnEditedOne() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        let store = PracticeStore(registry: registry)
+        try await registry.add(Space(id: "sp", name: "sp"))
+        try await registry.add(Project(id: "pr", space: "sp", name: "pr"))
+        try await registry.add(Service(id: "s", name: "s", kind: "x"), to: "pr")
+        let practice = Practice(ref: "s/p")
+        try await store.save("def run():\n    return 1\n", for: practice)
+        try store.writeDraft("def run():\n    return 2\n", for: practice)
+        try home.write("id: t\nname: t\nkind: x\n", "spaces/sp/projects/pr/services/t/service.yaml")    // a candidate's card
+        #expect(await registry.pending().count == 2)
+
+        for change in await registry.pending() { try await registry.discard(change) }
+        #expect(await registry.pending().isEmpty)
+        let root = registry.dir(ofSpace: "sp")
+        #expect(try String(contentsOf: root.appendingPathComponent("projects/pr/services/s/practices/p.py"), encoding: .utf8) == "def run():\n    return 1\n")
+        // The card's folder, which it alone filled, is gone with it.
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("projects/pr/services/t").path))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("projects/pr/services/s").path))
+    }
 }
 
 @Suite struct ReposTests {

@@ -38,6 +38,9 @@ public struct ScanResult: Codable, Sendable {
         /// Found again, but refused earlier (the caller's `rejected.yaml`): neither offered nor written.
         public var rejected: [Found] = []
         public var unknown: [Unknown] = []
+        /// Compose services that run once (`restart: "no"`, `profiles:`, a migrate/init/test name)
+        /// and have no card: neither candidates nor callers.
+        public var oneOff: [String] = []
         public var problems: [String] = []
     }
 
@@ -59,6 +62,10 @@ public enum Scanner {
     ]
     static let databases: Set<String> = ["postgres", "clickhouse", "redis", "mysql", "mongodb"]
     static let brokers: Set<String> = ["kafka", "rabbitmq"]
+    /// The last word of a compose name that runs once and exits.
+    static let oneOffWords: Set<String> = ["migrate", "migrator", "migrations", "init", "test", "tests", "e2e", "backup", "seed", "seeder", "creator"]
+    /// A storage or a broker is called and calls nobody: a variable of its shared env file is its callers'.
+    static func storage(_ kind: String) -> Bool { databases.contains(kind) || brokers.contains(kind) || kind == "s3" }
     /// One machine under several names; a port is what tells its services apart.
     static let loopback: Set<String> = ["localhost", "127.0.0.1", "::1", "host.docker.internal"]
     static let readWords: Set<String> = ["IN", "INPUT", "CONSUME", "CONSUMER", "SOURCE", "SUB", "SUBSCRIBE"]
@@ -112,6 +119,23 @@ public enum Scanner {
         return (compose, env)
     }
 
+    /// Those of the files git tracks: an untracked compose file is a developer's own stand, not
+    /// the deployment. When git cannot answer (no real repository), every file counts.
+    static func tracked(_ files: [String], in clone: URL) -> Set<String> {
+        guard !files.isEmpty, let git = Shell.locate("git") else { return Set(files) }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: git)
+        process.arguments = ["-C", clone.path, "ls-files", "-z", "--"] + files
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return Set(files) }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return Set(files) }
+        return Set(String(decoding: data, as: UTF8.self).split(separator: "\0").map(String.init))
+    }
+
     // MARK: Compose
 
     /// A compose service, united by name across the files of a repository.
@@ -124,6 +148,14 @@ public enum Scanner {
         var envFiles: Set<String> = []
         /// Build contexts as absolute paths.
         var contexts: [(path: String, file: String)] = []
+        /// `container_name` and network `aliases:` — other hosts it answers at.
+        var names: [String] = []
+        /// `restart: "no"` or `profiles:` — started by hand, not a running service.
+        var oneOff = false
+    }
+
+    static func oneOff(_ name: String, _ service: ComposeService) -> Bool {
+        service.oneOff || oneOffWords.contains(String(name.lowercased().split(whereSeparator: { "-_".contains($0) }).last ?? ""))
     }
 
     /// A value as written, without interpolation: `${VAR:-default}` gives its default, a value
@@ -166,6 +198,13 @@ public enum Scanner {
                 guard let path = entry as? String ?? (entry as? [String: Any])?["path"] as? String else { continue }
                 service.envFiles.insert(String(absolute(path).dropFirst(clone.path.count + 1)))
             }
+            if let container = body["container_name"] as? String { service.names.append(container) }
+            for (_, network) in body["networks"] as? [String: Any] ?? [:] {
+                for alias in (network as? [String: Any])?["aliases"] as? [Any] ?? [] { service.names.append("\(alias)") }
+            }
+            // `restart: no` unquoted is YAML's false; swarm form: `deploy.restart_policy.condition: none`.
+            let policy = ((body["deploy"] as? [String: Any])?["restart_policy"] as? [String: Any])?["condition"] as? String
+            if body["profiles"] != nil || body["restart"] as? Bool == false || (body["restart"] as? String)?.lowercased() == "no" || policy == "none" { service.oneOff = true }
             services[name] = service
         }
         for (key, raw) in root["networks"] as? [String: Any] ?? [:] {
@@ -211,6 +250,10 @@ public enum Scanner {
             if let m = text.wholeMatch(of: #/([A-Za-z][A-Za-z0-9+._-]*)://(?:[^/?#]*@)?([^:/?#@]+)(?::(\d+))?(/[^?#]*)?(?:[?#].*)?/#), m.2 != "0.0.0.0" {
                 let path = m.4.map(String.init)
                 return Target(scheme: m.1.lowercased(), host: m.2.lowercased(), port: m.3.flatMap { Int($0) }, path: path == "/" ? nil : path)
+            }
+            // A key-value DSN: `host=db port=5432 dbname=app`.
+            if let m = text.firstMatch(of: #/(?:^|\s)host=([A-Za-z0-9._-]+)/#), m.1 != "0.0.0.0" {
+                return Target(host: m.1.lowercased(), port: text.firstMatch(of: #/\bport=(\d+)/#).flatMap { Int($0.1) })
             }
             // `12:30` is a time and `0.0.0.0:8000` is where a server listens, not whom it calls.
             guard let m = text.wholeMatch(of: #/([A-Za-z0-9._-]+):(\d+)/#), m.1 != "0.0.0.0",
@@ -323,7 +366,11 @@ public enum Scanner {
             func reaches(_ service: Service, _ name: String) -> Bool {
                 Scanner.reaches(service, by: name, repo: repo, project: report.project, space: clone.space)
             }
-            let listed = files(in: root)
+            var listed = files(in: root)
+            let inGit = tracked(listed.compose + listed.env, in: root)
+            for file in listed.compose + listed.env where !inGit.contains(file) { clone.report.problems.append("\(file): not in git, skipped") }
+            listed.compose.removeAll { !inGit.contains($0) }
+            listed.env.removeAll { !inGit.contains($0) }
             clone.envFiles = listed.env
             var networks = Set<String>()
             for file in listed.compose {
@@ -335,15 +382,21 @@ public enum Scanner {
             // ahead of a service called exactly that.
             func order(_ name: String) -> String { (genericNames.contains(name.lowercased()) ? "1" : "0") + name }
             for (name, service) in clone.compose.sorted(by: { order($0.key) < order($1.key) }) {
-                // The repository's own service, or — for an image, not a build — shared
-                // infrastructure known under this name (`hyper-kafka` is `kafka`) where it may be meant.
-                // A service built here from another repository (`nn-live` from nn-mapmatch) is known
-                // under `<repo>-<name>`: that id or alias in the same space is the same service.
+                // The repository's own service; a service built here from another repository
+                // (`nn-live` from nn-mapmatch), known under `<repo>-<name>` in the same space; or a
+                // card this is another name of where the caller may mean it (`hyper-kafka` is `kafka`,
+                // `imu-sphere-tiles` is the shared `ble-panels-tiles`) — for a build only by a name
+                // that is not generic: two repositories may each build an `api`.
                 let prefixed = "\(repo.description.split(separator: "/").last!)-\(name)"
-                if let same = catalog.first(where: { $0.repo == repo && ($0.id == name || $0.aliases.contains(name)) })
+                let mine = [name] + service.names
+                if let same = catalog.first(where: { $0.repo == repo && (mine.contains($0.id) || !Set($0.aliases).isDisjoint(with: mine)) })
                     ?? catalog.first(where: { $0.space == clone.space && ($0.id == prefixed || $0.aliases.contains(prefixed)) })
-                    ?? (service.builds ? nil : catalog.first { $0.aliases.contains(name) && reaches($0, name) }) {
-                    clone.ids[name] = same.id
+                    ?? catalog.first(where: { s in mine.contains { n in (s.id == n || s.aliases.contains(n)) && reaches(s, n) && !(service.builds && generic(n)) } }) {
+                    for n in mine { clone.ids[n] = same.id }
+                    continue
+                }
+                if oneOff(name, service) {
+                    clone.report.oneOff.append(name)
                     continue
                 }
                 func free(_ id: String) -> Bool { !known.contains { $0.id == id } }
@@ -352,12 +405,14 @@ public enum Scanner {
                     clone.report.problems.append("\(name): its id \(id) is taken — if it is that service, add \(name) to its aliases")
                     continue
                 }
-                var candidate = Service(id: id, name: name, kind: isFrontend(service) ? "frontend" : kind(ofImage: service.image), repo: repo, aliases: id == name ? [] : [name])
+                var candidate = Service(id: id, name: name, kind: isFrontend(service) ? "frontend" : kind(ofImage: service.image), repo: repo,
+                                        aliases: mine.filter { $0 != id }.reduce(into: []) { if !$0.contains($1) { $0.append($1) } })
                 (candidate.space, candidate.project) = (clone.space, report.project)
                 known.append(candidate)
                 clone.report.services.append(candidate)
-                clone.ids[name] = id
+                for n in mine { clone.ids[n] = id }
             }
+            clone.report.oneOff.sort()
             clone.report.services.sort { $0.id < $1.id }
             clones.append(clone)
         }
@@ -413,15 +468,16 @@ public enum Scanner {
                 if !clone.report.unknown.contains(entry) { clone.report.unknown.append(entry) }
             }
             let services = clone.compose.sorted { $0.key < $1.key }.compactMap { name, service in clone.ids[name].map { (id: $0, service: service) } }
+            let callers = services.filter { id, _ in !(known.first { $0.id == id }.map { storage($0.kind) } ?? false) }
 
             var variables: [(callers: [String], name: String, value: String, file: String, envFile: Bool)] = []
-            for (id, service) in services { variables += service.variables.map { ([id], $0.name, $0.value, $0.file, false) } }
+            for (id, service) in callers { variables += service.variables.map { ([id], $0.name, $0.value, $0.file, false) } }
             for file in clone.envFiles {
-                var callers = clone.compose.filter { $0.value.envFiles.contains(file) || $0.value.envFiles.contains(realCounterpart(file)) }
-                if callers.isEmpty { callers = clone.compose.filter(\.value.builds) }
-                let ids = Set(callers.keys.compactMap { clone.ids[$0] }).sorted()
+                var users = clone.compose.filter { $0.value.envFiles.contains(file) || $0.value.envFiles.contains(realCounterpart(file)) }
+                if users.isEmpty { users = clone.compose.filter(\.value.builds) }
+                let ids = Set(users.keys.compactMap { clone.ids[$0] }).filter { id in callers.contains { $0.id == id } }.sorted()
                 guard !ids.isEmpty else {
-                    clone.report.problems.append("\(file): no compose service to take its variables")
+                    if users.isEmpty { clone.report.problems.append("\(file): no compose service to take its variables") }
                     continue
                 }
                 guard let text = try? String(contentsOf: clone.root.appendingPathComponent(file), encoding: .utf8) else { continue }
@@ -436,7 +492,8 @@ public enum Scanner {
                 }
                 for at in addresses(v.value) + (split.map { [$0] } ?? []) {
                     guard let hit = resolve(at, clone) else {
-                        unknown(.init(callers: v.callers, file: v.file, variable: v.name, host: at.host, port: at.port))
+                        // A loopback default in an example file points at nothing on this machine.
+                        if !loopback.contains(at.host) { unknown(.init(callers: v.callers, file: v.file, variable: v.name, host: at.host, port: at.port)) }
                         continue
                     }
                     let scheme = at.scheme ?? ""
@@ -472,7 +529,7 @@ public enum Scanner {
             }
 
             // A build context in another catalogued repository's clone.
-            for (id, service) in services {
+            for (id, service) in callers {
                 for context in service.contexts where !inside(context.path, clone.root.path) {
                     guard let other = local.first(where: { $0.key != clone.report.repo && assigned[$0.key] != nil && inside(context.path, $0.value.path) }) else { continue }
                     let theirs = known.filter { $0.repo == other.key }
@@ -489,7 +546,9 @@ public enum Scanner {
                 if (existing[entry.from] ?? []).contains(where: { key($0) == key(entry.link) }) { clone.report.present.append(entry) }
                 else { clone.report.new.append(entry) }
             }
-            for service in catalog where service.repo == clone.report.repo {
+            // Only what this clone's files define: a card of this repository run from another's
+            // compose (`nn-live`) is judged there.
+            for service in catalog where clone.ids.values.contains(service.id) {
                 for link in existing[service.id] ?? [] where (link.origin ?? "").hasPrefix("derived:")
                     && !found.contains(where: { $0.from == service.id && key($0.link) == key(link) }) {
                     clone.report.gone.append(.init(from: service.id, link: link))

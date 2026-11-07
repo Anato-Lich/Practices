@@ -46,6 +46,7 @@ let usage = """
                                     `accept`; links refused before are counted, --all lists them
       pending                       uncommitted changes in the spaces (an agent's edits)
       accept [space [path…]] [--message m]   commit them: all, one space's, or the given files
+      discard <space> <path…>       drop them: a new file is deleted, an edited one restored
 
     values and checks:
       check [ref…]                  endpoints and conditions of services (all by default)
@@ -551,6 +552,7 @@ case "scan":
         print("\(repo.repo)  [\(repo.project)]  " + (repo.clone.map(home) ?? "not cloned"))
         if !repo.services.isEmpty { print("  new services") }
         for s in repo.services { print("    " + pad(s.id, 30) + "  " + pad(s.kind, 12) + (s.aliases.first.map { "compose: \($0)" } ?? "")) }
+        if !repo.oneOff.isEmpty { print("  run once, not services: " + repo.oneOff.joined(separator: ", ")) }
         if !repo.new.isEmpty { print("  new links") }
         show(repo.new)
         if !repo.present.isEmpty { print("  in the catalogue already: \(repo.present.count) links") }
@@ -585,6 +587,16 @@ case "accept":
         if accepted.isEmpty { print("nothing pending"); break }
         for p in accepted { print("accepted  " + pad(p.space, 14) + p.path) }
     } catch { fail("practices: \(error)") }
+
+case "discard":
+    guard positional.count >= 3 else { print(usage); exit(2) }
+    let registry = Registry()
+    let chosen = await registry.pending().filter { $0.space == positional[1] && positional.dropFirst(2).contains($0.path) }
+    if chosen.isEmpty { print("nothing pending at those paths"); break }
+    for p in chosen {
+        do { try await registry.discard(p) } catch { fail("practices: \(error)") }
+        print("discarded " + pad(p.space, 14) + p.path)
+    }
 
 case "check":
     let registry = Registry(), store = SecretStore()

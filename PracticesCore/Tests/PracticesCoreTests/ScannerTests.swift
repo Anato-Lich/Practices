@@ -33,6 +33,8 @@ import Yams
         #expect(Scanner.addresses("jdbc:clickhouse://ch:8123").map(\.host) == ["ch"])
         #expect(Scanner.addresses("PLAINTEXT://a:9092, b:9093").map(\.port) == [9092, 9093])
         #expect(Scanner.addresses("https://api.example/").first?.path == nil)
+        #expect(Scanner.addresses("dbname=x host=Db port=5432 user=u") == [.init(host: "db", port: 5432)])
+        #expect(Scanner.addresses("host=db") == [.init(host: "db")])
         for notAnAddress in ["12:30", "0.0.0.0:8000", "http://0.0.0.0:8000", "frames.norm", "redis:7-alpine", "true"] {
             #expect(Scanner.addresses(notAnAddress).isEmpty, "\(notAnAddress)")
         }
@@ -289,15 +291,87 @@ import Yams
             Link(to: "scada-cache", via: "db", origin: compose),
             Link(to: "wifi-db", via: "http", names: ["WIFI": "WIFI_URL"], origin: compose),
         ])
-        #expect(scada.unknown == [
-            .init(callers: ["scada-app"], file: "docker-compose.yml", variable: "BFF_URL", host: "localhost", port: 8000),
-            .init(callers: ["scada-app"], file: "docker-compose.yml", variable: "DB_DSN", host: "db", port: 5432),
-        ])
+        // `localhost:8000` names nothing here and is nobody's unknown either.
+        #expect(scada.unknown == [.init(callers: ["scada-app"], file: "docker-compose.yml", variable: "DB_DSN", host: "db", port: 5432)])
 
         try Scanner.write(first, registry: home.registry)
         let second = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
         #expect(second.services.isEmpty && second.new.isEmpty && second.gone.isEmpty)
         #expect(second.present.map(\.link) == scada.new.map(\.link))
+    }
+
+    @Test func oneOffsStoragesAndLoopbackDefaults() throws {
+        let home = try catalogue(["github.com/acme/shop"])
+        try card(home, Service(id: "sso", name: "SSO", kind: "http", aliases: ["sso.example"]))
+        try card(home, Service(id: "shop-tools", name: "Tools", kind: "tool", repo: RepoID("github.com/acme/shop")!, aliases: ["tools"]))
+        try home.write("""
+            services:
+              api: {build: ., env_file: .default.env}
+              db: {image: "postgres:16", env_file: .default.env}
+              migrate: {build: ., restart: "no", env_file: .default.env}
+              seed-init: {build: ., env_file: .default.env}
+              tools: {build: ., profiles: [tools], env_file: .default.env}
+              backup: {image: x/backup, restart: no}
+            """, "code/shop/docker-compose.yml")
+        try home.write("SSO_URL=https://sso.example/jwks\nDB_URL=postgresql://u:p@localhost:5432/x\n", "code/shop/.default.env")
+        let shop = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
+        // `tools` has a card and stays; the others run once and are no services.
+        #expect(shop.services.map(\.id) == ["shop-api", "shop-db"])
+        #expect(shop.oneOff == ["backup", "migrate", "seed-init"])
+        // The shared env file is its callers': postgres calls nobody.
+        #expect(shop.new.map { "\($0.from) → \($0.link.to)" } == ["shop-api → sso", "shop-tools → sso"])
+        // `localhost:5432` in an example file is a developer's default, not an unknown service.
+        #expect(shop.unknown.isEmpty && shop.problems.isEmpty)
+    }
+
+    @Test func untrackedComposeFilesAreADevelopersOwn() async throws {
+        let home = try catalogue(["github.com/acme/shop"])
+        let clone = home.url.appendingPathComponent("code/shop")
+        try FileManager.default.removeItem(at: clone.appendingPathComponent(".git"))
+        try home.write("services:\n  api: {build: .}\n", "code/shop/docker-compose.yml")
+        try home.write("services:\n  tiles: {image: x/tiles}\n", "code/shop/docker-compose.local.yml")
+        for args in [["init", "-q"], ["remote", "add", "origin", "https://github.com/acme/shop.git"], ["add", "docker-compose.yml"],
+                     ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"]] {
+            _ = try await Shell.run("git", ["-C", clone.path] + args)
+        }
+        let shop = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
+        #expect(shop.services.map(\.id) == ["shop-api"])
+        #expect(shop.problems == ["docker-compose.local.yml: not in git, skipped"])
+    }
+
+    @Test func aBuildIsAnotherProjectsCardByItsExplicitAlias() throws {
+        let home = try catalogue(["github.com/acme/shop"])
+        // The shared tile server, which this repository also builds for its dev stand under its own name.
+        try home.place(Service(id: "panels-tiles", name: "Tiles", kind: "http", aliases: ["shop-tiles"]), project: "other")
+        try home.place(Service(id: "other-api", name: "API", kind: "http", aliases: ["api"]), project: "other")
+        try home.write("services:\n  shop-tiles: {build: ./tiles}\n  api: {build: .}\n", "code/shop/docker-compose.yml")
+        let shop = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
+        // `api` is generic: a build of its own, not the other project's card.
+        #expect(shop.services.map(\.id) == ["shop-api"])
+    }
+
+    @Test func containerNamesNetworkAliasesAndKeyValueDSNs() throws {
+        let home = try catalogue(["github.com/acme/shop"])
+        try home.write("""
+            services:
+              api:
+                build: .
+                environment:
+                  PG: host=Db port=5432 dbname=x
+                  TILES: http://tiles.local/
+                  VALHALLA: http://shop-valhalla-1:8002/route
+              valhalla:
+                image: x/valhalla
+                container_name: shop-valhalla-1
+                networks:
+                  web: {aliases: [tiles.local]}
+              db: {image: "postgres:16"}
+            """, "code/shop/docker-compose.yml")
+        let shop = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
+        #expect(shop.services.map(\.aliases) == [["api"], ["db"], ["shop-valhalla-1", "tiles.local"]])
+        let compose = "derived:docker-compose.yml"
+        #expect(shop.new.map(\.link) == [Link(to: "shop-db", via: "db", origin: compose), Link(to: "valhalla", via: "http", origin: compose)])
+        #expect(shop.unknown.isEmpty)
     }
 
     @Test func curatedLinksAreFoundAgainByCallerTargetAndVia() async throws {

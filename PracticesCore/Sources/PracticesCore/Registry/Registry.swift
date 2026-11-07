@@ -530,6 +530,20 @@ public struct Registry: Sendable {
         return (try? await git(root, ["diff", "HEAD", "--", change.path])) ?? ""
     }
 
+    /// Drops a pending change: a new file is deleted (with the folders it alone filled), an
+    /// edited or deleted one is restored from the last commit.
+    public func discard(_ change: Pending) async throws {
+        let root = dir(ofSpace: change.space)
+        guard change.state == "new" else { _ = try await git(root, ["checkout", "HEAD", "--", change.path]); return }
+        var file = root.appendingPathComponent(change.path)
+        try FileManager.default.removeItem(at: file)
+        while true {
+            file.deleteLastPathComponent()
+            guard file.path != root.path, (try? FileManager.default.contentsOfDirectory(atPath: file.path))?.isEmpty == true else { return }
+            try FileManager.default.removeItem(at: file)
+        }
+    }
+
     /// Commits pending changes — all of them, or those of one space, or the given paths of it.
     /// Returns what was accepted.
     @discardableResult

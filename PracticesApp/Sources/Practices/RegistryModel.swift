@@ -242,6 +242,13 @@ final class RegistryModel {
         await refreshPending()
     }
 
+    /// Drops one pending change: the file goes back to what the catalogue holds.
+    func discard(_ change: Pending) async {
+        do { try await registry.discard(change) } catch { fail("отклонить " + change.path, error) }
+        reload()
+        await refreshPending()
+    }
+
     func scanCopies() async {
         copies = await Copies.scan()
     }
