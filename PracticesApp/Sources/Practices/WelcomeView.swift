@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 import PracticesCore
 
-/// «Начало» (`design/Welcome.dc.html`): the first run, three steps — where the clones are, where
-/// the catalogue comes from, the agents. The parts of steps 1 and 2 are shared with «Настройка».
+/// «Начало» (`design/Welcome.dc.html`): the first run, three steps — where the clones are, your
+/// own space (the catalogue is personal, DECISIONS 36), the agents. The parts of steps 1 and 2 are shared with «Настройка».
 ///
 /// No live «настраивает агент» mode (`WelcomeAgent.dc.html`): the MCP process sends the app no
 /// signal; the window re-reads `Setup.status` when it becomes active instead (MainWindow).
@@ -34,15 +34,11 @@ struct WelcomeView: View {
                     }
                 }
             }
-            StepCard(n: 2, title: "Откуда взять каталог", text: "репозиторий пространства с карточками, связями и практиками — или пустое новое",
+            StepCard(n: 2, title: "Своё пространство", text: "каталог личный: проекты, сервисы и практики, которые вы ведёте",
                      state: states[1], current: current == 1) {
                 EmptyView()
             } content: {
-                CloneSpaceForm()
-                CreateSpaceRow(label: "или создать новое пространство")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 6)
-                    .overlay(alignment: .top) { Theme.Color.borderCard.frame(height: 1) }
+                CreateSpaceRow(label: "Создать пространство")
             }
             StepCard(n: 3, title: "Агенты", text: "MCP-сервер и блок инструкций в найденных инструментах; то же, что practicesctl setup agents",
                      state: states[2], current: current == 2) {
@@ -71,7 +67,7 @@ struct WelcomeView: View {
                 Button { registry.welcomeShown = false } label: { Text(verbatim: "Настроить позже").font(Theme.ui(12.5)).foregroundStyle(Theme.Color.link) }
                     .buttonStyle(.plain)
                 Spacer()
-                Text(verbatim: "то же из терминала: practicesctl setup roots · clone · agents")
+                Text(verbatim: "то же из терминала: practicesctl setup roots · space add · setup agents")
                     .font(Theme.mono(11)).foregroundStyle(Theme.Color.textMuted)
             }
         }
@@ -91,8 +87,7 @@ struct WelcomeView: View {
         let setup = registry.setup
         let roots: StepState = setup.busy.contains("roots") ? .running
             : (status?.roots.contains { $0.clones > 0 } ?? false) ? .done : .todo
-        let space: StepState = setup.busy.contains("clone") || setup.busy.contains("create") ? .running
-            : !registry.spaces.isEmpty ? .done : setup.clones.last?.error != nil ? .failed : .todo
+        let space: StepState = setup.busy.contains("create") ? .running : !registry.spaces.isEmpty ? .done : .todo
         let found = (status?.tools ?? []).filter(\.found)
         let agents: StepState = setup.busy.contains("agents") ? .running
             : !found.isEmpty && found.allSatisfy({ $0.mcp && ($0.instructions ?? "current") == "current" }) ? .done : .todo
@@ -214,65 +209,6 @@ struct RemoveButton: View {
             Text(verbatim: "✕").font(Theme.ui(14)).foregroundStyle(Theme.Color.textMuted).frame(width: 22, height: 22).contentShape(Rectangle())
         }
         .buttonStyle(.plain).help(Text(verbatim: "Убрать"))
-    }
-}
-
-/// URL + «Склонировать», then a row per attempt: running, cloned (N проектов · M сервисов), or git's error.
-struct CloneSpaceForm: View {
-    @Environment(RegistryModel.self) private var registry
-    @State private var url = ""
-
-    var body: some View {
-        let setup = registry.setup
-        HStack(spacing: 10) {
-            TextField(text: $url, prompt: Text(verbatim: "git@github.com:org/practices-space.git").foregroundStyle(Theme.Color.textDisabled)) {
-                Text(verbatim: "Адрес репозитория пространства")
-            }
-            .fieldStyle()
-            .onSubmit { clone() }
-            Button { clone() } label: { Text(verbatim: "Склонировать") }
-                .buttonStyle(ToolbarButtonStyle())
-                .disabled(url.trimmingCharacters(in: .whitespaces).isEmpty || setup.busy.contains("clone"))
-        }
-        if !setup.clones.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(setup.clones) { attempt in row(attempt) }
-            }
-        }
-    }
-
-    private func clone() {
-        let url = url
-        Task { await registry.setup.clone(url) }
-    }
-
-    private func row(_ attempt: SetupModel.CloneAttempt) -> some View {
-        HStack(spacing: 10) {
-            Text(verbatim: attempt.space ?? attempt.url).font(Theme.mono(12)).lineLimit(1).truncationMode(.middle)
-                .frame(minWidth: 110, maxWidth: attempt.space == nil ? 320 : nil, alignment: .leading)
-            if let space = attempt.space, let name = registry.spaces.first(where: { $0.id == space })?.name {
-                Text(verbatim: name).frame(minWidth: 120, alignment: .leading)
-            }
-            if attempt.running {
-                ProgressView().progressViewStyle(.linear).frame(maxWidth: 240)
-                Text(verbatim: "клонируется…").font(Theme.mono(11)).foregroundStyle(Theme.Color.textSecondary)
-            } else if let error = attempt.error {
-                Text(verbatim: "✕ " + error.replacingOccurrences(of: "\n", with: " ")).font(Theme.mono(11)).foregroundStyle(Theme.Color.error)
-                    .lineLimit(2).textSelection(.enabled).help(error)
-            } else if let summary = attempt.summary {
-                Text(verbatim: summary).font(Theme.mono(11.5)).foregroundStyle(Theme.Color.ok)
-            }
-            Spacer(minLength: 6)
-            if let space = attempt.space {
-                Button { registry.selection = .space(space) } label: { Text(verbatim: "Открыть") }
-                    .buttonStyle(CompactButtonStyle(height: 24, fontSize: 12))
-            } else if attempt.error != nil {
-                Button { Task { await registry.setup.clone(attempt.url) } } label: { Text(verbatim: "Повторить") }
-                    .buttonStyle(CompactButtonStyle(height: 24, fontSize: 12))
-                RemoveButton { registry.setup.dismissClone(attempt.id) }
-            }
-        }
-        .frame(minHeight: 30)
     }
 }
 

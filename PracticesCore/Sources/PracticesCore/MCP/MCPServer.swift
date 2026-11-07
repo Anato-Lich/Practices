@@ -175,7 +175,7 @@ public final class MCPServer: @unchecked Sendable {
         case "add_note":
             return try await addNote(service: try Self.string(args, "service"), text: try Self.string(args, "text"))
         case "setup_status":
-            return try encodable(await Setup.status(registry: registry, fetch: args["fetch"] as? Bool ?? false))
+            return try encodable(await Setup.status(registry: registry))
         case "setup_agents":
             if let project = args["project"] as? String, !project.isEmpty {
                 return ["written": try Setup.project(project, registry: registry)]
@@ -474,8 +474,7 @@ public final class MCPServer: @unchecked Sendable {
              required: ["service", "path", "meaning"]),
         tool("add_note", "Add a pitfall or a finding to a service's notes.",
              ["service": ["type": "string"], "text": ["type": "string"]], required: ["service", "text"]),
-        tool("setup_status", "Настроена ли эта машина: корни клонов (local.yaml) с числом найденных клонов, пространства с remote, веткой, незакоммиченными и ahead/behind, для Claude Code, Codex и Cursor — найден ли, зарегистрирован ли MCP, блок инструкций absent/current/outdated(vN); клоны проектов, где блок есть. Ничего не меняет.",
-             ["fetch": ["type": "boolean", "description": "сначала git fetch пространств (сеть)"]]),
+        tool("setup_status", "Настроена ли эта машина: корни клонов (local.yaml) с числом найденных клонов, пространства с путём, веткой и незакоммиченными, для Claude Code, Codex и Cursor — найден ли, зарегистрирован ли MCP, блок инструкций absent/current/outdated(vN); клоны проектов, где блок есть. Ничего не меняет."),
         tool("setup_agents", "Настроить агентов на этой машине: зарегистрировать MCP-сервер practices и записать блок инструкций в глобальные CLAUDE.md / AGENTS.md найденных инструментов; с project — только блок в CLAUDE.md и AGENTS.md клонов этого проекта. Спросите пользователя, прежде чем вызывать.",
              ["tools": ["type": "array", "items": ["type": "string", "enum": AgentTool.allCases.map(\.rawValue)], "description": "по умолчанию все найденные"],
               "mcp": ["type": "boolean", "description": "регистрировать MCP, по умолчанию да"],

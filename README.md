@@ -85,18 +85,22 @@ claude mcp add --scope user practices -- ~/.practices/bin/practicesctl mcp
 
 ## Передача другому человеку
 
-Общее — в git, личное — на машине (DECISIONS 36): код приложения и пространства — репозитории,
-`~/.practices/local.yaml`, секреты, регистрация MCP и блоки инструкций агентам — у каждого свои.
+Передаётся только приложение (DECISIONS 36). Каталог личный: пространства под `~/.practices/spaces`
+— локальные git-репозитории (история, приёмка правок агентов) без remote, из них ничего не
+копируется. `~/.practices/local.yaml`, секреты, регистрация MCP и блоки инструкций агентам тоже у
+каждого свои. Новый человек клонирует репозиторий приложения:
 
 ```sh
 git clone <этот репозиторий> && cd Practices && ./install.sh   # ставит xcodegen и uv через brew, если их нет
 ```
 
-Дальше — в приложении экран «Начало», или то же командами (их же может выполнить агент в диалоге):
+При первом запуске он создаёт своё пространство и добавляет папки со своими клонами — на экране
+«Начало» или командами (их же может выполнить агент в диалоге). Каталог наполняют `scan` и агенты:
 
 ```
 practicesctl setup status                          # что уже настроено
 practicesctl setup roots ~/Projects/…              # где лежат клоны
-practicesctl space clone <url пространства>        # общий каталог; space remote/push/pull — у владельца
+practicesctl space add <id> [--name N] [--hosting host/owner]   # своё пространство
+practicesctl scan <project> --write                # сервисы и связи из клонов, ждут `accept`
 practicesctl setup agents                          # MCP и блок инструкций для Claude Code, Codex, Cursor
 ```

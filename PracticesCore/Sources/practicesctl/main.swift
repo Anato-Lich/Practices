@@ -8,13 +8,9 @@ let usage = """
     usage: practicesctl <command> [--json]
 
     catalogue (~/.practices/spaces/<space>, one git repository per space):
-      spaces [--fetch]              spaces: remote, branch, uncommitted, ahead/behind the upstream
-                                    as last fetched (--fetch asks the remotes first)
+      spaces                        spaces: path, branch, uncommitted (the catalogue is personal:
+                                    each space is a local git repository, never shared)
       space add <id> [--name N] [--hosting host/owner …]
-      space remote <id> <url>       share a space: set its origin
-      space push <id> | space pull <id>    push -u origin HEAD | pull --ff-only (refused while
-                                    the space has uncommitted, pending files)
-      space clone <url> [id]        someone's shared space into ~/.practices/spaces/<id>
       projects [space]              the tree of projects with their repositories and services
       project <id>                  one project: repositories (role, local clone), services, chains
       project add <space>/<id> [--parent <project>] [--name N] [--description D]
@@ -70,7 +66,7 @@ let usage = """
     this machine (~/.practices/local.yaml, agents' settings; never in git):
       roots                         folders where clones are looked for, with the clones found
       roots add <path>… | roots remove <path>
-      setup status [--json] [--fetch]   roots, spaces with remotes, agents: MCP registered,
+      setup status [--json]         roots, spaces, agents: MCP registered,
                                     instruction block absent / current / outdated, project clones with it
       setup roots <path>…           = roots add, for the first run
       setup agents [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
@@ -136,7 +132,7 @@ func parse(_ args: [String]) -> (rest: [String], options: [String: [String]]) {
     var i = 0
     while i < args.count {
         let a = args[i]
-        if ["--json", "--all", "--force", "--unassigned", "--write", "--fetch", "--no-mcp", "--no-instructions"].contains(a) { i += 1; continue }
+        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-mcp", "--no-instructions"].contains(a) { i += 1; continue }
         if a.hasPrefix("--"), i + 1 < args.count { options[a, default: []].append(args[i + 1]); i += 2; continue }
         rest.append(a); i += 1
     }
@@ -169,19 +165,18 @@ func home(_ path: String?) -> String {
     return path.hasPrefix(h) ? "~" + path.dropFirst(h.count) : path
 }
 
-/// `x-keeper  X-Keeper  git@…  main  2 uncommitted  ↑1 ↓0`
+/// `x-keeper  X-Keeper  main  2 uncommitted`
 func spaceLine(_ s: SpaceState) -> String {
-    let g = s.git
-    return pad(s.id, 16) + pad(s.name, 22) + pad(s.remote ?? "нет remote", 48) + pad(g?.branch ?? (g == nil ? "no git" : "detached"), 10)
-        + pad("\(g?.uncommitted ?? 0) uncommitted", 16) + (g?.ahead.map { "↑\($0) ↓\(g?.behind ?? 0)" } ?? "")
+    pad(s.id, 16) + pad(s.name, 22) + pad(s.branch ?? (s.uncommitted == nil ? "no git" : "detached"), 10)
+        + (s.uncommitted.map { "\($0) uncommitted" } ?? "")
 }
 
 switch positional.first {
 case "spaces":
     let states: [SpaceState]
-    do { states = try await Registry().spaceStates(fetch: args.contains("--fetch")) } catch { fail("practices: \(error)") }
+    do { states = try await Registry().spaceStates() } catch { fail("practices: \(error)") }
     if json { printJSON(states); break }
-    if states.isEmpty { print("no spaces yet — `practicesctl space add <id>` or `practicesctl space clone <url>`"); break }
+    if states.isEmpty { print("no spaces yet — `practicesctl space add <id>`"); break }
     for s in states { print(spaceLine(s)) }
 
 case "space":
@@ -197,18 +192,6 @@ case "space":
             }
             try await registry.add(Space(id: rest[2], name: options["--name"]?.last ?? rest[2], hosting: hosting))
             print("space \(rest[2]): \(home(registry.dir(ofSpace: rest[2]).path))")
-        case ("remote", 4):
-            try await registry.setRemote(ofSpace: rest[2], to: rest[3])
-            print("\(rest[2]): origin = \(rest[3]) — `practicesctl space push \(rest[2])`")
-        case ("push", 3):
-            try await registry.push(space: rest[2])
-            print("\(rest[2]): pushed")
-        case ("pull", 3):
-            try await registry.pull(space: rest[2])
-            print("\(rest[2]): up to date")
-        case ("clone", 3), ("clone", 4):
-            let id = try await registry.clone(space: rest[2], as: rest.count == 4 ? rest[3] : nil)
-            print("space \(id): \(home(registry.dir(ofSpace: id).path))")
         default: print(usage); exit(2)
         }
     } catch { fail("practices: \(error)") }
@@ -232,11 +215,11 @@ case "setup":
     do {
         switch rest.count > 1 ? rest[1] : "" {
         case "status":
-            let status = try await Setup.status(fetch: args.contains("--fetch"))
+            let status = try await Setup.status()
             if json { printJSON(status); break }
             print("roots" + (status.defaultRoots ? " (none in local.yaml — the default; `practicesctl setup roots <path>…`)" : ""))
             for r in status.roots { print("  " + pad(home(r.path), 40) + "  " + (r.exists ? "\(r.clones) clones" : "missing")) }
-            print("\nspaces" + (status.spaces.isEmpty ? " — none; `practicesctl space clone <url>`" : ""))
+            print("\nspaces" + (status.spaces.isEmpty ? " — none; `practicesctl space add <id>`" : ""))
             for s in status.spaces { print("  " + spaceLine(s)) }
             print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — not installed: ./install.sh)"))
             for t in status.tools {

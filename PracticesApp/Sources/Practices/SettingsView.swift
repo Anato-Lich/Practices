@@ -3,14 +3,10 @@ import AppKit
 import PracticesCore
 
 /// «Настройка» (`design/Settings.dc.html`): what is personal to this machine (DECISIONS 36) —
-/// spaces and their remotes, roots, agents, the environment. Failures go to the error bar.
+/// spaces (local repositories, never shared), roots, agents, the environment. Failures go to the error bar.
 struct SettingsView: View {
     @Environment(RegistryModel.self) private var registry
-    @State private var editingRemote: String?
-    @State private var remoteText = ""
-    @State private var adding: Adding?
-
-    enum Adding { case clone, create }
+    @State private var adding = false
 
     var body: some View {
         let setup = registry.setup
@@ -35,9 +31,6 @@ struct SettingsView: View {
         .toolbarTrailing {
             Button { Task { await setup.refresh() } } label: { Text(verbatim: "Проверить") }
                 .disabled(setup.busy.contains("status"))
-            Button { Task { await setup.refresh(fetch: true) } } label: { Text(verbatim: "Проверить с fetch") }
-                .disabled(setup.busy.contains("status"))
-                .help(Text(verbatim: "git fetch каждого пространства с remote — сеть"))
         }
     }
 
@@ -50,9 +43,8 @@ struct SettingsView: View {
                 GridRow {
                     Text(verbatim: "id").frame(width: 110, alignment: .leading)
                     Text(verbatim: "название").frame(width: 130, alignment: .leading)
-                    Text(verbatim: "remote").frame(maxWidth: .infinity, alignment: .leading)
+                    Text(verbatim: "путь").frame(maxWidth: .infinity, alignment: .leading)
                     Text(verbatim: "git").frame(width: 300, alignment: .leading)
-                    Color.clear.frame(width: 130, height: 1)
                 }
                 .font(Theme.mono(10.5)).foregroundStyle(Theme.Color.textMuted).textCase(.uppercase)
                 .padding(.bottom, 4)
@@ -64,88 +56,37 @@ struct SettingsView: View {
             }
             VStack(spacing: 0) {
                 if spaces.isEmpty {
-                    Text(verbatim: "Пространств нет — склонируйте или создайте.").font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted)
+                    Text(verbatim: "Пространств нет — создайте своё.").font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted)
                         .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                 }
             }
             HStack(spacing: 8) {
-                Button { adding = adding == .clone ? nil : .clone } label: { Text(verbatim: "Склонировать пространство…") }
-                    .buttonStyle(ToolbarButtonStyle())
-                Button { adding = adding == .create ? nil : .create } label: { Text(verbatim: "Создать…") }
+                Button { adding.toggle() } label: { Text(verbatim: "Создать…") }
                     .buttonStyle(ToolbarButtonStyle())
                 Spacer()
-                Text(verbatim: "Push и Pull — только для репозитория пространства; карточки проектов живут там.")
+                Text(verbatim: "Каталог личный: git пространства — только история и принятые правки, без remote.")
                     .font(Theme.ui(11.5)).foregroundStyle(Theme.Color.textMuted)
             }
             .padding(.top, 6)
-            switch adding {
-            case .clone: CloneSpaceForm()
-            case .create: CreateSpaceRow()
-            case nil: EmptyView()
-            }
+            if adding { CreateSpaceRow() }
         }
     }
 
     private func spaceRow(_ space: SpaceState) -> some View {
-        let setup = registry.setup
-        return GridRow {
+        GridRow {
             Text(verbatim: space.id).font(Theme.mono(12)).lineLimit(1).frame(height: 34)
             Text(verbatim: space.name).font(Theme.ui(13)).lineLimit(1)
-            remoteCell(space)
+            Text(verbatim: tilde(space.path)).font(Theme.mono(11.5)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1).truncationMode(.middle).help(space.path)
             gitCell(space)
-            HStack(spacing: 6) {
-                Button { Task { await setup.push(space.id) } } label: { Text(verbatim: "Push") }
-                    .disabled(space.remote == nil || space.git?.ahead == 0 || setup.busy.contains("push:" + space.id))
-                Button { Task { await setup.pull(space.id) } } label: { Text(verbatim: "Pull") }
-                    .disabled(space.remote == nil || setup.busy.contains("pull:" + space.id))
-            }
-            .buttonStyle(CompactButtonStyle(height: 24, fontSize: 12))
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-    }
-
-    @ViewBuilder private func remoteCell(_ space: SpaceState) -> some View {
-        if editingRemote == space.id {
-            HStack(spacing: 6) {
-                TextField(text: $remoteText, prompt: Text(verbatim: "git@host:org/space.git").foregroundStyle(Theme.Color.textDisabled)) { Text(verbatim: "remote") }
-                    .fieldStyle()
-                    .onSubmit { saveRemote(space.id) }
-                    .onExitCommand { editingRemote = nil }
-                Button { saveRemote(space.id) } label: { Text(verbatim: "Задать") }
-                    .buttonStyle(CompactButtonStyle(height: 24, fontSize: 12))
-                    .disabled(remoteText.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        } else if let remote = space.remote {
-            Text(verbatim: remote).font(Theme.mono(11.5)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1).truncationMode(.middle).help(remote)
-        } else {
-            HStack(spacing: 8) {
-                Text(verbatim: "нет remote").font(Theme.mono(11.5)).foregroundStyle(Theme.Color.warn)
-                Button { remoteText = ""; editingRemote = space.id } label: { Text(verbatim: "Задать…") }
-                    .buttonStyle(CompactButtonStyle(height: 24, fontSize: 12))
-            }
-        }
-    }
-
-    private func saveRemote(_ id: String) {
-        let url = remoteText.trimmingCharacters(in: .whitespaces)
-        guard !url.isEmpty else { return }
-        editingRemote = nil
-        Task { await registry.setup.setRemote(id, url) }
     }
 
     @ViewBuilder private func gitCell(_ space: SpaceState) -> some View {
-        if let git = space.git {
+        if let uncommitted = space.uncommitted {
             HStack(spacing: 10) {
-                Text(verbatim: git.branch ?? "HEAD")
-                Text(verbatim: git.uncommitted == 0 ? "чисто" : "\(git.uncommitted) не закоммичены")
-                    .foregroundStyle(git.uncommitted == 0 ? Theme.Color.ok : Theme.Color.warn)
-                if space.remote == nil {
-                    Text(verbatim: "только локально").foregroundStyle(Theme.Color.warn)
-                } else if let ahead = git.ahead, let behind = git.behind {
-                    Text(verbatim: "↑\(ahead) ↓\(behind)").foregroundStyle(ahead + behind > 0 ? Theme.Color.warn : Theme.Color.textSecondary)
-                } else {
-                    Text(verbatim: "нет upstream").foregroundStyle(Theme.Color.warn)
-                }
+                Text(verbatim: space.branch ?? "HEAD")
+                Text(verbatim: uncommitted == 0 ? "чисто" : "\(uncommitted) не закоммичены")
+                    .foregroundStyle(uncommitted == 0 ? Theme.Color.ok : Theme.Color.warn)
             }
             .font(Theme.mono(11.5)).lineLimit(1)
         } else {

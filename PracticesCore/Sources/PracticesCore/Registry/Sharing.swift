@@ -1,15 +1,18 @@
 import Foundation
 
-/// A space as `spaces` shows it: where its repository is shared and how far this copy is from it.
+/// A space as `spaces` shows it: its local git repository (history, accepted edits). The
+/// catalogue is personal — spaces have no remote (DECISIONS 36).
 public struct SpaceState: Codable, Sendable {
     public let id: String
     public let name: String
-    /// `origin`; nil — the space is on this machine only.
-    public let remote: String?
-    public let git: GitState?
+    public let path: String
+    /// nil — detached HEAD, or not a git repository.
+    public let branch: String?
+    /// nil — not a git repository.
+    public let uncommitted: Int?
 }
 
-/// Decision 36: spaces are shared through git, roots stay in `local.yaml` on this machine.
+/// Decision 36: roots stay in `local.yaml` on this machine.
 extension Registry {
 
     /// The `~/.practices` this registry was opened at.
@@ -48,81 +51,17 @@ extension Registry {
         try config.save(home.appendingPathComponent("local.yaml"))
     }
 
-    // MARK: Remotes
+    // MARK: Spaces
 
-    // A space without `.git` must not answer with the state of a repository above it.
-    private func isRepository(_ dir: URL) -> Bool { FileManager.default.fileExists(atPath: dir.appendingPathComponent(".git").path) }
-
-    public func remote(ofSpace id: String) async -> String? {
-        guard isRepository(dir(ofSpace: id)) else { return nil }
-        return (try? await git(dir(ofSpace: id), ["remote", "get-url", "origin"]))?.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// Every space with its remote and git state; `fetch` asks the remotes first (network).
-    public func spaceStates(fetch: Bool = false) async throws -> [SpaceState] {
+    /// Every space with the state of its repository.
+    public func spaceStates() async throws -> [SpaceState] {
         var out: [SpaceState] = []
         for space in try spaces() {
             let dir = dir(ofSpace: space.id)
-            let remote = await remote(ofSpace: space.id)
-            if fetch, remote != nil { _ = try await git(dir, ["fetch", "-q", "origin"]) }
-            out.append(SpaceState(id: space.id, name: space.name, remote: remote, git: isRepository(dir) ? await Repos.gitState(ofClone: dir.path) : nil))
+            // A space without `.git` must not answer with the state of a repository above it.
+            let git = FileManager.default.fileExists(atPath: dir.appendingPathComponent(".git").path) ? await Repos.gitState(ofClone: dir.path) : nil
+            out.append(SpaceState(id: space.id, name: space.name, path: dir.path, branch: git?.branch, uncommitted: git?.uncommitted))
         }
         return out
-    }
-
-    private func existingSpace(_ id: String) throws -> URL {
-        guard spaceIDs().contains(id) else { throw Failure("no space \(id)") }
-        return dir(ofSpace: id)
-    }
-
-    public func setRemote(ofSpace id: String, to url: String) async throws {
-        let dir = try existingSpace(id)
-        try await ensureRepository(dir)
-        let verb = await remote(ofSpace: id) == nil ? "add" : "set-url"
-        _ = try await git(dir, ["remote", verb, "origin", url])
-    }
-
-    private func requireRemote(_ id: String) async throws {
-        guard await remote(ofSpace: id) != nil else { throw Failure("space \(id) has no remote — `practicesctl space remote \(id) <url>`") }
-    }
-
-    public func push(space id: String) async throws {
-        let dir = try existingSpace(id)
-        try await requireRemote(id)
-        _ = try await git(dir, ["push", "-q", "-u", "origin", "HEAD"])
-    }
-
-    /// Fast-forward only, and never over uncommitted files: those are an agent's edits waiting
-    /// for the user (DECISIONS 19).
-    public func pull(space id: String) async throws {
-        let dir = try existingSpace(id)
-        try await requireRemote(id)
-        let waiting = await pending().filter { $0.space == id }
-        guard waiting.isEmpty else {
-            throw Failure("space \(id) has \(waiting.count) uncommitted files (pending edits) — accept or discard them first (`practicesctl pending`)")
-        }
-        _ = try await git(dir, ["pull", "-q", "--ff-only"])
-    }
-
-    /// Clones a shared space into `spaces/<id>`; returns the id.
-    @discardableResult
-    public func clone(space url: String, as given: String? = nil) async throws -> String {
-        var name = url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        name = String(name.split(whereSeparator: { $0 == "/" || $0 == ":" }).last ?? "")
-        if name.hasSuffix(".git") { name = String(name.dropLast(4)) }
-        let id = given ?? name
-        guard Self.isValidID(id) else { throw Failure("not an id: \(id) — give one: space clone <url> <id>") }
-        let dest = root.appendingPathComponent(id)
-        guard !FileManager.default.fileExists(atPath: dest.path), !spaceIDs().contains(id) else { throw Failure("space \(id) exists: \(dest.path)") }
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        _ = try await Shell.run("git", ["clone", "-q", url, dest.path])
-        guard FileManager.default.fileExists(atPath: dest.appendingPathComponent("space.yaml").path) else {
-            try? FileManager.default.removeItem(at: dest)
-            throw Failure("\(url) has no space.yaml — not a Practices space; the clone is removed")
-        }
-        // Same local author as a space made here, so `accept` works without a global identity.
-        _ = try await git(dest, ["config", "user.name", "Practices"])
-        _ = try await git(dest, ["config", "user.email", "practices@localhost"])
-        return id
     }
 }

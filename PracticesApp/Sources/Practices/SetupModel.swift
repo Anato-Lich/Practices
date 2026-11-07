@@ -7,21 +7,10 @@ import PracticesCore
 @MainActor @Observable
 final class SetupModel {
 
-    /// A space clone started from «Начало» or «Настройка», with how it ended.
-    struct CloneAttempt: Identifiable {
-        let id = UUID()
-        let url: String
-        var space: String?
-        var error: String?
-        var summary: String?
-        var running: Bool { space == nil && error == nil }
-    }
-
     private(set) var status: SetupStatus?
     private(set) var checkedAt: Date?
-    /// Operations in flight: "status", "roots", "clone", "create", "agents", "push:<id>", …
+    /// Operations in flight: "status", "roots", "create", "agents", …
     private(set) var busy: Set<String> = []
-    private(set) var clones: [CloneAttempt] = []
     /// What the last «Настроить агентов» did, a line per thing.
     private(set) var agentLines: [String]?
     private(set) var runtimeBusy = false
@@ -35,9 +24,9 @@ final class SetupModel {
         return AgentHome(base: base ?? URL(fileURLWithPath: NSHomeDirectory()))
     }
 
-    func refresh(fetch: Bool = false) async {
+    func refresh() async {
         let home = Self.agentHome
-        if let s = await run("проверить настройку", "status", { try await Setup.status(registry: Registry(), home: home, fetch: fetch) }) {
+        if let s = await run("проверить настройку", "status", { try await Setup.status(registry: Registry(), home: home) }) {
             status = s
             checkedAt = Date()
         }
@@ -74,56 +63,12 @@ final class SetupModel {
 
     // MARK: Spaces
 
-    /// The error stays on the attempt's row (`Welcome.dc.html`), not in the error bar.
-    func clone(_ url: String) async {
-        let url = url.trimmingCharacters(in: .whitespaces)
-        guard !url.isEmpty else { return }
-        clones.removeAll { $0.url == url }
-        let attempt = CloneAttempt(url: url)
-        clones.append(attempt)
-        busy.insert("clone")
-        defer { busy.remove("clone") }
-        let result: Result<(String, Int, Int), Error> = await Task.detached {
-            do {
-                let id = try await Registry().clone(space: url)
-                let registry = Registry()
-                return .success((id, try registry.projects(space: id).count, try registry.services().filter { $0.space == id }.count))
-            } catch { return .failure(error) }
-        }.value
-        guard let i = clones.firstIndex(where: { $0.id == attempt.id }) else { return }
-        switch result {
-        case .success(let (id, projects, services)):
-            clones[i].space = id
-            clones[i].summary = "✓ склонировано · " + ru(projects, "проект", "проекта", "проектов") + " · " + ru(services, "сервис", "сервиса", "сервисов")
-        case .failure(let error):
-            clones[i].error = String(describing: error)
-        }
-        await changed()
-    }
-
-    func dismissClone(_ id: UUID) { clones.removeAll { $0.id == id } }
-
     /// True when the space was made.
     func create(id: String, name: String) async -> Bool {
         let space = Space(id: id.trimmingCharacters(in: .whitespaces), name: name.trimmingCharacters(in: .whitespaces))
         let made = await run("создать пространство \(space.id)", "create") { try await Registry().add(space); return true } ?? false
         await changed()
         return made
-    }
-
-    func setRemote(_ id: String, _ url: String) async {
-        await run("задать remote \(id)", "remote:\(id)") { try await Registry().setRemote(ofSpace: id, to: url) }
-        await refresh()
-    }
-
-    func push(_ id: String) async {
-        await run("отправить \(id)", "push:\(id)") { try await Registry().push(space: id) }
-        await refresh()
-    }
-
-    func pull(_ id: String) async {
-        await run("получить \(id)", "pull:\(id)") { try await Registry().pull(space: id) }
-        await changed()
     }
 
     // MARK: Agents

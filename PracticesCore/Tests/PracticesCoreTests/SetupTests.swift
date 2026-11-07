@@ -93,56 +93,10 @@ import Foundation
         let root = (json["roots"] as! [[String: Any]])[0]
         #expect(root["clones"] as? Int == 0 && root["exists"] as? Bool == true)
         let space = (json["spaces"] as! [[String: Any]])[0]
-        #expect(space["id"] as? String == "sp" && space["remote"] == nil)
-        #expect((space["git"] as? [String: Any])?["uncommitted"] as? Int == 0)
+        #expect(space["id"] as? String == "sp" && space["remote"] == nil && space["uncommitted"] as? Int == 0)
         let tools = json["tools"] as! [[String: Any]]
         #expect(tools.map { $0["tool"] as? String } == ["claude", "codex", "cursor"])
         #expect(tools[0]["found"] as? Bool == true && tools[0]["mcp"] as? Bool == false && tools[0]["instructions"] as? String == "absent")
         #expect(tools[1]["found"] as? Bool == false)
-    }
-}
-
-@Suite struct SpaceSharingTests {
-    func git(_ dir: URL, _ args: String...) async throws -> String { try await Shell.run("git", ["-C", dir.path] + args) }
-
-    @Test func remotePushCloneAndPull() async throws {
-        let mine = TempHome(), theirs = TempHome()
-        let bare = mine.url.appendingPathComponent("shared/sp.git")
-        try FileManager.default.createDirectory(at: bare, withIntermediateDirectories: true)
-        _ = try await git(bare, "init", "-q", "--bare")
-
-        try await mine.registry.add(Space(id: "sp", name: "Space"))
-        try await mine.registry.setRemote(ofSpace: "sp", to: bare.path)
-        try await mine.registry.setRemote(ofSpace: "sp", to: bare.path)          // set-url the second time
-        try await mine.registry.push(space: "sp")
-        let branch = try #require(try await mine.registry.spaceStates().first?.git?.branch)
-        _ = try await git(bare, "symbolic-ref", "HEAD", "refs/heads/\(branch)")
-        let state = try await mine.registry.spaceStates()[0]
-        #expect(state.remote == bare.path && state.git?.ahead == 0 && state.git?.behind == 0)
-
-        #expect(try await theirs.registry.clone(space: bare.path) == "sp")
-        #expect(try theirs.registry.space("sp").name == "Space")
-        await #expect(throws: Registry.Failure.self) { try await theirs.registry.clone(space: bare.path) }   // exists
-
-        try await mine.registry.add(Project(id: "pr", space: "sp", name: "Project"))
-        try await mine.registry.push(space: "sp")
-        try await theirs.registry.pull(space: "sp")
-        #expect(try theirs.registry.project("pr").name == "Project")
-
-        try "draft".write(to: theirs.registry.dir(ofSpace: "sp").appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
-        await #expect(throws: Registry.Failure.self) { try await theirs.registry.pull(space: "sp") }
-    }
-
-    @Test func cloneWithoutSpaceYamlIsRemoved() async throws {
-        let home = TempHome()
-        let repo = home.url.appendingPathComponent("plain")
-        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
-        _ = try await git(repo, "init", "-q")
-        try "x".write(to: repo.appendingPathComponent("README"), atomically: true, encoding: .utf8)
-        _ = try await git(repo, "add", "README")
-        _ = try await git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x")
-        await #expect(throws: Registry.Failure.self) { try await home.registry.clone(space: repo.path + "/.git", as: "other") }
-        #expect(!FileManager.default.fileExists(atPath: home.registry.root.appendingPathComponent("other").path))
-        await #expect(throws: Registry.Failure.self) { try await home.registry.push(space: "missing") }
     }
 }

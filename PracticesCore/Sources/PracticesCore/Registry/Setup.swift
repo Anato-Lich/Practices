@@ -46,7 +46,7 @@ public struct AgentHome: Sendable {
 /// The instruction block written into agents' CLAUDE.md / AGENTS.md between markers.
 public enum AgentInstructions {
     /// Bump when the text of `Resources/AgentInstructions.md` changes: older blocks show as outdated.
-    public static let version = 1
+    public static let version = 2
     public static let projectFiles = ["CLAUDE.md", "AGENTS.md"]
 
     public static var text: String {
@@ -174,7 +174,7 @@ public struct SetupStatus: Codable, Sendable {
 
 public enum Setup {
 
-    public static func status(registry: Registry = Registry(), home: AgentHome = AgentHome(), fetch: Bool = false) async throws -> SetupStatus {
+    public static func status(registry: Registry = Registry(), home: AgentHome = AgentHome()) async throws -> SetupStatus {
         let fm = FileManager.default
         let roots = registry.searchRoots.map { path in
             SetupStatus.Root(path: path, exists: fm.fileExists(atPath: path), clones: Repos.clones(roots: [path]).count)
@@ -190,7 +190,7 @@ public enum Setup {
                 if state != "absent" { blocks.append(.init(project: project, clone: clone, file: name, state: state)) }
             }
         }
-        return SetupStatus(roots: roots, defaultRoots: registry.local.roots.isEmpty, spaces: try await registry.spaceStates(fetch: fetch),
+        return SetupStatus(roots: roots, defaultRoots: registry.local.roots.isEmpty, spaces: try await registry.spaceStates(),
                            command: home.command, commandInstalled: fm.isExecutableFile(atPath: home.command),
                            tools: tools, projectBlocks: blocks)
     }
