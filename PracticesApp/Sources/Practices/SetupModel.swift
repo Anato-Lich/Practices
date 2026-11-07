@@ -11,8 +11,10 @@ final class SetupModel {
     private(set) var checkedAt: Date?
     /// Operations in flight: "status", "roots", "create", "agents", …
     private(set) var busy: Set<String> = []
-    /// What the last «Настроить агентов» did, a line per thing.
-    private(set) var agentLines: [String]?
+    /// What the last «Настроить агентов» did, an entry per file.
+    private(set) var agentWrites: [SetupWrite]?
+    /// Clones of the catalogue's projects: what «В проектах» writes into.
+    private(set) var projectClones = 0
     private(set) var runtimeBusy = false
 
     @ObservationIgnored weak var app: RegistryModel?
@@ -26,8 +28,9 @@ final class SetupModel {
 
     func refresh() async {
         let home = Self.agentHome
-        if let s = await run("проверить настройку", "status", { try await Setup.status(registry: Registry(), home: home) }) {
+        if let (s, n) = await run("проверить настройку", "status", { (try await Setup.status(registry: Registry(), home: home), try Setup.projectClones(registry: Registry()).count) }) {
             status = s
+            projectClones = n
             checkedAt = Date()
         }
     }
@@ -73,9 +76,11 @@ final class SetupModel {
 
     // MARK: Agents
 
-    func configureAgents(_ tools: [AgentTool], mcp: Bool = true, instructions: Bool = true) async {
+    func setupAgents(_ tools: [AgentTool], scope: InstructionScope = .global, mcp: Bool = true, instructions: Bool = true) async {
         let home = Self.agentHome
-        agentLines = await run("настроить агентов", "agents") { try Setup.agents(home: home, tools: tools, mcp: mcp, instructions: instructions) }
+        agentWrites = await run("настроить агентов", "agents") {
+            try Setup.agents(home: home, registry: Registry(), tools: tools, mcp: mcp, instructions: instructions, scope: scope)
+        }
         await refresh()
     }
 

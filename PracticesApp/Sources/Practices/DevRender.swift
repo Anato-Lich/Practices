@@ -67,7 +67,12 @@ enum DevRender {
             }
             if args.contains("--map") { registry.selection = .map }
             // `--welcome`: «Начало» (with an empty `PRACTICES_HOME` it shows anyway); `--settings`: «Настройка».
-            if args.contains("--welcome") { registry.welcomeShown = true; await registry.setup.refresh() }
+            if args.contains("--welcome") {
+                // A selection first, so MainWindow's onAppear does not pick a space and hide «Начало».
+                if registry.selection == nil, let first = registry.spaces.first { registry.selection = .space(first.id) }
+                registry.welcomeShown = true
+                await registry.setup.refresh()
+            }
             if args.contains("--settings") { registry.selection = .settings; await registry.setup.refresh() }
             if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
             if args.contains("--palette") { registry.paletteShown = true }

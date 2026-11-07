@@ -73,7 +73,7 @@ import Foundation
     @Test func toolNotFoundIsSkipped() throws {
         let base = TempHome().url
         let done = try Setup.agents(home: AgentHome(base: base, practices: base))
-        #expect(done.allSatisfy { $0.contains("not found") })
+        #expect(done.allSatisfy { $0.state == "not found" })
         #expect(!FileManager.default.fileExists(atPath: base.appendingPathComponent(".claude.json").path))
     }
 
@@ -88,7 +88,7 @@ import Foundation
 
         let status = try await Setup.status(registry: home.registry, home: agents)
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(status)) as! [String: Any]
-        #expect(Set(json.keys) == ["roots", "defaultRoots", "spaces", "command", "commandInstalled", "tools", "projectBlocks"])
+        #expect(Set(json.keys) == ["roots", "defaultRoots", "spaces", "command", "commandInstalled", "tools", "projectBlocks"])     // scope nil: no block anywhere
         #expect(json["defaultRoots"] as? Bool == false)
         let root = (json["roots"] as! [[String: Any]])[0]
         #expect(root["clones"] as? Int == 0 && root["exists"] as? Bool == true)
@@ -98,5 +98,57 @@ import Foundation
         #expect(tools.map { $0["tool"] as? String } == ["claude", "codex", "cursor"])
         #expect(tools[0]["found"] as? Bool == true && tools[0]["mcp"] as? Bool == false && tools[0]["instructions"] as? String == "absent")
         #expect(tools[1]["found"] as? Bool == false)
+    }
+
+    /// Project `pr` with two repositories, each cloned under `code/`; Claude Code found.
+    func catalogue() throws -> (TempHome, AgentHome, [URL]) {
+        let home = TempHome()
+        let repos = ["github.com/o/one", "github.com/o/two"]
+        try home.write("roots: [\(home.url.path)/code]\n", "local.yaml")
+        try home.write("name: sp\n", "spaces/sp/space.yaml")
+        try home.write(Registry.yaml(Project(id: "pr", space: "sp", name: "pr", repos: repos.map { .init(repo: RepoID($0)!) })),
+                       "spaces/sp/projects/pr/project.yaml")
+        for repo in repos {
+            try home.write("[remote \"origin\"]\n\turl = https://\(repo).git\n", "code/\((repo as NSString).lastPathComponent)/.git/config")
+        }
+        let agents = AgentHome(base: home.url.appendingPathComponent("user"), practices: home.url)
+        try FileManager.default.createDirectory(at: agents.dir(.claude), withIntermediateDirectories: true)
+        return (home, agents, ["one", "two"].map { home.url.appendingPathComponent("code/" + $0) })
+    }
+
+    @Test func scopeProjectsWritesEveryClone() async throws {
+        let (home, agents, clones) = try catalogue()
+        #expect(try await Setup.status(registry: home.registry, home: agents).scope == nil)
+
+        let done = try Setup.agents(home: agents, registry: home.registry, scope: .projects)
+        #expect(done.filter { $0.state == "written" }.count == 4 && done.filter { $0.state == "written" }.allSatisfy { $0.target == "pr" })
+        for clone in clones {
+            for name in AgentInstructions.projectFiles { #expect(AgentInstructions.state(of: clone.appendingPathComponent(name)) == "current") }
+        }
+        #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "absent")
+        #expect(MCPRegistration.isRegistered(.claude, home: agents))
+        let status = try await Setup.status(registry: home.registry, home: agents)
+        #expect(status.scope == .projects && status.projectBlocks.count == 4)
+
+        #expect(try Setup.agents(home: agents, registry: home.registry, scope: .projects).filter { $0.target == "pr" }.allSatisfy { $0.state == "updated" })
+    }
+
+    @Test func scopeGlobalLeavesClones() async throws {
+        let (home, agents, clones) = try catalogue()
+        _ = try Setup.agents(home: agents, registry: home.registry, scope: .global)
+        for clone in clones {
+            for name in AgentInstructions.projectFiles { #expect(!FileManager.default.fileExists(atPath: clone.appendingPathComponent(name).path)) }
+        }
+        #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "current")
+        #expect(try await Setup.status(registry: home.registry, home: agents).scope == .global)
+    }
+
+    @Test func scopeProjectsWithoutClonesFails() throws {
+        let home = TempHome()
+        let agents = AgentHome(base: home.url, practices: home.url)
+        try FileManager.default.createDirectory(at: agents.dir(.claude), withIntermediateDirectories: true)
+        try home.write("roots: [\(home.url.path)/code]\n", "local.yaml")
+        #expect(throws: Registry.Failure.self) { try Setup.agents(home: agents, registry: home.registry, scope: .projects) }
+        #expect(!MCPRegistration.isRegistered(.claude, home: agents))      // nothing done before the refusal
     }
 }

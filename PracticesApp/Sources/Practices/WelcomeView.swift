@@ -10,6 +10,7 @@ import PracticesCore
 struct WelcomeView: View {
     @Environment(RegistryModel.self) private var registry
     @State private var unchecked: Set<AgentTool> = []
+    @State private var scope: InstructionScope?
 
     var body: some View {
         let setup = registry.setup
@@ -43,10 +44,12 @@ struct WelcomeView: View {
             StepCard(n: 3, title: "Агенты", text: "MCP-сервер и блок инструкций в найденных инструментах; то же, что practicesctl setup agents",
                      state: states[2], current: current == 2) {
                 let tools = (status?.tools ?? []).filter { $0.found && !unchecked.contains($0.tool) }.map(\.tool)
-                Button { Task { await setup.configureAgents(tools) } } label: { Text(verbatim: "Настроить агентов") }
+                let scope = scope ?? status?.scope ?? .global
+                Button { Task { await setup.setupAgents(tools, scope: scope) } } label: { Text(verbatim: "Настроить агентов") }
                     .buttonStyle(ToolbarButtonStyle(prominent: true))
-                    .disabled(tools.isEmpty || setup.busy.contains("agents"))
+                    .disabled(tools.isEmpty || setup.busy.contains("agents") || scope == .projects && setup.projectClones == 0)
             } content: {
+                ScopeSegments(scope: Binding(get: { scope ?? status?.scope ?? .global }, set: { scope = $0 }), clones: setup.projectClones)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(status?.tools ?? [], id: \.tool) { tool in agentRow(tool) }
                 }
@@ -90,19 +93,20 @@ struct WelcomeView: View {
         let space: StepState = setup.busy.contains("create") ? .running : !registry.spaces.isEmpty ? .done : .todo
         let found = (status?.tools ?? []).filter(\.found)
         let agents: StepState = setup.busy.contains("agents") ? .running
-            : !found.isEmpty && found.allSatisfy({ $0.mcp && ($0.instructions ?? "current") == "current" }) ? .done : .todo
+            : !found.isEmpty && found.allSatisfy({ $0.mcp && (status?.scope == .projects || ($0.instructions ?? "current") == "current") }) ? .done : .todo
         return [roots, space, agents]
     }
 
     private func agentRow(_ tool: SetupStatus.Tool) -> some View {
         let home = SetupModel.agentHome
-        let where_ = [tilde(home.mcpConfig(tool.tool).path), home.instructions(tool.tool).map { tilde($0.path) }].compactMap { $0 }.joined(separator: " и ")
+        let global = (scope ?? registry.setup.status?.scope ?? .global) == .global
+        let where_ = [tilde(home.mcpConfig(tool.tool).path), global ? home.instructions(tool.tool).map { tilde($0.path) } : nil].compactMap { $0 }.joined(separator: " и ")
         let on = Binding(get: { tool.found && !unchecked.contains(tool.tool) },
                          set: { if $0 { unchecked.remove(tool.tool) } else { unchecked.insert(tool.tool) } })
         return HStack(spacing: 10) {
             Toggle(isOn: on) {
                 if tool.found {
-                    Text(verbatim: tool.tool.title + " — MCP-сервер и блок инструкций: ") + Text(verbatim: where_).font(Theme.mono(12))
+                    Text(verbatim: tool.tool.title + (global ? " — MCP-сервер и блок инструкций: " : " — MCP-сервер: ")) + Text(verbatim: where_).font(Theme.mono(12))
                 } else {
                     Text(verbatim: tool.tool.title + " — на машине не найден")
                 }
@@ -197,6 +201,36 @@ struct RootsList: View {
                 }
                 .frame(height: 28)
             }
+        }
+    }
+}
+
+/// «Глобально / В проектах»: where the instruction block goes (the segment of ConnectSheet), with
+/// the number of clones the second one writes into.
+struct ScopeSegments: View {
+    @Binding var scope: InstructionScope
+    let clones: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 0) {
+                ForEach(InstructionScope.allCases, id: \.self) { s in
+                    Button { scope = s } label: {
+                        Text(verbatim: s == .global ? "Глобально" : "В проектах · " + ru(clones, "клон", "клона", "клонов"))
+                            .font(Theme.ui(12)).foregroundStyle(scope == s ? .white : Theme.Color.text)
+                            .padding(.horizontal, 12).padding(.vertical, 2)
+                            .background(scope == s ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 4))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(2)
+            .background(Theme.Color.buttonBg, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.Color.borderButton))
+            .fixedSize()
+            Text(verbatim: scope == .global ? "~/.claude/CLAUDE.md, ~/.codex/AGENTS.md" : "CLAUDE.md и AGENTS.md в каждом клоне проектов каталога")
+                .font(Theme.mono(11)).foregroundStyle(Theme.Color.textMuted).lineLimit(1).truncationMode(.middle)
         }
     }
 }

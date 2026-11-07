@@ -69,9 +69,12 @@ let usage = """
       setup status [--json]         roots, spaces, agents: MCP registered,
                                     instruction block absent / current / outdated, project clones with it
       setup roots <path>…           = roots add, for the first run
-      setup agents [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
-                                    register the MCP server and write the instruction block for
-                                    the tools found (~/.claude, ~/.codex, ~/.cursor)
+      setup agents --global | --projects [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
+                                    register the MCP server for the tools found (~/.claude, ~/.codex,
+                                    ~/.cursor) and write the instruction block: --global into
+                                    ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md, --projects into CLAUDE.md
+                                    and AGENTS.md of every clone of the catalogue's projects;
+                                    with neither, asks (in a terminal)
       setup agents --project <id>   the block into CLAUDE.md and AGENTS.md of the project's clones
 
     agent:
@@ -132,7 +135,7 @@ func parse(_ args: [String]) -> (rest: [String], options: [String: [String]]) {
     var i = 0
     while i < args.count {
         let a = args[i]
-        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-mcp", "--no-instructions"].contains(a) { i += 1; continue }
+        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-mcp", "--no-instructions", "--global", "--projects"].contains(a) { i += 1; continue }
         if a.hasPrefix("--"), i + 1 < args.count { options[a, default: []].append(args[i + 1]); i += 2; continue }
         rest.append(a); i += 1
     }
@@ -230,7 +233,7 @@ case "setup":
             for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, 60) + b.state) }
         case "agents":
             if let project = options["--project"]?.last {
-                try Setup.project(project).forEach { print("instructions v\(AgentInstructions.version) in \(home($0))") }
+                try Setup.project(project).forEach { print(pad($0.target, 10) + pad($0.state, 12) + home($0.file)) }
                 break
             }
             let tools = try options["--tools"]?.last.map { list in
@@ -239,7 +242,25 @@ case "setup":
                     return tool
                 }
             }
-            try Setup.agents(tools: tools, mcp: !args.contains("--no-mcp"), instructions: !args.contains("--no-instructions")).forEach { print($0) }
+            let scope: InstructionScope
+            if args.contains("--global") != args.contains("--projects") {
+                scope = args.contains("--global") ? .global : .projects
+            } else if args.contains("--global") {
+                fail("practices: --global or --projects, not both", 2)
+            } else if isatty(0) != 0 {
+                let n = try Setup.projectClones(registry: Registry()).count
+                print("Куда записать инструкции агентам?\n  [1] глобально — ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md\n  [2] в каждый проект — CLAUDE.md/AGENTS.md клонов (\(n) клонов)")
+                print("> ", terminator: "")
+                switch readLine()?.trimmingCharacters(in: .whitespaces) {
+                case "1": scope = .global
+                case "2": scope = .projects
+                default: fail("practices: ответ 1 или 2", 2)
+                }
+            } else {
+                fail("practices: укажите --global или --projects", 2)
+            }
+            try Setup.agents(tools: tools, mcp: !args.contains("--no-mcp"), instructions: !args.contains("--no-instructions"), scope: scope)
+                .forEach { print(pad($0.target, 10) + pad($0.state, 12) + home($0.file)) }
         case "roots" where rest.count > 2:
             for path in rest.dropFirst(2) { print("root \(try Registry().addRoot(path)) added") }
         default: print(usage); exit(2)

@@ -178,14 +178,17 @@ public final class MCPServer: @unchecked Sendable {
             return try encodable(await Setup.status(registry: registry))
         case "setup_agents":
             if let project = args["project"] as? String, !project.isEmpty {
-                return ["written": try Setup.project(project, registry: registry)]
+                return try encodable(Setup.project(project, registry: registry))
             }
             let tools = try (args["tools"] as? [String])?.map { name in
                 guard let tool = AgentTool(rawValue: name) else { throw ToolError(description: "tools are claude, codex, cursor") }
                 return tool
             }
-            return ["done": try Setup.agents(tools: tools, mcp: args["mcp"] as? Bool ?? true,
-                                             instructions: args["instructions"] as? Bool ?? true)]
+            guard let scope = (args["scope"] as? String).flatMap(InstructionScope.init) else {
+                throw ToolError(description: "scope is global or projects: ask the user which")
+            }
+            return try encodable(Setup.agents(registry: registry, tools: tools, mcp: args["mcp"] as? Bool ?? true,
+                                              instructions: args["instructions"] as? Bool ?? true, scope: scope))
         default:
             throw ToolError(description: "unknown tool \(name)")
         }
@@ -475,10 +478,12 @@ public final class MCPServer: @unchecked Sendable {
         tool("add_note", "Add a pitfall or a finding to a service's notes.",
              ["service": ["type": "string"], "text": ["type": "string"]], required: ["service", "text"]),
         tool("setup_status", "Настроена ли эта машина: корни клонов (local.yaml) с числом найденных клонов, пространства с путём, веткой и незакоммиченными, для Claude Code, Codex и Cursor — найден ли, зарегистрирован ли MCP, блок инструкций absent/current/outdated(vN); клоны проектов, где блок есть. Ничего не меняет."),
-        tool("setup_agents", "Настроить агентов на этой машине: зарегистрировать MCP-сервер practices и записать блок инструкций в глобальные CLAUDE.md / AGENTS.md найденных инструментов; с project — только блок в CLAUDE.md и AGENTS.md клонов этого проекта. Спросите пользователя, прежде чем вызывать.",
-             ["tools": ["type": "array", "items": ["type": "string", "enum": AgentTool.allCases.map(\.rawValue)], "description": "по умолчанию все найденные"],
+        tool("setup_agents", "Настроить агентов на этой машине: зарегистрировать MCP-сервер practices и записать блок инструкций: scope global — в глобальные ~/.claude/CLAUDE.md / ~/.codex/AGENTS.md найденных инструментов, scope projects — в CLAUDE.md и AGENTS.md каждого клона проектов каталога (MCP регистрируется глобально в обоих случаях); с project — только блок в клоны этого проекта. Куда писать инструкции — глобально или в каждый проект — спросите пользователя, прежде чем вызывать. Возвращает, что записано: target, file, state.",
+             ["scope": ["type": "string", "enum": InstructionScope.allCases.map(\.rawValue), "description": "global или projects — выбор пользователя"],
+              "tools": ["type": "array", "items": ["type": "string", "enum": AgentTool.allCases.map(\.rawValue)], "description": "по умолчанию все найденные"],
               "mcp": ["type": "boolean", "description": "регистрировать MCP, по умолчанию да"],
               "instructions": ["type": "boolean", "description": "писать блок инструкций, по умолчанию да"],
-              "project": ["type": "string", "description": "id проекта: блок в его клоны"]]),
+              "project": ["type": "string", "description": "id проекта: блок в его клоны (scope тогда не важен)"]],
+             required: ["scope"]),
     ] }
 }

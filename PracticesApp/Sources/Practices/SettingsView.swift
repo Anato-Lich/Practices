@@ -7,6 +7,7 @@ import PracticesCore
 struct SettingsView: View {
     @Environment(RegistryModel.self) private var registry
     @State private var adding = false
+    @State private var scope: InstructionScope?
 
     var body: some View {
         let setup = registry.setup
@@ -163,10 +164,10 @@ struct SettingsView: View {
                                 Button { Task { await setup.refresh() } } label: { Text(verbatim: "Проверить снова") }
                             } else {
                                 if !tool.mcp {
-                                    Button { Task { await setup.configureAgents([tool.tool], instructions: false) } } label: { Text(verbatim: "Зарегистрировать") }
+                                    Button { Task { await setup.setupAgents([tool.tool], instructions: false) } } label: { Text(verbatim: "Зарегистрировать") }
                                 }
                                 if let state = tool.instructions {
-                                    Button { Task { await setup.configureAgents([tool.tool], mcp: false) } } label: {
+                                    Button { Task { await setup.setupAgents([tool.tool], mcp: false) } } label: {
                                         Text(verbatim: state == "absent" ? "Записать" : state == "current" ? "Записать снова" : "Обновить")
                                     }
                                     .disabled(state == "current")
@@ -181,6 +182,19 @@ struct SettingsView: View {
                     Theme.Color.borderSoft.frame(height: 1)
                 }
             }
+            HStack(spacing: 10) {
+                SectionTitle("Инструкции")
+                Text(verbatim: status?.scope.map { $0 == .global ? "сейчас: глобально" : "сейчас: в проектах" } ?? "не настроено")
+                    .font(Theme.mono(11)).foregroundStyle(status?.scope == nil ? Theme.Color.textMuted : Theme.Color.ok)
+                Spacer()
+            }
+            .padding(.top, 4)
+            let chosen = scope ?? status?.scope ?? .global
+            let found = (status?.tools ?? []).filter(\.found).map(\.tool)
+            ScopeSegments(scope: Binding(get: { chosen }, set: { scope = $0 }), clones: setup.projectClones)
+            Button { Task { await setup.setupAgents(found, scope: chosen) } } label: { Text(verbatim: "Настроить агентов") }
+                .buttonStyle(CompactButtonStyle(prominent: true, height: 24, fontSize: 12))
+                .disabled(found.isEmpty || setup.busy.contains("agents") || chosen == .projects && setup.projectClones == 0)
             HStack {
                 SectionTitle("В проектах")
                 Spacer()

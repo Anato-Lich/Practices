@@ -46,7 +46,7 @@ public struct AgentHome: Sendable {
 /// The instruction block written into agents' CLAUDE.md / AGENTS.md between markers.
 public enum AgentInstructions {
     /// Bump when the text of `Resources/AgentInstructions.md` changes: older blocks show as outdated.
-    public static let version = 2
+    public static let version = 3
     public static let projectFiles = ["CLAUDE.md", "AGENTS.md"]
 
     public static var text: String {
@@ -142,6 +142,20 @@ public enum MCPRegistration {
     static func table(in text: String) -> Substring? { tableRange(in: text).map { text[$0] } }
 }
 
+/// Where `setup agents` writes the instruction block: the tools' global files, or CLAUDE.md and
+/// AGENTS.md of every clone of the catalogue's projects. The MCP server is registered globally either way.
+public enum InstructionScope: String, CaseIterable, Codable, Sendable {
+    case global, projects
+}
+
+/// A thing `setup agents` did: `target` is a tool or a project id; `state` is `registered` (MCP),
+/// `written` (the file had no block), `updated` (a block was replaced) or `not found` (tool skipped).
+public struct SetupWrite: Codable, Sendable {
+    public let target: String
+    public let file: String
+    public let state: String
+}
+
 /// What `setup status` shows: is this machine set up (DECISIONS 36).
 public struct SetupStatus: Codable, Sendable {
     public struct Root: Codable, Sendable {
@@ -170,6 +184,8 @@ public struct SetupStatus: Codable, Sendable {
     public let commandInstalled: Bool
     public let tools: [Tool]
     public let projectBlocks: [ProjectBlock]
+    /// Inferred from the blocks there are: global ones → `global`, only project ones → `projects`, none → nil.
+    public let scope: InstructionScope?
 }
 
 public enum Setup {
@@ -192,44 +208,58 @@ public enum Setup {
         }
         return SetupStatus(roots: roots, defaultRoots: registry.local.roots.isEmpty, spaces: try await registry.spaceStates(),
                            command: home.command, commandInstalled: fm.isExecutableFile(atPath: home.command),
-                           tools: tools, projectBlocks: blocks)
+                           tools: tools, projectBlocks: blocks,
+                           scope: tools.contains { ($0.instructions ?? "absent") != "absent" } ? .global : blocks.isEmpty ? nil : .projects)
     }
 
-    /// Registers the MCP server and writes the instruction block for each found tool (all of
-    /// them unless `tools` names some). Returns a line per thing done or skipped.
-    public static func agents(home: AgentHome = AgentHome(), tools: [AgentTool]? = nil, mcp: Bool = true, instructions: Bool = true) throws -> [String] {
-        var done: [String] = []
+    /// Registers the MCP server for each found tool (all of them unless `tools` names some) and
+    /// writes the instruction block: into the tools' global files, or with `.projects` into every
+    /// clone of every project (whatever `tools` says — the files are CLAUDE.md and AGENTS.md).
+    public static func agents(home: AgentHome = AgentHome(), registry: Registry = Registry(), tools: [AgentTool]? = nil,
+                              mcp: Bool = true, instructions: Bool = true, scope: InstructionScope = .global) throws -> [SetupWrite] {
+        let clones = instructions && scope == .projects ? try projectClones(registry: registry) : []
+        if instructions && scope == .projects && clones.isEmpty {
+            throw Registry.Failure("no local clone of any project's repositories under the roots")
+        }
+        var done: [SetupWrite] = []
         for tool in tools ?? AgentTool.allCases {
-            guard home.found(tool) else { done.append("\(tool.rawValue): not found (\(home.dir(tool).path)), skipped"); continue }
+            guard home.found(tool) else { done.append(.init(target: tool.rawValue, file: home.dir(tool).path, state: "not found")); continue }
             if mcp {
                 try MCPRegistration.register(tool, home: home)
-                done.append("\(tool.rawValue): MCP server registered in \(home.mcpConfig(tool).path)")
+                done.append(.init(target: tool.rawValue, file: home.mcpConfig(tool).path, state: "registered"))
             }
-            if instructions, let file = home.instructions(tool) {
-                try AgentInstructions.write(to: file)
-                done.append("\(tool.rawValue): instructions v\(AgentInstructions.version) in \(file.path)")
+            if instructions, scope == .global, let file = home.instructions(tool) {
+                done.append(try write(file, target: tool.rawValue))
             }
         }
-        return done
+        return done + (try write(clones))
     }
 
     /// The block into CLAUDE.md and AGENTS.md of every local clone of the project's repositories.
-    public static func project(_ id: String, registry: Registry = Registry()) throws -> [String] {
+    public static func project(_ id: String, registry: Registry = Registry()) throws -> [SetupWrite] {
         let clones = try projectClones(registry: registry).filter { $0.project == id }
         guard try registry.project(id).repos.count > 0 else { throw Registry.Failure("project \(id) has no repositories") }
         guard !clones.isEmpty else { throw Registry.Failure("no local clone of \(id)'s repositories under the roots") }
-        var done: [String] = []
-        for (_, clone) in clones {
+        return try write(clones)
+    }
+
+    static func write(_ clones: [(project: String, clone: String)]) throws -> [SetupWrite] {
+        var done: [SetupWrite] = []
+        for (project, clone) in clones {
             for name in AgentInstructions.projectFiles {
-                let file = URL(fileURLWithPath: clone).appendingPathComponent(name)
-                try AgentInstructions.write(to: file)
-                done.append(file.path)
+                done.append(try write(URL(fileURLWithPath: clone).appendingPathComponent(name), target: project))
             }
         }
         return done
     }
 
-    static func projectClones(registry: Registry) throws -> [(project: String, clone: String)] {
+    static func write(_ file: URL, target: String) throws -> SetupWrite {
+        let before = AgentInstructions.state(of: file)
+        try AgentInstructions.write(to: file)
+        return SetupWrite(target: target, file: file.path, state: before == "absent" ? "written" : "updated")
+    }
+
+    public static func projectClones(registry: Registry) throws -> [(project: String, clone: String)] {
         let clones = Repos.clones(roots: registry.searchRoots)
         return try registry.projects().flatMap { p in p.repos.compactMap { r in clones[r.repo].map { (p.id, $0) } } }
     }
