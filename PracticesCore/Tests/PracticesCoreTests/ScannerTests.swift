@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Yams
 @testable import PracticesCore
 
 @Suite struct ScannerTests {
@@ -366,6 +367,69 @@ import Foundation
         #expect(third.present.count == 1 && third.new.isEmpty)
         try Scanner.write(Scanner.scan(registry: registry, store: home.store), registry: registry)
         #expect(registry.links(of: "shop-api").count == 2)
+    }
+
+    @Test func aRejectedLinkLeavesTheCatalogueAndIsNotOfferedAgain() throws {
+        let home = try catalogue(["github.com/acme/shop"])
+        let registry = home.registry
+        try card(home, Service(id: "kafka", name: "Kafka", kind: "kafka", aliases: ["hyper-kafka"]))
+        try home.write("services:\n  api:\n    build: .\n    environment:\n      KAFKA: hyper-kafka:9092\n      A_TOPIC_OUT: a\n      B_TOPIC_OUT: b\n",
+                       "code/shop/docker-compose.yml")
+        try Scanner.write(Scanner.scan(registry: registry, store: home.store), registry: registry)
+        #expect(registry.links(of: "shop-api").map(\.via) == ["network", "topic", "topic"])
+
+        // A topic is told apart by `what`: rejecting `a` keeps `b`.
+        let files = try registry.reject(Link(to: "kafka", via: "topic", what: "a"), from: "shop-api", why: "only b is produced", origin: "code:x.py")
+        #expect(files.map(\.lastPathComponent) == ["links.yaml", "rejected.yaml"])
+        #expect(registry.links(of: "shop-api").compactMap(\.what) == ["b"])
+        #expect(registry.rejected(of: "shop-api") == [RejectedLink(to: "kafka", via: "topic", what: "a", why: "only b is produced", origin: "code:x.py")])
+        let second = try Scanner.scan(registry: registry, store: home.store).repos[0]
+        #expect(second.new.isEmpty && second.present.count == 2)
+        #expect(second.rejected.map(\.link.what) == ["a"])
+
+        // Without `via` every way to the service is refused, and a topic needs a broker link.
+        _ = try registry.reject(Link(to: "kafka"), from: "shop-api", why: "no Kafka client", origin: "manual")
+        #expect(registry.links(of: "shop-api").isEmpty)
+        let third = try Scanner.scan(registry: registry, store: home.store).repos[0]
+        #expect(third.new.isEmpty && third.present.isEmpty && third.rejected.map(\.link.via) == ["network", "topic"])
+        #expect(third.unknown.map(\.topic) == ["b"])
+        try Scanner.write(Scanner.scan(registry: registry, store: home.store), registry: registry)
+        #expect(registry.links(of: "shop-api").isEmpty)
+
+        #expect(try registry.unreject(Link(to: "kafka", via: "http"), from: "shop-api") == nil)
+        _ = try registry.unreject(Link(to: "kafka"), from: "shop-api")
+        _ = try registry.unreject(Link(to: "kafka", via: "topic", what: "a"), from: "shop-api")
+        #expect(registry.rejected(of: "shop-api").isEmpty)
+        #expect(try Scanner.scan(registry: registry, store: home.store).repos[0].new.count == 3)
+    }
+
+    @Test func namesKeepTheirOrderThroughYAML() throws {
+        let link = Link(to: "ch", names: ["Z_URL": "CH_URL", "A_USER": "CH_USER", "M_DB": "CH_DATABASE"])
+        let text = try Registry.yaml([link])
+        #expect(text.range(of: "Z_URL")!.lowerBound < text.range(of: "A_USER")!.lowerBound)
+        #expect(try YAMLDecoder().decode([Link].self, from: text) == [link])
+    }
+
+    /// The CLI an agent runs: `link add --origin code:… --no-commit` leaves the file for the user.
+    @Test func linkAddForAgentsStaysUncommitted() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        try await registry.add(Space(id: "sp", name: "sp"))
+        try await registry.add(Project(id: "pr", space: "sp", name: "pr"))
+        try await registry.add(Service(id: "a", name: "a", kind: "http"), to: "pr")
+        try await registry.add(Service(id: "b", name: "b", kind: "http"), to: "pr")
+        let binary = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(".build/debug/practicesctl")
+        let process = Process()
+        process.executableURL = binary
+        process.arguments = ["link", "add", "a", "b", "--via", "http", "--origin", "code:src/client.py", "--no-commit"]
+        process.environment = ProcessInfo.processInfo.environment.merging(["PRACTICES_HOME": home.url.path]) { $1 }
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+        #expect(registry.links(of: "a").map(\.origin) == ["code:src/client.py"])
+        #expect(await registry.pending().map(\.path) == ["projects/pr/services/a/links.yaml"])
     }
 
     @Test func doctorAndCodeSearchWalkEverySearchRoot() async throws {

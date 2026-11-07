@@ -36,7 +36,8 @@ public final class MCPServer: @unchecked Sendable {
         to you. The project gets them by running under `practicesctl run <service>… -- <command>`.
 
         When you fix or improve a practice, or write a new one, send it with `update_practice`; \
-        when you learn that one service calls another, record it with `add_link`. Both are left \
+        when you learn that one service calls another, record it with `add_link`; a derived link \
+        the code shows to be false goes to `reject_link`, not away. These are left \
         as uncommitted changes the user reviews and accepts — say so, and do not treat them as \
         versions yet. Pitfalls go to `add_note`, field meanings to `describe_field`; those are \
         saved at once.
@@ -157,7 +158,8 @@ public final class MCPServer: @unchecked Sendable {
             return try await updatePractice(try Self.string(args, "ref"), code: try Self.string(args, "code"),
                                             project: args["project"] as? String)
         case "add_link":
-            let names = Self.params(args["names"])
+            // A JSON object has no order to keep; sorted, a rewrite does not shuffle it.
+            let names = Link.Names(Self.params(args["names"]).sorted { $0.key < $1.key }.map { ($0.key, $0.value) })
             let link = Link(to: try Self.string(args, "to"), endpoint: args["endpoint"] as? String, env: args["env"] as? String,
                             via: args["via"] as? String, what: args["what"] as? String, access: args["access"] as? String,
                             why: args["why"] as? String, practice: args["practice"] as? String,
@@ -165,6 +167,12 @@ public final class MCPServer: @unchecked Sendable {
                             origin: args["origin"] as? String ?? "manual")
             let file = try registry.addLink(link, from: try Self.string(args, "from"))
             return ["written": true, "file": file.path, "pending": true,
+                    "note": "Left uncommitted: the user reviews and accepts it (practicesctl pending / accept)."]
+        case "reject_link":
+            let link = Link(to: try Self.string(args, "to"), via: args["via"] as? String, what: args["what"] as? String)
+            let files = try registry.reject(link, from: try Self.string(args, "from"), why: try Self.string(args, "why"),
+                                            origin: args["origin"] as? String ?? "manual")
+            return ["written": true, "files": files.map(\.path), "pending": true,
                     "note": "Left uncommitted: the user reviews and accepts it (practicesctl pending / accept)."]
         case "scan_links":
             return try encodable(Scanner.scan([try Self.string(args, "target")], registry: registry, store: secrets))
@@ -466,8 +474,16 @@ public final class MCPServer: @unchecked Sendable {
               "practice": ["type": "string", "description": "the practice that does this call, service/name"],
               "names": ["type": "object", "description": "the caller's variable → the called service's key"],
               "file": ["type": "string", "description": "the env file in the caller's repository"],
-              "origin": ["type": "string", "description": "manual, or derived:<file it was derived from>"]],
+              "origin": ["type": "string", "description": "code:<file> where you saw the call (what an agent passes), manual, or derived:<file it was derived from>"]],
              required: ["from", "to"]),
+        tool("reject_link", "Отклонить связь: вы проверили по коду, что выведенная сканером связь ложна (сервис не строит этого клиента, переменная пришла из общего env-файла). Не удаляйте её — запишите сюда: она уходит из links.yaml в rejected.yaml вызывающего с причиной, и сканер больше её не предлагает. Ключ — to + via (без via — любая) + для via: topic ещё what (топик). Правка остаётся незакоммиченной, пользователь принимает её сам.",
+             ["from": ["type": "string", "description": "вызывающий сервис"],
+              "to": ["type": "string", "description": "сервис, которого он на самом деле не вызывает"],
+              "via": ["type": "string", "enum": Link.vias, "description": "без via отклоняются все пути к to"],
+              "what": ["type": "string", "description": "топик, для via: topic"],
+              "why": ["type": "string", "description": "одна строка: что в коде показывает, что связи нет (файл:строка)"],
+              "origin": ["type": "string", "description": "code:<файл, где проверено>; по умолчанию manual"]],
+             required: ["from", "to", "why"]),
         tool("scan_links", "What the files of a project's or a repository's local clones say and the catalogue may not: compose services without a card, links implied by URLs, DSNs and topic variables in compose and example env files (new, already recorded, or derived earlier and gone), addresses that match no service, shared external networks. Reads only; nothing is written.",
              ["target": ["type": "string", "description": "a project id or a repository address"]], required: ["target"]),
         tool("describe_field", "Write what a field of a service's results means (and its values). Fills a missing description; an existing one is not overwritten.",

@@ -60,8 +60,8 @@ public struct Pending: Codable, Hashable, Sendable {
 ///
 ///     <space>/space.yaml, conditions.yaml
 ///     <space>/projects/<project>/project.yaml, chains/<name>.py
-///     <space>/projects/<project>/services/<service>/{service.yaml, links.yaml, notes.md,
-///                                                    fields.yaml, docs.yaml, practices/<name>.py}
+///     <space>/projects/<project>/services/<service>/{service.yaml, links.yaml, rejected.yaml,
+///                                                    notes.md, fields.yaml, docs.yaml, practices/<name>.py}
 ///
 /// Ids of services, projects and conditions are unique across spaces (DECISIONS 7): the path
 /// is for display. No values ever land here.
@@ -218,6 +218,9 @@ public struct Registry: Sendable {
     /// Outgoing links: whom this service calls.
     public func links(of id: String) -> [Link] { list(Link.self, "links.yaml", of: id) }
 
+    /// Links of this caller that were checked and refused (`rejected.yaml`).
+    public func rejected(of id: String) -> [RejectedLink] { list(RejectedLink.self, "rejected.yaml", of: id) }
+
     /// Incoming links, computed from the callers' files.
     public func links(to id: String) -> [(from: String, link: Link)] {
         serviceIDs().flatMap { from in links(of: from).filter { $0.to == id }.map { (from, $0) } }
@@ -357,6 +360,31 @@ public struct Registry: Sendable {
         if let access = link.access, !Link.accesses.contains(access) { throw Failure("access is one of " + Link.accesses.joined(separator: ", ")) }
         let existing = links(of: from)
         return try saveLinks(existing.contains(link) ? existing : existing + [link], of: from)
+    }
+
+    /// Records that `from` does not make this link: the matching entries leave `links.yaml`, the
+    /// refusal goes to `rejected.yaml` (replacing one with the same key). Returns the files
+    /// written, uncommitted. Only `to`, `via` and, for a topic, `what` of the link count.
+    public func reject(_ link: Link, from: String, why: String, origin: String) throws -> [URL] {
+        if let via = link.via, !Link.vias.contains(via) { throw Failure("via is one of " + Link.vias.joined(separator: ", ")) }
+        let entry = RejectedLink(to: link.to, via: link.via, what: link.what, why: why, origin: origin)
+        var files: [URL] = []
+        let links = links(of: from)
+        let kept = links.filter { !entry.matches($0) }
+        if kept.count < links.count { files.append(try saveLinks(kept, of: from)) }
+        files.append(try saveRejected(rejected(of: from).filter { !$0.sameKey(entry) } + [entry], of: from))
+        return files
+    }
+
+    /// Takes a refusal back; returns the file, uncommitted, or nil when there was none.
+    public func unreject(_ link: Link, from: String) throws -> URL? {
+        let probe = RejectedLink(to: link.to, via: link.via, what: link.what, why: "")
+        let all = rejected(of: from), kept = all.filter { !$0.sameKey(probe) }
+        return kept.count == all.count ? nil : try saveRejected(kept, of: from)
+    }
+
+    private func saveRejected(_ list: [RejectedLink], of id: String) throws -> URL {
+        try write(Self.yaml(list), to: file("rejected.yaml", of: id))
     }
 
     // MARK: Writing

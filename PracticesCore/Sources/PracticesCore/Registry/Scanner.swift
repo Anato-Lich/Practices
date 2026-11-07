@@ -35,6 +35,8 @@ public struct ScanResult: Codable, Sendable {
         public var present: [Found] = []
         /// `derived:` links of the catalogue that the files no longer give. Never deleted here.
         public var gone: [Found] = []
+        /// Found again, but refused earlier (the caller's `rejected.yaml`): neither offered nor written.
+        public var rejected: [Found] = []
         public var unknown: [Unknown] = []
         public var problems: [String] = []
     }
@@ -303,6 +305,7 @@ public enum Scanner {
         let assigned = try registry.assigned()
         let catalog = try registry.services()
         let existing = Dictionary(catalog.map { ($0.id, registry.links(of: $0.id)) }, uniquingKeysWith: { first, _ in first })
+        let refused = Dictionary(catalog.map { ($0.id, registry.rejected(of: $0.id)) }, uniquingKeysWith: { first, _ in first })
         let spaces = Dictionary(registry.projectDirs().map { ($0.id, $0.space) }, uniquingKeysWith: { first, _ in first })
         let local = Repos.clones(roots: registry.searchRoots).mapValues { URL(fileURLWithPath: $0).standardizedFileURL }
         var result = ScanResult()
@@ -395,6 +398,11 @@ public enum Scanner {
             var found: [ScanResult.Found] = []
             func add(_ from: String, _ link: Link) {
                 guard link.to != from, !found.contains(where: { $0.from == from && key($0.link) == key(link) }) else { return }
+                // Refused before and not in the catalogue: counted, and no topic is routed through it.
+                if !(existing[from] ?? []).contains(where: { key($0) == key(link) }), (refused[from] ?? []).contains(where: { $0.matches(link) }) {
+                    if !clone.report.rejected.contains(where: { $0.from == from && key($0.link) == key(link) }) { clone.report.rejected.append(.init(from: from, link: link)) }
+                    return
+                }
                 found.append(.init(from: from, link: link))
             }
             func unknown(_ entry: ScanResult.Unknown) {
@@ -440,7 +448,8 @@ public enum Scanner {
 
             // A topic goes to the broker its caller is linked to: by the same file first, then
             // by any file of this scan, then by the catalogue. A number or a flag is a setting
-            // of the broker itself (`KAFKA_AUTO_CREATE_TOPICS_ENABLE=true`), not a topic.
+            // of the broker itself (`KAFKA_AUTO_CREATE_TOPICS_ENABLE=true`), not a topic. A topic refused
+            // before needs no broker link: it is counted as refused, not as unknown.
             for v in variables where v.name.uppercased().contains("TOPIC") && Double(v.value) == nil && Bool(v.value) == nil {
                 let words = Set(v.name.uppercased().split(separator: "_").map(String.init))
                 let access = !words.isDisjoint(with: readWords) ? "read" : !words.isDisjoint(with: writeWords) ? "write" : nil
@@ -448,7 +457,8 @@ public enum Scanner {
                 for from in v.callers {
                     let mine = found.filter { $0.from == from }.map(\.link)
                     let links = mine.filter { $0.origin == "derived:\(v.file)" } + mine + (existing[from] ?? [])
-                    guard let broker = links.first(where: { link in known.contains { $0.id == link.to && brokers.contains($0.kind) } }) else {
+                    guard let broker = links.first(where: { link in known.contains { $0.id == link.to && brokers.contains($0.kind) } })
+                        ?? refused[from]?.first(where: { $0.via == "topic" && $0.what == v.value }).map({ Link(to: $0.to) }) else {
                         without.append(from)
                         continue
                     }

@@ -29,13 +29,21 @@ let usage = """
       links [service]               who calls whom (of one service: both directions)
       link add <from> <to> [--endpoint e] [--env e] [--via http|topic|db|network|build]
                                     [--what w] [--access read|write] [--why w] [--practice ref]
-                                    [--file f] [--as VAR=KEY …]
+                                    [--file f] [--as VAR=KEY …] [--origin o] [--no-commit]
+                                    --origin: manual (default), code:<file> where the call is seen
+                                    (what agents pass); --no-commit leaves it for `accept`
+      link reject <from> <to> [--via v] [--what topic] --why "…" [--origin o] [--no-commit]
+                                    the link was checked and is false: it leaves links.yaml, goes to
+                                    rejected.yaml, and `scan` no longer offers it (origin: manual,
+                                    code:<file>, audit:<report>)
+      link unreject <from> <to> [--via v] [--what topic] [--no-commit]
       conditions [space]            named conditions and who requires them
       condition add <space>/<id> --name N [--hint H] [--reachable TEMPLATE]
                                     TEMPLATE = host:port over the service's keys, e.g. '${PG_HOST}:${PG_PORT}'
-      scan [project | repo]… [--write]   services and links the clones' compose files and example
-                                    env files give, against the catalogue (default: every assigned
-                                    clone); --write leaves the new ones uncommitted for `accept`
+      scan [project | repo]… [--write] [--all]   services and links the clones' compose files and
+                                    example env files give, against the catalogue (default: every
+                                    assigned clone); --write leaves the new ones uncommitted for
+                                    `accept`; links refused before are counted, --all lists them
       pending                       uncommitted changes in the spaces (an agent's edits)
       accept [space [path…]] [--message m]   commit them: all, one space's, or the given files
 
@@ -135,7 +143,7 @@ func parse(_ args: [String]) -> (rest: [String], options: [String: [String]]) {
     var i = 0
     while i < args.count {
         let a = args[i]
-        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-mcp", "--no-instructions", "--global", "--projects"].contains(a) { i += 1; continue }
+        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-commit", "--no-mcp", "--no-instructions", "--global", "--projects"].contains(a) { i += 1; continue }
         if a.hasPrefix("--"), i + 1 < args.count { options[a, default: []].append(args[i + 1]); i += 2; continue }
         rest.append(a); i += 1
     }
@@ -447,7 +455,9 @@ case "links":
         if json { printJSON(out.map { placed($0, from: positional[1]) } + incoming.map { placed($0.link, from: $0.from) }); break }
         for l in out { print("→ " + linkLine(l.to, l)) }
         for (from, l) in incoming { print("← " + linkLine(from, l, incoming: true)) }
+        let refused = registry.rejected(of: positional[1])
         if out.isEmpty && incoming.isEmpty { print("no links") }
+        if !refused.isEmpty { print("отклонено: " + refused.map { [$0.to, $0.via, $0.via == "topic" ? $0.what : nil].compactMap { $0 }.joined(separator: " ") }.joined(separator: ", ")) }
         break
     }
     let all = registry.serviceIDs().map { (from: $0, links: registry.links(of: $0)) }.filter { !$0.links.isEmpty }
@@ -456,19 +466,40 @@ case "links":
 
 case "link":
     let (rest, options) = parse(args)
-    guard rest.count == 4, rest[1] == "add" else { print(usage); exit(2) }
-    var names: [String: String] = [:]
+    guard rest.count == 4, ["add", "reject", "unreject"].contains(rest[1]) else { print(usage); exit(2) }
+    var names = Link.Names()
     for pair in options["--as"] ?? [] {
         let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
         guard kv.count == 2 else { fail("--as is VAR=KEY", 2) }
         names[kv[0]] = kv[1]
     }
+    let origin = options["--origin"]?.last ?? "manual"
     let link = Link(to: rest[3], endpoint: options["--endpoint"]?.last, env: options["--env"]?.last, via: options["--via"]?.last,
                     what: options["--what"]?.last, access: options["--access"]?.last, why: options["--why"]?.last,
-                    practice: options["--practice"]?.last, names: names.isEmpty ? nil : names, file: options["--file"]?.last)
+                    practice: options["--practice"]?.last, names: names.isEmpty ? nil : names, file: options["--file"]?.last,
+                    origin: origin)
     let registry = Registry()
-    do { try await registry.commit("\(rest[2]) → \(rest[3])", [try registry.addLink(link, from: rest[2])]) } catch { fail("practices: \(error)") }
-    print("\(rest[2]) → " + linkLine(rest[3], link))
+    let (from, commit) = (rest[2], !args.contains("--no-commit"))
+    do {
+        var files: [URL] = []
+        switch rest[1] {
+        case "add": files = [try registry.addLink(link, from: from)]
+        case "reject":
+            guard let why = link.why else { fail("link reject needs --why: what in the code shows the link is false", 2) }
+            files = try registry.reject(link, from: from, why: why, origin: origin)
+        default:
+            guard let file = try registry.unreject(link, from: from) else { fail("\(from) has no refused link to \(rest[3]) with that via/what") }
+            files = [file]
+        }
+        let verb = rest[1] == "add" ? "" : rest[1] == "reject" ? "reject " : "unreject "
+        if commit { try await registry.commit("\(verb)\(from) → \(rest[3])", files) }
+    } catch { fail("practices: \(error)") }
+    let tail = commit ? "" : "  (not committed — `practicesctl pending`, then `accept`)"
+    switch rest[1] {
+    case "add": print("\(from) → " + linkLine(rest[3], link) + tail)
+    case "reject": print("\(from) ✕ " + linkLine(rest[3], Link(to: rest[3], via: link.via, what: link.what, why: link.why)) + tail)
+    default: print("\(from) → \(rest[3]): no longer refused" + tail)
+    }
 
 case "conditions":
     let registry = Registry()
@@ -523,6 +554,8 @@ case "scan":
         if !repo.new.isEmpty { print("  new links") }
         show(repo.new)
         if !repo.present.isEmpty { print("  in the catalogue already: \(repo.present.count) links") }
+        if !repo.rejected.isEmpty { print("  \(repo.rejected.count) отклонены ранее" + (args.contains("--all") ? "" : " (--all: list)")) }
+        if args.contains("--all") { show(repo.rejected) }
         if !repo.gone.isEmpty { print("  gone (derived before, not found now; nothing is deleted)") }
         for f in repo.gone { print("    " + [f.from, "→", f.link.to, f.link.via, f.link.what].compactMap { $0 }.joined(separator: " ")) }
         if !repo.unknown.isEmpty { print("  unknown") }

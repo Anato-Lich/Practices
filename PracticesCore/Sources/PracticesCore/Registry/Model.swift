@@ -150,17 +150,86 @@ public struct Link: Codable, Hashable, Sendable {
     public var why: String?
     public var practice: String?
     /// The caller's variable → the service's key.
-    public var names: [String: String]?
+    public var names: Names?
     /// The env file in the caller's repository that holds them.
     public var file: String?
-    /// `manual`, or `derived:<the file it was derived from>`.
+    /// `manual`, `code:<the file it was checked in>`, or `derived:<the file it was derived from>`.
     public var origin: String?
 
     public init(to: String, endpoint: String? = nil, env: String? = nil, via: String? = nil, what: String? = nil,
-                access: String? = nil, why: String? = nil, practice: String? = nil, names: [String: String]? = nil,
+                access: String? = nil, why: String? = nil, practice: String? = nil, names: Names? = nil,
                 file: String? = nil, origin: String? = "manual") {
         self.to = to; self.endpoint = endpoint; self.env = env; self.via = via; self.what = what
         self.access = access; self.why = why; self.practice = practice; self.names = names
         self.file = file; self.origin = origin
+    }
+
+    /// A map kept in the order it was written: a Swift dictionary has none, so every rewrite of
+    /// `links.yaml` shuffled the variables.
+    public struct Names: Codable, Hashable, Sendable, Sequence, ExpressibleByDictionaryLiteral {
+        struct Pair: Hashable, Sendable { var key, value: String }
+        private var pairs: [Pair] = []
+
+        public init(_ pairs: [(String, String)]) { for (key, value) in pairs { self[key] = value } }
+        public init(dictionaryLiteral elements: (String, String)...) { self.init(elements) }
+
+        public subscript(key: String) -> String? {
+            get { pairs.first { $0.key == key }?.value }
+            set {
+                let i = pairs.firstIndex { $0.key == key }
+                switch (i, newValue) {
+                case let (i?, value?): pairs[i].value = value
+                case let (i?, nil): pairs.remove(at: i)
+                case let (nil, value?): pairs.append(Pair(key: key, value: value))
+                case (nil, nil): break
+                }
+            }
+        }
+        public var isEmpty: Bool { pairs.isEmpty }
+        public func makeIterator() -> IndexingIterator<[(key: String, value: String)]> { pairs.map { ($0.key, $0.value) }.makeIterator() }
+
+        public typealias Key = String
+        public typealias Value = String
+
+        struct Name: CodingKey {
+            let stringValue: String
+            var intValue: Int? { nil }
+            init(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: Name.self)
+            for key in c.allKeys { self[key.stringValue] = try c.decode(String.self, forKey: key) }
+        }
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: Name.self)
+            for pair in pairs { try c.encode(pair.value, forKey: Name(stringValue: pair.key)) }
+        }
+    }
+}
+
+/// A link that was checked and refused: one entry of the caller's `rejected.yaml`. The scanner
+/// does not offer it again; maps never see it — it is not a link.
+public struct RejectedLink: Codable, Hashable, Sendable {
+    public var to: String
+    /// Nil: every way of reaching `to` is refused.
+    public var via: String?
+    /// The topic, for `via: topic`; elsewhere a note.
+    public var what: String?
+    public var why: String
+    /// Who decided: `audit:<report>`, `manual`, `code:<file>`.
+    public var origin: String
+
+    public init(to: String, via: String? = nil, what: String? = nil, why: String, origin: String = "manual") {
+        self.to = to; self.via = via; self.what = what; self.why = why; self.origin = origin
+    }
+
+    /// The scanner's key (`to`, `via`, the topic), with a nil `via` matching any.
+    public func matches(_ link: Link) -> Bool {
+        to == link.to && (via == nil || via == link.via) && (via != "topic" || what == link.what)
+    }
+
+    func sameKey(_ other: RejectedLink) -> Bool {
+        to == other.to && via == other.via && (via != "topic" || what == other.what)
     }
 }
