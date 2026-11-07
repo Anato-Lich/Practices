@@ -46,13 +46,18 @@ import Foundation
         #expect(store.url(of: practice)?.path.hasSuffix("spaces/sp/projects/pr/services/xkdb/practices/get.py") == true)
         #expect(try await store.versions(of: practice).map(\.message) == ["xkdb/get v1", "xkdb/get v2: fix"])
         #expect(try await store.code(of: practice, at: store.versions(of: practice)[0]).contains("return 1"))
+        // A second practice with nearly the same code starts at 1, not at the first one's count.
+        let body = String(repeating: "    conn = connect()  # the same connection code in every practice\n", count: 12)
+        try await store.save("def run():\n" + body + "    return 2\n", for: practice, message: "long")
+        #expect(try await store.save("def run():\n" + body + "    return 3\n", for: Practice(ref: "xkdb/twin")) == 1)
+        #expect(try await store.versions(of: Practice(ref: "xkdb/twin")).count == 1)
 
         // A new chain needs its project; an existing one is found by name.
         #expect(store.url(of: chain) == nil)
         await #expect(throws: Registry.Failure.self) { try await store.save("x = 1\n", for: chain) }
         try await store.save("from practices import use\nget = use('xkdb/get')\ndef run():\n    return get()\n", for: chain, project: "pr")
         #expect(store.url(of: chain)?.path.hasSuffix("spaces/sp/projects/pr/chains/telemetry.py") == true)
-        #expect(store.all().map(\.ref) == ["xkdb/get", "chains/telemetry"])
+        #expect(store.all().map(\.ref) == ["xkdb/get", "xkdb/twin", "chains/telemetry"])
         #expect(store.services(for: chain) == ["xkdb"])
         // Not a file name, or no such service: no path at all.
         #expect(store.url(of: Practice(ref: "xkdb/../../x")) == nil)

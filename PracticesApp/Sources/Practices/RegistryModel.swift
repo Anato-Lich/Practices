@@ -3,20 +3,39 @@ import AppKit
 import Observation
 import PracticesCore
 
-/// The registry as the window sees it: services, which keys have values, the latest checks
-/// and Doctor's report. Values themselves never reach this model — only `set` passes one
+/// The catalogue as the window sees it: spaces, the tree of projects, services, which keys have
+/// values, the latest checks, what waits to be accepted and Doctor's report. Values themselves never reach this model — only `set` passes one
 /// through, straight to the store.
 @MainActor @Observable
 final class RegistryModel {
 
+    private(set) var spaces: [Space] = []
+    /// Projects of every space in tree order, with their depth (`Registry.tree`).
+    private(set) var tree: [(project: Project, depth: Int)] = []
+    /// project id → the projects right under it; the top ones of all spaces apart.
+    private(set) var childProjects: [String: [Project]] = [:]
+    private(set) var topProjects: [Project] = []
+    /// space id → its conditions.
+    private(set) var conditions: [String: [Condition]] = [:]
     private(set) var services: [Service] = []
     /// project id → `space / parent / project`, for display.
     private(set) var projectPaths: [String: String] = [:]
-    /// service id → its practices; chains apart.
+    /// service id → its practices; project id → its chains.
     private(set) var practices: [String: [Practice]] = [:]
-    private(set) var chains: [Practice] = []
-    /// What the window shows; views set it to open a service or a practice.
-    var selection: MainWindow.SidebarItem?
+    private(set) var chains: [String: [Practice]] = [:]
+    /// Repository → its clone on this machine, and the clone's state once a project view asked.
+    private(set) var clones: [RepoID: String] = [:]
+    private(set) var gitStates: [RepoID: GitState] = [:]
+    /// Uncommitted changes in the spaces: what agents wrote and the user has not accepted (DECISIONS 19).
+    private(set) var pending: [Pending] = []
+    /// «Не распределено»: nil until asked for — it calls `gh` and `glab` (DECISIONS 15, 16).
+    private(set) var unassigned: [RepoInfo]?
+    private(set) var unassignedProblems: [String] = []
+    private(set) var loadingUnassigned = false
+    /// What the window shows; views set it to open a project, a service or a practice.
+    var selection: MainWindow.SidebarItem? { didSet { reveal() } }
+    /// Projects and services whose rows are open in the sidebar.
+    var expanded: Set<MainWindow.SidebarItem> = []
     var searchText = ""
     /// Open practices keep their state (code being edited, last result) while switching.
     private var practiceModels: [String: PracticeModel] = [:]
@@ -36,22 +55,117 @@ final class RegistryModel {
     let store = SecretStore()
 
     func reload() {
+        // Ids are unique by rule, not by construction: a card written by hand may repeat one,
+        // and the window must still open to show it.
+        func first<T>(_ a: T, _: T) -> T { a }
         do {
+            spaces = try registry.spaces()
+            tree = Registry.tree(try registry.projects())
+            // The tree is a preorder: the last project of a smaller depth is the parent.
+            var above: [Project] = []
+            topProjects = []
+            childProjects = [:]
+            for (project, depth) in tree {
+                above.removeLast(above.count - depth)
+                if let parent = above.last { childProjects[parent.id, default: []].append(project) } else { topProjects.append(project) }
+                above.append(project)
+            }
+            conditions = Dictionary(spaces.map { ($0.id, registry.conditions(space: $0.id)) }, uniquingKeysWith: first)
             services = try registry.services()
-            projectPaths = Dictionary(uniqueKeysWithValues: try registry.projects().map {
-                ($0.id, ([$0.space] + registry.path(ofProject: $0.id)).joined(separator: " / "))
-            })
-            keyStatus = Dictionary(uniqueKeysWithValues: services.map { ($0.id, (try? store.status(service: $0)) ?? [:]) })
+            projectPaths = Dictionary(projects.map { ($0.id, ([$0.space] + path(of: $0.id).map(\.id)).joined(separator: " / ")) }, uniquingKeysWith: first)
+            keyStatus = Dictionary(services.map { ($0.id, (try? store.status(service: $0)) ?? [:]) }, uniquingKeysWith: first)
             let practiceStore = PracticeStore(registry: registry)
-            practices = Dictionary(uniqueKeysWithValues: services.map { ($0.id, practiceStore.list(service: $0.id)) })
+            practices = Dictionary(services.map { ($0.id, practiceStore.list(service: $0.id)) }, uniquingKeysWith: first)
             loadChecks()
-            chains = practiceStore.chains()
+            chains = Dictionary(projects.map { ($0.id, practiceStore.chains(project: $0.id)) }, uniquingKeysWith: first)
         } catch {
             self.error = String(describing: error)
         }
     }
 
     func service(_ id: String) -> Service? { services.first { $0.id == id } }
+    func services(of project: Project) -> [Service] { services.filter { $0.project == project.id && $0.space == project.space } }
+
+    var projects: [Project] { tree.map(\.project) }
+    func project(_ id: String) -> Project? { projects.first { $0.id == id } }
+
+    /// A project with its ancestors, outermost first. Bounded by the number of projects: a
+    /// cycle written by hand must not spin.
+    func path(of id: String) -> [Project] {
+        var path: [Project] = [], next: String? = id
+        for _ in tree {
+            guard let found = next.flatMap(project) else { break }
+            path.insert(found, at: 0)
+            next = found.parent
+        }
+        return path
+    }
+
+    /// Opens the tree down to the selected row, so a jump from a card is seen in the sidebar.
+    private func reveal() {
+        let project: String?
+        switch selection {
+        case .practice(let ref):
+            let practice = Practice(ref: ref)
+            if let id = practice.service { expanded.insert(.service(id)) }
+            project = practice.service.flatMap(service)?.project ?? chains.first { $0.value.contains(practice) }?.key
+        case .service(let id): project = service(id)?.project
+        case .project(let id): project = self.project(id)?.parent
+        default: return
+        }
+        for ancestor in project.map(path(of:)) ?? [] { expanded.insert(.project(ancestor.id)) }
+    }
+
+    // MARK: Repositories
+
+    /// Where the project's repositories are cloned (a walk of the search roots, off the main
+    /// thread) and how the clones stand: local `git status` and `git log`, no fetch.
+    func loadGitStates(of project: Project) async {
+        let roots = registry.searchRoots
+        clones = await Task.detached { Repos.clones(roots: roots) }.value
+        for repo in project.repos.map(\.repo) {
+            if let path = clones[repo] { gitStates[repo] = await Repos.gitState(ofClone: path) }
+        }
+    }
+
+    func loadUnassigned() async {
+        loadingUnassigned = true
+        do {
+            let (repos, problems) = try await Repos.unassigned(registry: registry)
+            unassigned = repos
+            unassignedProblems = problems
+        } catch { self.error = String(describing: error) }
+        loadingUnassigned = false
+    }
+
+    func assign(_ repo: RepoID, to project: String) async {
+        do {
+            try await registry.assign(repo, to: project)
+            unassigned?.removeAll { $0.repo == repo }
+            reload()
+        } catch { self.error = String(describing: error) }
+    }
+
+    func ignore(_ repo: RepoID, in space: String, _ ignored: Bool = true) async {
+        do {
+            try await registry.ignore(repo, in: space, ignored)
+            if let i = unassigned?.firstIndex(where: { $0.repo == repo }) { unassigned?[i].ignored = ignored }
+            reload()
+        } catch { self.error = String(describing: error) }
+    }
+
+    // MARK: Pending
+
+    func refreshPending() async { pending = await registry.pending() }
+
+    func diff(of change: Pending) async -> String { await registry.diff(of: change) }
+
+    /// Commits one pending change, or all of them.
+    func accept(_ change: Pending? = nil) async {
+        do { try await registry.accept(space: change?.space, paths: change.map { [$0.path] } ?? []) } catch { self.error = String(describing: error) }
+        reload()
+        await refreshPending()
+    }
 
     func scanCopies() async {
         copies = await Copies.scan()

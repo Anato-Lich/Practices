@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-/// A report instead of discipline. Reads `.env` files and plain text under the projects root
+/// A report instead of discipline. Reads `.env` files and plain text under the search roots
 /// and compares them with the registry. Findings carry key names and paths —
 /// values are compared inside this process and never leave it.
 public struct DoctorFinding: Hashable, Sendable, Codable {
@@ -57,13 +57,20 @@ public enum Doctor {
         return (env.sorted(), text)
     }
 
-    public static func run(root: String = Monitor.projectsRoot(), registry: Registry = Registry(),
+    /// The same walk over several roots.
+    public static func collect(roots: [String]) -> (env: [String], text: [String]) {
+        let each = roots.map(collect(root:))
+        return (each.flatMap(\.env), each.flatMap(\.text))
+    }
+
+    /// Without `root`: the registry's search roots (`local.yaml`).
+    public static func run(root: String? = nil, registry: Registry = Registry(),
                            store: SecretStore = SecretStore(), scanText: Bool = true) async throws -> [DoctorFinding] {
         let services = try registry.services()
         var keyOwner: [String: [Service]] = [:]
         for service in services { for key in service.keys { keyOwner[key.name, default: []].append(service) } }
 
-        let (envFiles, textFiles) = collect(root: root)
+        let (envFiles, textFiles) = collect(roots: root.map { [$0] } ?? registry.searchRoots)
         var findings: [DoctorFinding] = []
         var unknownSecrets: [String: [(path: String, key: String)]] = [:]   // digest → places
 

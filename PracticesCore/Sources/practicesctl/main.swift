@@ -37,6 +37,9 @@ let usage = """
       conditions [space]            named conditions and who requires them
       condition add <space>/<id> --name N [--hint H] [--reachable TEMPLATE]
                                     TEMPLATE = host:port over the service's keys, e.g. '${PG_HOST}:${PG_PORT}'
+      scan [project | repo]… [--write]   services and links the clones' compose files and example
+                                    env files give, against the catalogue (default: every assigned
+                                    clone); --write leaves the new ones uncommitted for `accept`
       pending                       uncommitted changes in the spaces (an agent's edits)
       accept [space [path…]] [--message m]   commit them: all, one space's, or the given files
 
@@ -48,7 +51,7 @@ let usage = """
                                     fill an environment (adding it if new); values are never printed
       env <ref…>                    names of the variables `run` would set (no values)
       run <ref…> -- <command…>      run a command with the services' values in its environment
-      doctor                        .env files and plain text in ~/Projects against the registry
+      doctor                        .env files and plain text under the search roots against the registry
       connect <ref…> --to <file> [--project dir] [--as VAR=KEY…] [--only KEY,KEY]
                                     write services' values into a project's env file, once;
                                     refuses files git would commit (--force)
@@ -62,7 +65,7 @@ let usage = """
                                     run it and print the result (a table, a tree or text)
       runs <practice>               its run history: version, time, rows
       search <text>                 fields, practices whose result has it, docs, code
-      copies [practice]             copies in ~/Projects found by their marker: current / outdated / modified
+      copies [practice]             copies under the search roots found by their marker: current / outdated / modified
 
     agent:
       mcp                           MCP server on stdin/stdout
@@ -81,6 +84,29 @@ func printJSON<T: Encodable>(_ value: T) {
     print(String(decoding: try! encoder.encode(value), as: UTF8.self))
 }
 
+/// `--json` carries what yaml leaves to the path — the id, the space, the project, the caller —
+/// beside the record's own fields.
+struct Placed<T: Encodable>: Encodable {
+    struct Key: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+    let place: [String: String]
+    let value: T
+
+    func encode(to encoder: Encoder) throws {
+        try value.encode(to: encoder)
+        var c = encoder.container(keyedBy: Key.self)
+        for (key, text) in place { try c.encode(text, forKey: Key(stringValue: key)) }
+    }
+}
+
+func placed(_ p: Project) -> Placed<Project> { Placed(place: ["id": p.id, "space": p.space], value: p) }
+func placed(_ s: Service) -> Placed<Service> { Placed(place: ["space": s.space, "project": s.project], value: s) }
+func placed(_ link: Link, from: String) -> Placed<Link> { Placed(place: ["from": from], value: link) }
+
 func pad(_ s: String, _ width: Int) -> String {
     s.count >= width ? s : s + String(repeating: " ", count: width - s.count)
 }
@@ -93,13 +119,13 @@ func summary(_ lines: [EnvFiles.Line]) -> String {
 }
 
 /// `--name value` options of the catalogue commands (repeatable) and what is left of the
-/// arguments after the command word; `--json`, `--all` and `--force` take no value.
+/// arguments after the command word; `--json`, `--all`, `--force` and `--write` take no value.
 func parse(_ args: [String]) -> (rest: [String], options: [String: [String]]) {
     var rest: [String] = [], options: [String: [String]] = [:]
     var i = 0
     while i < args.count {
         let a = args[i]
-        if ["--json", "--all", "--force", "--unassigned"].contains(a) { i += 1; continue }
+        if ["--json", "--all", "--force", "--unassigned", "--write"].contains(a) { i += 1; continue }
         if a.hasPrefix("--"), i + 1 < args.count { options[a, default: []].append(args[i + 1]); i += 2; continue }
         rest.append(a); i += 1
     }
@@ -213,7 +239,7 @@ case "logs":
 case "spaces":
     let registry = Registry()
     let spaces = try registry.spaces()
-    if json { printJSON(spaces); break }
+    if json { printJSON(spaces.map { Placed(place: ["id": $0.id], value: $0) }); break }
     if spaces.isEmpty { print("no spaces yet — `practicesctl space add <id> --hosting github.com/<owner>`"); break }
     for space in spaces {
         let projects = try registry.projects(space: space.id)
@@ -236,7 +262,7 @@ case "space":
 case "projects":
     let registry = Registry()
     let projects = try registry.projects(space: positional.count > 1 ? positional[1] : nil)
-    if json { printJSON(projects); break }
+    if json { printJSON(projects.map(placed)); break }
     let services = try registry.services()
     for (p, depth) in Registry.tree(projects) {
         print(pad(String(repeating: "  ", count: depth) + (depth == 0 ? "\(p.space)/" : "") + p.id, 38) + pad(p.name, 26)
@@ -263,7 +289,7 @@ case "project":
     guard rest.count == 2 else { print(usage); exit(2) }
     let project: Project
     do { project = try registry.project(rest[1]) } catch { fail("\(error)") }
-    if json { printJSON(project); break }
+    if json { printJSON(placed(project)); break }
     print("\(project.name)  [" + ([project.space] + registry.path(ofProject: project.id)).joined(separator: "/") + "]")
     if let d = project.description { print(d) }
     let clones = Repos.clones(roots: registry.searchRoots)
@@ -331,7 +357,7 @@ case "ignore", "unignore":
 case "services":
     let registry = Registry(), store = SecretStore()
     let services = try registry.services(project: positional.count > 1 ? positional[1] : nil)
-    if json { printJSON(services); break }
+    if json { printJSON(services.map(placed)); break }
     if services.isEmpty { print("no services — `practicesctl service add <id> --project <project>`"); break }
     for service in services {
         let status = (try? store.status(service: service)) ?? [:]
@@ -355,7 +381,7 @@ case "service":
     guard rest.count == 2 else { print(usage); exit(2) }
     let service: Service
     do { service = try registry.service(rest[1]) } catch { fail("\(error)") }
-    if json { printJSON(service); break }
+    if json { printJSON(placed(service)); break }
     print("\(service.name)  [\(service.kind)]  " + ([service.space] + registry.path(ofProject: service.project) + [service.id]).joined(separator: "/")
           + "  \(service.tags.joined(separator: ", "))")
     if let d = service.description { print(d) }
@@ -398,14 +424,14 @@ case "links":
     if positional.count > 1 {
         guard registry.dir(of: positional[1]) != nil else { fail("no service \(positional[1])") }
         let out = registry.links(of: positional[1]), incoming = registry.links(to: positional[1])
-        if json { printJSON(["out": out, "in": incoming.map(\.link)]); break }
+        if json { printJSON(out.map { placed($0, from: positional[1]) } + incoming.map { placed($0.link, from: $0.from) }); break }
         for l in out { print("→ " + linkLine(l.to, l)) }
         for (from, l) in incoming { print("← " + linkLine(from, l, incoming: true)) }
         if out.isEmpty && incoming.isEmpty { print("no links") }
         break
     }
     let all = registry.serviceIDs().map { (from: $0, links: registry.links(of: $0)) }.filter { !$0.links.isEmpty }
-    if json { printJSON(Dictionary(uniqueKeysWithValues: all.map { ($0.from, $0.links) })); break }
+    if json { printJSON(all.flatMap { from, links in links.map { placed($0, from: from) } }); break }
     for (from, links) in all { for l in links { print(pad(from, 24) + "→ " + linkLine(l.to, l)) } }
 
 case "link":
@@ -448,6 +474,48 @@ case "condition":
                                            reachable: options["--reachable"]?.last), to: parts[0])
     } catch { fail("practices: \(error)") }
     print("condition \(parts[1]) in \(parts[0])")
+
+case "scan":
+    let registry = Registry()
+    let result: ScanResult
+    var written: [URL] = []
+    do {
+        result = try Scanner.scan(Array(positional.dropFirst()), registry: registry)
+        if args.contains("--write") { written = try Scanner.write(result, registry: registry) }
+    } catch { fail("practices: \(error)") }
+    if json { printJSON(result); break }
+    // One env file is often shared by many services: its links are printed once, under their callers.
+    func show(_ found: [ScanResult.Found]) {
+        var callers: [Link: [String]] = [:], heads: [String] = [], rows: [String: [String]] = [:]
+        for f in found { callers[f.link, default: []].append(f.from) }
+        for f in found where callers[f.link]?.first == f.from {
+            let head = callers[f.link]!.joined(separator: ", ") + "  ← " + (f.link.origin ?? "").dropFirst(8)
+            if rows[head] == nil { heads.append(head) }
+            rows[head, default: []].append("→ " + linkLine(f.link.to, f.link)
+                + (f.link.names.map { "  " + $0.map { "\($0)=\($1)" }.sorted().joined(separator: " ") } ?? ""))
+        }
+        for head in heads { print("    " + head); rows[head]!.forEach { print("      " + $0) } }
+    }
+    for repo in result.repos {
+        print("\(repo.repo)  [\(repo.project)]  " + (repo.clone.map(home) ?? "not cloned"))
+        if !repo.services.isEmpty { print("  new services") }
+        for s in repo.services { print("    " + pad(s.id, 30) + "  " + pad(s.kind, 12) + (s.aliases.first.map { "compose: \($0)" } ?? "")) }
+        if !repo.new.isEmpty { print("  new links") }
+        show(repo.new)
+        if !repo.present.isEmpty { print("  in the catalogue already: \(repo.present.count) links") }
+        if !repo.gone.isEmpty { print("  gone (derived before, not found now; nothing is deleted)") }
+        for f in repo.gone { print("    " + [f.from, "→", f.link.to, f.link.via, f.link.what].compactMap { $0 }.joined(separator: " ")) }
+        if !repo.unknown.isEmpty { print("  unknown") }
+        for u in repo.unknown {
+            let what = u.build.map { "build context in \($0): which service?" } ?? u.topic.map { "topic \($0): no link to a broker" }
+                ?? (u.host ?? "") + (u.port.map { ":\($0)" } ?? "")
+            print("    " + pad(u.variable ?? "build", 32) + "  " + pad(what, 40) + "  " + pad(u.file, 28) + "  " + u.callers.joined(separator: ", "))
+        }
+        repo.problems.forEach { print("  ! " + $0) }
+    }
+    if !result.networks.isEmpty { print("shared networks") }
+    for (name, repos) in result.networks.sorted(by: { $0.key < $1.key }) { print("  " + pad(name, 20) + "  " + repos.joined(separator: ", ")) }
+    if !written.isEmpty { print("\nwritten, not committed: \(written.count) files — `practicesctl pending`, then `accept`") }
 
 case "pending":
     let pending = await Registry().pending()
@@ -693,7 +761,10 @@ case "try":
     if !result.secretsUpdated.isEmpty { print("  stored rotated: " + result.secretsUpdated.joined(separator: ", ")) }
     if !result.stdout.isEmpty { print("\n-- stdout\n" + result.stdout) }
     guard result.ok else {
-        print("\nfailed: \(result.error ?? "")\n" + (result.traceback ?? "") + (result.stderr.isEmpty ? "" : "\n-- stderr\n" + result.stderr))
+        print("\nfailed: \(result.error ?? "")")
+        if result.conditions != nil { print("declared conditions of its services (not checked):") }
+        for c in result.conditions ?? [] { print("  " + pad(c.id, 18) + c.name + (c.hint.map { " — \($0)" } ?? "")) }
+        print((result.traceback ?? "") + (result.stderr.isEmpty ? "" : "\n-- stderr\n" + result.stderr))
         exit(1)
     }
     print("")

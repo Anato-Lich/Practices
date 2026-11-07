@@ -293,14 +293,18 @@ public struct Registry: Sendable {
     }
 
     public func add(_ service: Service, to project: String) async throws {
+        try await commit("Service \(service.id)", [try draft(service, in: project)])
+    }
+
+    /// A new service's card, written and returned uncommitted: the scanner's candidate waits
+    /// for the user (DECISIONS 19).
+    public func draft(_ service: Service, in project: String) throws -> URL {
         guard Self.isValidID(service.id) else { throw Failure("not an id: \(service.id)") }
         guard let dir = dir(ofProject: project) else { throw Failure("no project \(project)") }
         if let existing = serviceDirs().first(where: { $0.id == service.id }) {
             throw Failure("service \(service.id) exists in \(existing.space)/\(existing.project) — one service, one card")
         }
-        let file = dir.appendingPathComponent("services/\(service.id)/service.yaml")
-        try write(Self.yaml(service), to: file)
-        try await commit("Service \(service.id)", [file])
+        return try write(Self.yaml(service), to: dir.appendingPathComponent("services/\(service.id)/service.yaml"))
     }
 
     public func add(_ condition: Condition, to space: String) async throws {
@@ -458,6 +462,14 @@ public struct Registry: Sendable {
             }
         }
         return out
+    }
+
+    /// What accepting a pending change would commit: the file itself when it is new, its diff
+    /// otherwise.
+    public func diff(of change: Pending) async -> String {
+        let root = dir(ofSpace: change.space)
+        if change.state == "new" { return (try? String(contentsOf: root.appendingPathComponent(change.path), encoding: .utf8)) ?? "" }
+        return (try? await git(root, ["diff", "HEAD", "--", change.path])) ?? ""
     }
 
     /// Commits pending changes — all of them, or those of one space, or the given paths of it.

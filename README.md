@@ -68,6 +68,7 @@ practicesctl repos [--all] | assign <repo> <project> [--role r] | unassign <repo
 practicesctl services [project] | service <id> | service add <id> --project <p> …
 practicesctl links [service] | link add <from> <to> [--via db] [--why …]
 practicesctl conditions [space] | condition add <space>/<id> --name N [--hint H]
+practicesctl scan [project | repo]… [--write]      # services and links from compose and example env files
 practicesctl pending | accept [space [path…]]      # an agent's edits wait here
 ```
 

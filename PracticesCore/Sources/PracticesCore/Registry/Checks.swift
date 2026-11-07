@@ -53,6 +53,15 @@ public enum Checks {
         await conditions(service, env: env, values: values, registry: registry).filter { !$0.ok }.compactMap(\.message)
     }
 
+    /// Conditions of these services that are declared and never probed (an authorisation, an
+    /// office-only network), each once: what to show beside a failed run, whose bare `401`
+    /// says nothing of the hint.
+    public static func declared(_ services: [Service], registry: Registry = Registry()) -> [Condition] {
+        var seen = Set<String>()
+        return services.flatMap(\.conditionIDs).filter { seen.insert($0).inserted }
+            .compactMap(registry.condition).filter { $0.reachable == nil }
+    }
+
     /// Every endpoint of a service, concurrently.
     public static func check(_ service: Service, env: String, values: [String: String]) async -> [CheckResult] {
         await withTaskGroup(of: CheckResult.self) { group in

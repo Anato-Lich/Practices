@@ -188,6 +188,13 @@ struct PracticeView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: result.error ?? "").font(.callout.monospaced()).foregroundStyle(.red)
                 .textSelection(.enabled).padding(.horizontal, 12).padding(.top, 8)
+            // Declared conditions of its services: a bare 401 does not say "log in to System".
+            ForEach(result.conditions ?? []) { condition in
+                Label { Text(verbatim: condition.name + (condition.hint.map { " — \($0)" } ?? "")) } icon: {
+                    Image(systemName: "network.badge.shield.half.filled")
+                }
+                .font(.callout).foregroundStyle(.orange).padding(.horizontal, 12)
+            }
             MonoText(text: [result.traceback ?? "", result.stderr, result.stdout].filter { !$0.isEmpty }.joined(separator: "\n\n"))
         }
     }

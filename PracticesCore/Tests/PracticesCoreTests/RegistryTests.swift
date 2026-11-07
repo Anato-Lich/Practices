@@ -321,6 +321,11 @@ struct TempHome {
         // Nothing to commit a second time.
         #expect(try await registry.commit("s: note", [root.appendingPathComponent("\(services)/notes.md")]) == false)
 
+        // What the user reads before accepting: a diff, or the whole file when it is new.
+        let diff = await registry.diff(of: pending.first { $0.state == "modified" }!)
+        #expect(diff.contains("-    return 1") && diff.contains("+    return 2"))
+        #expect(await registry.diff(of: pending.first { $0.path.hasSuffix("new.py") }!) == "def run():\n    return 0\n")
+
         // Accepting one file, then the rest.
         let one = try await registry.accept(space: "sp", paths: ["\(services)/practices/p.py"])
         #expect(one.map(\.path) == ["\(services)/practices/p.py"])
@@ -351,6 +356,38 @@ struct TempHome {
                                                          "gitlab.rnd.x-keeper.net/x-keeper-rnd/x-vision/x-vision-cloud",
                                                          "github.com/deep/enough"])
         #expect(clones[RepoID("github.com/x-keeper/device_analysis-api")!]?.hasSuffix("code/X-Keeper/device-analysis/api") == true)
+    }
+
+    @Test func gitStateOfAClone() async throws {
+        let home = TempHome()
+        let origin = home.url.appendingPathComponent("origin").path, clone = home.url.appendingPathComponent("clone").path
+        func git(_ dir: String, _ args: String...) async throws {
+            _ = try await Shell.run("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@localhost", "-c", "commit.gpgsign=false"] + args)
+        }
+        try home.write("one\n", "origin/a.txt")
+        try await git(origin, "init", "-q", "-b", "main")
+        #expect(await Repos.gitState(ofClone: origin) == GitState(branch: "main", uncommitted: 1))     // no commit, no upstream
+        try await git(origin, "add", "a.txt")
+        try await git(origin, "commit", "-q", "-m", "first")
+        try await git(home.url.path, "clone", "-q", origin, clone)
+        try home.write("two\n", "origin/a.txt")
+        try await git(origin, "commit", "-q", "-am", "theirs")
+
+        try home.write("mine\n", "clone/b.txt")
+        try await git(clone, "add", "b.txt")
+        try await git(clone, "commit", "-q", "-m", "Мой коммит\tс табом")
+        try home.write("changed\n", "clone/a.txt")
+        try home.write("new\n", "clone/c.txt")
+        // Before a fetch the clone does not know of `theirs`; nothing here fetches.
+        var state = try #require(await Repos.gitState(ofClone: clone))
+        #expect(state.branch == "main" && state.uncommitted == 2 && state.ahead == 1 && state.behind == 0)
+        #expect(state.subject == "Мой коммит\tс табом" && abs(state.lastCommit!.timeIntervalSinceNow) < 60)
+        try await git(clone, "fetch", "-q")
+        state = try #require(await Repos.gitState(ofClone: clone))
+        #expect(state.ahead == 1 && state.behind == 1)
+        try await git(clone, "checkout", "-q", "--detach")
+        #expect(await Repos.gitState(ofClone: clone)?.branch == nil)
+        #expect(await Repos.gitState(ofClone: home.url.appendingPathComponent("nowhere").path) == nil)
     }
 
     static let github = """
@@ -455,6 +492,8 @@ struct TempHome {
         #expect(results.map(\.ok) == [true, false, false, true])
         let unmet = await Checks.unmet(service, env: "prod", values: ["HOST": "127.0.0.1", "PORT": "1"], registry: home.registry)
         #expect(unmet.count == 2 && unmet.contains("Включите WireGuard-туннель"))
+        // Declared and never probed: what goes with a failed run. The probed and the undeclared do not.
+        #expect(Checks.declared([service, service], registry: home.registry).map(\.hint) == ["Работает из офисной сети"])
     }
 }
 

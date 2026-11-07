@@ -2,12 +2,32 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
+    "%lld projects · %lld repositories · %lld services · %lld ignored": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "проектов: %lld · репозиториев: %lld · сервисов: %lld · игнорируется: %lld"
+          }
+        }
+      }
+    },
     "%lld runs": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld прогонов"
+          }
+        }
+      }
+    },
+    "%lld uncommitted": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не закоммичено: %lld"
           }
         }
       }
@@ -32,6 +52,26 @@
         }
       }
     },
+    "Accept": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять"
+          }
+        }
+      }
+    },
+    "Accept all": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять всё"
+          }
+        }
+      }
+    },
     "Add one with `practicesctl service add <id> --project <project>`.": {
       "localizations": {
         "ru": {
@@ -42,12 +82,42 @@
         }
       }
     },
+    "Ahead of and behind its upstream, as the last fetch left it": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Опережение и отставание от upstream — по состоянию на последний fetch"
+          }
+        }
+      }
+    },
     "All endpoints answer": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Все точки входа отвечают"
+          }
+        }
+      }
+    },
+    "Asking gh and glab…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спрашиваю gh и glab…"
+          }
+        }
+      }
+    },
+    "Assign": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В проект"
           }
         }
       }
@@ -292,6 +362,16 @@
         }
       }
     },
+    "Could not list %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось получить список: %@"
+          }
+        }
+      }
+    },
     "Could not stop process %lld": {
       "localizations": {
         "ru": {
@@ -432,6 +512,16 @@
         }
       }
     },
+    "Every repository is in a project or ignored": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все репозитории в проектах или игнорируются"
+          }
+        }
+      }
+    },
     "Existing": {
       "localizations": {
         "ru": {
@@ -518,6 +608,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Не проходит healthcheck"
+          }
+        }
+      }
+    },
+    "Hosting": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хостинг"
+          }
+        }
+      }
+    },
+    "Ignore": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Игнорировать"
           }
         }
       }
@@ -632,6 +742,16 @@
         }
       }
     },
+    "Load": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Загрузить"
+          }
+        }
+      }
+    },
     "Logs": {
       "localizations": {
         "ru": {
@@ -672,6 +792,16 @@
         }
       }
     },
+    "No conditions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Условий нет"
+          }
+        }
+      }
+    },
     "No description": {
       "localizations": {
         "ru": {
@@ -708,6 +838,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Папка не выбрана"
+          }
+        }
+      }
+    },
+    "No hosting": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хостинг не задан"
           }
         }
       }
@@ -778,6 +918,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ни один проект не слушает порт"
+          }
+        }
+      }
+    },
+    "No projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проектов нет"
+          }
+        }
+      }
+    },
+    "No repositories": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Репозиториев нет"
           }
         }
       }
@@ -862,6 +1022,16 @@
         }
       }
     },
+    "Nothing pending": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принимать нечего"
+          }
+        }
+      }
+    },
     "Nothing printed": {
       "localizations": {
         "ru": {
@@ -902,12 +1072,42 @@
         }
       }
     },
+    "Open in Terminal": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть в Терминале"
+          }
+        }
+      }
+    },
+    "Open in Visual Studio Code": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть в Visual Studio Code"
+          }
+        }
+      }
+    },
     "Open in browser": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Открыть в браузере"
+          }
+        }
+      }
+    },
+    "Open on the hosting": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть на хостинге"
           }
         }
       }
@@ -928,6 +1128,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "В OrbStack без порта:"
+          }
+        }
+      }
+    },
+    "Overview": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обзор"
+          }
+        }
+      }
+    },
+    "Pending": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ждут приёмки"
           }
         }
       }
@@ -958,6 +1178,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Практики"
+          }
+        }
+      }
+    },
+    "Projects": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проекты"
           }
         }
       }
@@ -1008,6 +1238,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Удалить значение"
+          }
+        }
+      }
+    },
+    "Repositories": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Репозитории"
+          }
+        }
+      }
+    },
+    "Repositories of the spaces' hosting (through gh and glab) and local clones that are in no project. Nothing is asked until you load the list.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Репозитории с хостингов пространств (через gh и glab) и локальные клоны, не входящие ни в один проект. Запросов нет, пока вы не загрузите список."
+          }
+        }
+      }
+    },
+    "Repositories · services": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Репозитории · сервисы"
+          }
+        }
+      }
+    },
+    "Required by %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Требуют: %@"
           }
         }
       }
@@ -1162,6 +1432,16 @@
         }
       }
     },
+    "Show ignored": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показывать игнорируемые"
+          }
+        }
+      }
+    },
     "Show in Finder": {
       "localizations": {
         "ru": {
@@ -1228,6 +1508,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Остановить контейнер"
+          }
+        }
+      }
+    },
+    "Stop ignoring": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не игнорировать"
           }
         }
       }
@@ -1312,6 +1602,16 @@
         }
       }
     },
+    "Unassigned": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не распределено"
+          }
+        }
+      }
+    },
     "Value": {
       "localizations": {
         "ru": {
@@ -1352,6 +1652,16 @@
         }
       }
     },
+    "What agents write into the spaces waits here until you accept it.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Здесь ждёт то, что агенты записали в пространства, пока вы это не примете."
+          }
+        }
+      }
+    },
     "Write": {
       "localizations": {
         "ru": {
@@ -1372,12 +1682,32 @@
         }
       }
     },
+    "active %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "активность %@"
+          }
+        }
+      }
+    },
     "added": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "добавится"
+          }
+        }
+      }
+    },
+    "archived": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "архив"
           }
         }
       }
@@ -1422,6 +1752,16 @@
         }
       }
     },
+    "deleted": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "удалён"
+          }
+        }
+      }
+    },
     "done": {
       "localizations": {
         "ru": {
@@ -1452,6 +1792,26 @@
         }
       }
     },
+    "folder without git": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "папка без git"
+          }
+        }
+      }
+    },
+    "ignored": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "игнорируется"
+          }
+        }
+      }
+    },
     "input: %@": {
       "localizations": {
         "ru": {
@@ -1462,12 +1822,62 @@
         }
       }
     },
+    "local only": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "только локально"
+          }
+        }
+      }
+    },
     "macOS AirPlay Receiver listens here.": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
             "value": "Здесь слушает приёмник AirPlay macOS."
+          }
+        }
+      }
+    },
+    "modified": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "изменён"
+          }
+        }
+      }
+    },
+    "new": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "новый"
+          }
+        }
+      }
+    },
+    "no path in local.yaml": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет пути в local.yaml"
+          }
+        }
+      }
+    },
+    "no upstream": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "нет upstream"
           }
         }
       }
@@ -1488,6 +1898,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "ещё не проверялся"
+          }
+        }
+      }
+    },
+    "not cloned": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не склонирован"
           }
         }
       }
@@ -1528,6 +1948,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "сохранены обновлённые %@"
+          }
+        }
+      }
+    },
+    "suggested: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "предложение: %@"
           }
         }
       }

@@ -4,6 +4,9 @@ import AppKit
 
 /// `Practices --render-popover out.png`: takes one real snapshot, renders the popover
 /// offscreen and exits. Lets the layout be checked without clicking the menu-bar item.
+/// `--render-window out.png [--space id | --project id | --service id | --practice ref |
+/// --pending | --search text | --doctor] [--expand project,…] [--wait seconds] [--light]`
+/// does the same for the main window.
 @MainActor
 enum DevRender {
     static func runIfRequested() {
@@ -45,10 +48,23 @@ enum DevRender {
                     if let k = args.firstIndex(of: "--step"), k + 1 < args.count { practice.selectedStep = Int(args[k + 1]) }
                 }
                 if let j = args.firstIndex(of: "--service"), j + 1 < args.count { registry.selection = .service(args[j + 1]) }
-                if let j = args.firstIndex(of: "--search"), j + 1 < args.count {
-                    registry.searchText = args[j + 1]
-                    if let w = args.firstIndex(of: "--wait"), w + 1 < args.count { try? await Task.sleep(for: .seconds(Double(args[w + 1]) ?? 0)) }
+                if let j = args.firstIndex(of: "--space"), j + 1 < args.count { registry.selection = .space(args[j + 1]) }
+                if let j = args.firstIndex(of: "--project"), j + 1 < args.count, let project = registry.project(args[j + 1]) {
+                    registry.selection = .project(project.id)
+                    await registry.loadGitStates(of: project)
                 }
+                if args.contains("--pending") {
+                    await registry.refreshPending()
+                    registry.selection = .pending
+                }
+                // `--expand a,b`: these projects open in the sidebar, with their services.
+                if let j = args.firstIndex(of: "--expand"), j + 1 < args.count {
+                    for id in args[j + 1].split(separator: ",").map(String.init) {
+                        registry.expanded.insert(.project(id))
+                        for service in registry.services where service.project == id { registry.expanded.insert(.service(service.id)) }
+                    }
+                }
+                if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
                 content = AnyView(MainWindow().environment(registry).environment(model)
                     .frame(width: 1200, height: 780))
             } else {
@@ -69,6 +85,8 @@ enum DevRender {
             window.contentView = host
             host.layoutSubtreeIfNeeded()
             try? await Task.sleep(for: .milliseconds(300))
+            // `--wait <seconds>`: for what the views load themselves once they are on screen.
+            if let w = args.firstIndex(of: "--wait"), w + 1 < args.count { try? await Task.sleep(for: .seconds(Double(args[w + 1]) ?? 0)) }
             if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                 host.cacheDisplay(in: host.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))

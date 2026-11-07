@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Карта сервисов Practices</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one board per space; a project is a card, a parent project a frame around its
+   children; a service is a row; links are curves drawn over the board, loud only for the
+   selected service. */
+:root {
+  --bg: #f4f5f3; --panel: #ffffff; --ink: #1c2422; --muted: #66716d; --line: #d5dad7;
+  --accent: #0b6e63; --accent-soft: #dcefeb;
+  --db: #2f5fb0; --broker: #8a4bb5; --http: #0b6e63; --other: #7a6a3a; --warn: #b4571a;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --bg: #121615; --panel: #1b211f; --ink: #e6ebe8; --muted: #93a09b; --line: #2f3835;
+  --accent: #56c7b8; --accent-soft: #17332f;
+  --db: #7fa6ee; --broker: #c597e6; --http: #56c7b8; --other: #c9b677; --warn: #e79a5c;
+} }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121615; --panel: #1b211f; --ink: #e6ebe8; --muted: #93a09b; --line: #2f3835;
+  --accent: #56c7b8; --accent-soft: #17332f;
+  --db: #7fa6ee; --broker: #c597e6; --http: #56c7b8; --other: #c9b677; --warn: #e79a5c;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); }
+header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+.stats { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tools { margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+input[type=search] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); width: 220px; }
+label.toggle { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend { padding: 0 24px 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 12.5px; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--other); flex: none; }
+.dot.db { background: var(--db); } .dot.broker { background: var(--broker); } .dot.http { background: var(--http); }
+.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 0 24px 32px; align-items: start; }
+#board { position: relative; min-width: 0; }
+#edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.space { margin-bottom: 22px; }
+.space > h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
+.grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.group { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+.group > .gtitle { font-weight: 600; font-size: 13px; }
+.group > .grid { gap: 10px; }
+.project { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px 8px; width: 232px; }
+.project h3 { margin: 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.project .meta { color: var(--muted); font-size: 12px; margin: 1px 0 6px; overflow-wrap: anywhere; }
+.project .empty { color: var(--muted); font-size: 12px; font-style: italic; }
+.svc { display: flex; gap: 7px; align-items: center; width: 100%; padding: 3px 6px; margin: 2px 0; border: 1px solid transparent; border-radius: 5px; background: none; color: inherit; font: 12.5px/1.35 var(--mono); text-align: left; cursor: pointer; }
+.svc:hover { background: var(--accent-soft); }
+.svc .n { overflow-wrap: anywhere; flex: 1; }
+.svc .deg { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.svc.ext { border-style: dashed; border-color: var(--line); }
+.svc .lock { color: var(--warn); font-size: 11px; }
+.svc.sel { background: var(--accent); color: var(--bg); }
+.svc.sel .deg, .svc.sel .lock { color: inherit; }
+.svc.peer { background: var(--accent-soft); border-color: var(--accent); border-style: solid; }
+body.focus .svc:not(.sel):not(.peer) { opacity: .38; }
+body.filter .svc.miss, body.filter .project.miss { display: none; }
+#edges path { fill: none; stroke: var(--muted); stroke-width: 1; opacity: .16; }
+#edges path.on { stroke: var(--accent); stroke-width: 1.8; opacity: .95; }
+#edges path.on.in { stroke-dasharray: 5 4; }
+body.focus #edges path:not(.on), body.quiet #edges path:not(.on) { opacity: 0; }
+aside { position: sticky; top: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; max-height: calc(100vh - 24px); overflow: auto; }
+aside h2 { font: 600 15px var(--mono); margin: 0 0 2px; overflow-wrap: anywhere; }
+aside .path { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+aside h4 { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; font-weight: 600; }
+aside p { margin: 0 0 6px; }
+aside ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+aside li .to { font-family: var(--mono); font-size: 12.5px; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-align: left; }
+aside li .how { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.chip { display: inline-block; font-size: 11.5px; border: 1px solid var(--line); border-radius: 10px; padding: 0 7px; margin: 0 4px 4px 0; color: var(--muted); }
+.chip.warn { color: var(--warn); border-color: var(--warn); }
+@media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } aside { position: static; max-height: none; } .project { width: 100%; } }
+@media (prefers-reduced-motion: no-preference) { #edges path { transition: opacity .12s; } }
+</style>
+</head>
+<body class="quiet">
+<header>
+  <h1>Карта сервисов</h1>
+  <span class="stats" id="stats"></span>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Сервис, проект, топик…" aria-label="Поиск по карте">
+    <label class="toggle"><input type="checkbox" id="all"> все связи сразу</label>
+  </div>
+</header>
+<div class="legend">
+  <span><i class="dot db"></i>база данных</span><span><i class="dot broker"></i>брокер</span>
+  <span><i class="dot http"></i>HTTP и сокеты</span><span><i class="dot"></i>прочее</span>
+  <span>пунктирная рамка — сервис без репозитория</span><span style="color:var(--warn)">◆ есть условие доступа</span>
+  <span>число — сколько сервисов его вызывает</span>
+</div>
+<div class="wrap">
+  <div id="board"><svg id="edges" aria-hidden="true"></svg></div>
+  <aside id="side" aria-live="polite"></aside>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const $ = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+const byId = Object.fromEntries(D.services.map(s => [s.id, s]));
+const proj = Object.fromEntries(D.projects.map(p => [p.id, p]));
+const cond = Object.fromEntries(D.conditions.map(c => [c.id, c]));
+const links = D.links.filter(l => byId[l.from] && byId[l.to]);
+const dangling = D.links.filter(l => !byId[l.to]);
+const inDeg = {}; links.forEach(l => { (inDeg[l.to] ||= new Set()).add(l.from); });
+const group = k => /postgres|clickhouse|redis|mysql|sqlite|s3|influx/.test(k) ? 'db' : /kafka|rabbit|mq|nats/.test(k) ? 'broker' : /http|socket|grpc|tcp/.test(k) ? 'http' : '';
+const conds = s => [...new Set([...(s.requires || []), ...(s.endpoints || []).flatMap(e => e.requires || [])])];
+const board = document.getElementById('board'), svg = document.getElementById('edges'), side = document.getElementById('side');
+const rows = {};
+
+function card(p) {
+  const el = $('div', 'project'); el.dataset.p = p.id;
+  el.append($('h3', '', p.name));
+  const repos = p.repos.length + p.folders.length;
+  el.append($('div', 'meta', p.id + (repos ? ' · ' + repos + ' реп.' : ' · без репозиториев')));
+  const mine = D.services.filter(s => s.project === p.id);
+  if (!mine.length) el.append($('div', 'empty', 'сервисы не описаны'));
+  for (const s of mine) {
+    const b = $('button', 'svc' + (s.repo ? '' : ' ext')); b.type = 'button'; b.dataset.s = s.id; b.title = s.name;
+    const d = $('i', 'dot ' + group(s.kind)); b.append(d, $('span', 'n', s.id));
+    if (conds(s).length) b.append($('span', 'lock', '◆'));
+    if (inDeg[s.id]) b.append($('span', 'deg', String(inDeg[s.id].size)));
+    b.addEventListener('click', () => select(s.id)); rows[s.id] = b; el.append(b);
+  }
+  return el;
+}
+for (const sp of D.spaces) {
+  const sec = $('section', 'space'); sec.append($('h2', '', sp.name));
+  const grid = $('div', 'grid'); sec.append(grid);
+  const ps = D.projects.filter(p => p.space === sp.id);
+  const kids = id => ps.filter(p => p.parent === id);
+  for (const p of ps.filter(p => !p.parent || !proj[p.parent])) {
+    if (kids(p.id).length) {
+      const g = $('div', 'group'); g.append($('div', 'gtitle', p.name));
+      const inner = $('div', 'grid');
+      if (p.repos.length || D.services.some(s => s.project === p.id)) inner.append(card(p));
+      kids(p.id).forEach(k => inner.append(card(k))); g.append(inner); grid.append(g);
+    } else grid.append(card(p));
+  }
+  board.append(sec);
+}
+document.getElementById('stats').textContent =
+  `${D.projects.length} проектов · ${D.services.length} сервисов · ${links.length} связей` + (dangling.length ? ` · ${dangling.length} ведут к неописанным сервисам` : '');
+
+let selected = null;
+function draw() {
+  const base = board.getBoundingClientRect();
+  svg.replaceChildren();
+  for (const l of links) {
+    const a = rows[l.from], b = rows[l.to];
+    if (!a || !b || a.offsetParent === null || b.offsetParent === null) continue;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    const right = rb.left > ra.left;
+    const x1 = (right ? ra.right : ra.left) - base.left, y1 = ra.top + ra.height / 2 - base.top;
+    const x2 = (right ? rb.left : (rb.left === ra.left ? rb.left : rb.right)) - base.left, y2 = rb.top + rb.height / 2 - base.top;
+    const bend = rb.left === ra.left ? -34 : (x2 - x1) * .45;
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', rb.left === ra.left ? `M${x1},${y1} C${x1 + bend},${y1} ${x2 + bend},${y2} ${x2},${y2}` : `M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}`);
+    if (selected && (l.from === selected || l.to === selected)) p.setAttribute('class', 'on' + (l.to === selected ? ' in' : ''));
+    svg.append(p);
+  }
+}
+function linkItem(l, other, arrow) {
+  const li = $('li'); const b = $('button', 'to', arrow + ' ' + other + (l.endpoint ? ' / ' + l.endpoint : '')); b.type = 'button';
+  b.addEventListener('click', () => select(other)); li.append(b);
+  const how = [l.via, l.what, l.access && '(' + l.access + ')'].filter(Boolean).join(' ');
+  li.append($('div', 'how', [how, l.why].filter(Boolean).join(' — ') + (l.practice ? ' · практика ' + l.practice : '')));
+  return li;
+}
+function select(id) {
+  selected = selected === id ? null : id;
+  document.body.classList.toggle('focus', !!selected);
+  for (const [sid, el] of Object.entries(rows)) { el.classList.remove('sel', 'peer'); }
+  side.replaceChildren();
+  if (!selected) { intro(); draw(); return; }
+  const s = byId[id]; rows[id].classList.add('sel');
+  const out = links.filter(l => l.from === id), inc = links.filter(l => l.to === id);
+  [...out.map(l => l.to), ...inc.map(l => l.from)].forEach(o => rows[o] && rows[o].classList.add('peer'));
+  const path = []; for (let p = proj[s.project]; p; p = proj[p.parent]) path.unshift(p.name);
+  side.append($('h2', '', s.id), $('div', 'path', [D.spaces.find(x => x.id === s.space).name, ...path].join(' / ')));
+  if (s.name !== s.id) side.append($('p', '', s.name));
+  if (s.description) side.append($('p', '', s.description));
+  const chips = $('div'); chips.append($('span', 'chip', s.kind));
+  if (!s.repo) chips.append($('span', 'chip', 'без репозитория'));
+  s.tags.forEach(t => chips.append($('span', 'chip', t))); s.envs.forEach(t => chips.append($('span', 'chip', t)));
+  side.append(chips);
+  if (s.aliases.length) side.append($('h4', '', 'Другие имена'), $('p', '', s.aliases.join(', ')));
+  const cs = conds(s);
+  if (cs.length) { side.append($('h4', '', 'Условия доступа')); cs.forEach(c => { side.append($('span', 'chip warn', (cond[c] || {}).name || c)); if ((cond[c] || {}).hint) side.append($('p', '', cond[c].hint)); }); }
+  if (s.endpoints.length) side.append($('h4', '', 'Точки входа'), $('p', '', s.endpoints.map(e => e.id + (e.label ? ' (' + e.label + ')' : '')).join(', ')));
+  if (s.guards.length) { side.append($('h4', '', 'Правила')); s.guards.forEach(g => side.append($('p', '', g))); }
+  if (s.practices.length) side.append($('h4', '', 'Практики'), $('p', '', s.practices.map(p => s.id + '/' + p).join(', ')));
+  if (out.length) { side.append($('h4', '', 'Вызывает (' + out.length + ')')); const ul = $('ul'); out.forEach(l => ul.append(linkItem(l, l.to, '→'))); side.append(ul); }
+  if (inc.length) { side.append($('h4', '', 'Его вызывают (' + inc.length + ')')); const ul = $('ul'); inc.forEach(l => ul.append(linkItem(l, l.from, '←'))); side.append(ul); }
+  if (!out.length && !inc.length) side.append($('h4', '', 'Связи'), $('p', '', 'Связей в каталоге нет.'));
+  draw();
+}
+function intro() {
+  side.append($('h2', '', 'Общие сервисы'), $('div', 'path', 'кого вызывают чаще всего — нажмите, чтобы увидеть связи'));
+  const ul = $('ul');
+  Object.entries(inDeg).sort((a, b) => b[1].size - a[1].size).slice(0, 14).forEach(([id, set]) => {
+    const li = $('li'); const b = $('button', 'to', id); b.type = 'button'; b.addEventListener('click', () => select(id));
+    li.append(b, $('div', 'how', set.size + ' вызывающих · ' + (proj[byId[id].project] || {}).name)); ul.append(li);
+  });
+  side.append(ul);
+}
+document.getElementById('all').addEventListener('change', e => document.body.classList.toggle('quiet', !e.target.checked));
+document.getElementById('q').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase(); document.body.classList.toggle('filter', !!q);
+  const hit = new Set();
+  if (q) { D.services.forEach(s => { const text = [s.id, s.name, s.description, s.kind, ...s.aliases, ...s.tags].join(' ').toLowerCase(); if (text.includes(q)) hit.add(s.id); });
+           links.forEach(l => { if ([l.what, l.why, l.via].join(' ').toLowerCase().includes(q)) { hit.add(l.from); hit.add(l.to); } }); }
+  for (const [id, el] of Object.entries(rows)) el.classList.toggle('miss', !!q && !hit.has(id));
+  document.querySelectorAll('.project').forEach(p => { const pr = proj[p.dataset.p]; const own = (pr.name + ' ' + pr.id).toLowerCase().includes(q);
+    if (own) p.querySelectorAll('.svc').forEach(r => r.classList.remove('miss'));
+    p.classList.toggle('miss', !!q && !own && !p.querySelector('.svc:not(.miss)')); });
+  draw();
+});
+addEventListener('resize', draw);
+intro(); draw(); document.fonts && document.fonts.ready.then(draw);
+// A link can open the map on one service: …#sso
+const fromHash = () => { const id = decodeURIComponent(location.hash.slice(1)); if (byId[id] && selected !== id) { select(id); rows[id].scrollIntoView({ block: 'center' }); } };
+addEventListener('hashchange', fromHash); fromHash();
+</script>
+</body>
+</html>

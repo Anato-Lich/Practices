@@ -17,6 +17,19 @@ public struct RepoInfo: Codable, Hashable, Sendable {
     public var ignored = false
 }
 
+/// A clone as it stands on this machine — read, never changed (DECISIONS 17).
+public struct GitState: Codable, Hashable, Sendable {
+    /// nil — a detached HEAD.
+    public var branch: String?
+    /// Paths that differ from the last commit, untracked ones included.
+    public var uncommitted = 0
+    /// Against the upstream as the last fetch left it; nil — the branch has none.
+    public var ahead: Int?
+    public var behind: Int?
+    public var lastCommit: Date?
+    public var subject: String?
+}
+
 public enum Repos {
 
     // MARK: Local clones
@@ -54,6 +67,31 @@ public enum Repos {
             return line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
         }
         return nil
+    }
+
+    /// Branch, uncommitted paths, ahead/behind and the last commit of a clone; nil when git
+    /// does not answer there. No fetch, and no index refresh written (`--no-optional-locks`).
+    public static func gitState(ofClone path: String) async -> GitState? {
+        func git(_ args: [String]) async -> String? { try? await Shell.run("git", ["--no-optional-locks", "-C", path] + args) }
+        guard let status = await git(["status", "--porcelain=v2", "--branch"]) else { return nil }
+        var state = GitState()
+        for line in status.split(separator: "\n") {
+            let words = line.split(separator: " ")
+            if !line.hasPrefix("#") { state.uncommitted += 1; continue }
+            guard words.count >= 3 else { continue }
+            if words[1] == "branch.head", words[2] != "(detached)" { state.branch = String(words[2]) }
+            if words[1] == "branch.ab", words.count == 4 {                  // # branch.ab +1 -2
+                state.ahead = Int(words[2].dropFirst())
+                state.behind = Int(words[3].dropFirst())
+            }
+        }
+        // An empty repository has no commit to show: the rest still holds.
+        if let last = await git(["log", "-1", "--format=%ct%x09%s"])?.split(separator: "\n").first?.split(separator: "\t", maxSplits: 1),
+           let time = TimeInterval(last[0]) {
+            state.lastCommit = Date(timeIntervalSince1970: time)
+            state.subject = last.count > 1 ? String(last[1]) : nil
+        }
+        return state
     }
 
     // MARK: Hosting

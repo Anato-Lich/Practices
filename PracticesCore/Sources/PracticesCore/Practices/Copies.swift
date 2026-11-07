@@ -35,9 +35,10 @@ public enum Copies {
         return lines.joined(separator: "\n")
     }
 
-    /// Every marked copy under the projects root (the registry itself is not a project).
-    public static func scan(root: String = Monitor.projectsRoot(), store: PracticeStore = PracticeStore()) async -> [PracticeCopy] {
-        let files = Doctor.collect(root: root).text.filter { $0.hasSuffix(".py") }
+    /// Every marked copy under the registry's search roots, or under `root` when given (the
+    /// registry itself is not a project).
+    public static func scan(root: String? = nil, store: PracticeStore = PracticeStore()) async -> [PracticeCopy] {
+        let files = Doctor.collect(roots: root.map { [$0] } ?? store.registry.searchRoots).text.filter { $0.hasSuffix(".py") }
         var found: [(ref: String, version: Int?, path: String, line: Int, text: String)] = []
         for path in files {
             guard let data = FileManager.default.contents(atPath: path),

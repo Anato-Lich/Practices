@@ -76,11 +76,14 @@ struct ServiceView: View {
             if let description = service.description {
                 Text(verbatim: description).foregroundStyle(.secondary)
             }
-            // Where the card is, the repository it is built from, the other names it goes by.
-            let facts = [registry.projectPaths[service.project] ?? service.project, service.repo?.description,
-                         service.aliases.isEmpty ? nil : "aka " + service.aliases.joined(separator: ", ")].compactMap { $0 }
-            Text(verbatim: facts.joined(separator: "  ·  ")).font(.caption.monospaced()).foregroundStyle(.secondary)
-                .textSelection(.enabled)
+            // Where the card is (each part a way back), the repository it is built from, the
+            // other names it goes by.
+            ProjectPath(project: service.project)
+            let facts = [service.repo?.description, service.aliases.isEmpty ? nil : "aka " + service.aliases.joined(separator: ", ")].compactMap { $0 }
+            if !facts.isEmpty {
+                Text(verbatim: facts.joined(separator: "  ·  ")).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
         }
     }
 
@@ -98,6 +101,10 @@ struct ServiceView: View {
                         // The template names keys, never their values.
                         Text(verbatim: endpoint.label ?? endpoint.address ?? endpoint.url ?? "")
                             .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        // Its own conditions, by name; the whole service's are in the card below.
+                        ForEach(endpoint.requires, id: \.self) { id in
+                            Chip(text: registry.condition(id)?.name ?? id, tint: .orange).lineLimit(1)
+                        }
                         Spacer()
                         if let result {
                             Text(verbatim: result.ok ? (result.millis.map { "\($0) ms" } ?? "") : (result.message ?? ""))

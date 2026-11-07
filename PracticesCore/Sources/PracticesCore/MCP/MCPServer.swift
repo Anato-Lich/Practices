@@ -143,7 +143,7 @@ public final class MCPServer: @unchecked Sendable {
         case "search":
             let query = try Self.string(args, "query")
             var out = try encodable(Search.run(query, registry: registry, store: store)) as? [String: Any] ?? [:]
-            let (hits, files) = await ProjectCode.search(query, limit: 20)
+            let (hits, files) = await ProjectCode.search(query, registry: registry, limit: 20)
             out["project_code"] = try encodable(hits)
             out["project_code_files"] = files
             return out
@@ -166,6 +166,8 @@ public final class MCPServer: @unchecked Sendable {
             let file = try registry.addLink(link, from: try Self.string(args, "from"))
             return ["written": true, "file": file.path, "pending": true,
                     "note": "Left uncommitted: the user reviews and accepts it (practicesctl pending / accept)."]
+        case "scan_links":
+            return try encodable(Scanner.scan([try Self.string(args, "target")], registry: registry, store: secrets))
         case "describe_field":
             return try await describeField(service: try Self.string(args, "service"), path: try Self.string(args, "path"),
                                            meaning: try Self.string(args, "meaning"),
@@ -190,6 +192,7 @@ public final class MCPServer: @unchecked Sendable {
             ["id": project.id, "space": project.space, "name": project.name, "description": project.description ?? "",
              "parent": project.parent as Any, "children": projects.filter { $0.parent == project.id }.map(\.id),
              "repos": project.repos.map { ["repo": $0.repo.description, "role": $0.role ?? ""] },
+             "folders": project.folders.map(\.name),
              "services": services.filter { $0.project == project.id }.map(\.id)]
         }
     }
@@ -319,6 +322,9 @@ public final class MCPServer: @unchecked Sendable {
             out["error"] = error
             out["traceback"] = String((result.traceback ?? "").suffix(3000))
         }
+        if let conditions = result.conditions {
+            out["conditions"] = conditions.map { ["id": $0.id, "name": $0.name, "hint": $0.hint ?? ""] }
+        }
         if pii {
             out["note"] = "a service is tagged pii: rows are not returned, only their shape"
         } else {
@@ -419,14 +425,14 @@ public final class MCPServer: @unchecked Sendable {
               "version": ["type": "integer", "description": "defaults to the latest"]], required: ["ref"]),
         tool("search", "Search by meaning: a field (e.g. acc_motion) in the service dictionaries, practices whose result has it, documents, notes and practice code.",
              ["query": ["type": "string"]], required: ["query"]),
-        tool("run_practice", "Run a practice with the credentials of its services and get the result: shape, first rows, fields, steps of a chain, timing. Fails with the condition's hint when a condition does not hold.",
+        tool("run_practice", "Run a practice with the credentials of its services and get the result: shape, first rows, fields, steps of a chain, timing. Fails with the condition's hint when a condition does not hold; a failed run comes with `conditions` — the declared, unchecked conditions of its services (an authorisation, a network) and their hints.",
              ["ref": ["type": "string"],
               "params": ["type": "object", "description": "arguments of run(), as JSON values or strings"],
               "envs": ["type": "object", "description": "environment per service, e.g. {\"kafka\": \"dev\"}"],
               "rows": ["type": "integer", "description": "rows to return, default 20, max 200"]], required: ["ref"]),
         tool("env_names", "Names of the environment variables a set of services provides (and which have no value), and the command that runs a program with them.",
              ["refs": ["type": "array", "items": ["type": "string"], "description": "service or service@env"]], required: ["refs"]),
-        tool("list_copies", "Copies of practices found in ~/Projects by their marker line: current, outdated, or modified in the project and not sent back.",
+        tool("list_copies", "Copies of practices found under the search roots by their marker line: current, outdated, or modified in the project and not sent back.",
              ["ref": ["type": "string"]]),
         tool("update_practice", "Send a changed or new practice. The file is written and left uncommitted: the user reviews the diff and accepts it; until then there is no new version.",
              ["ref": ["type": "string", "description": "service/name or chains/name"],
@@ -447,6 +453,8 @@ public final class MCPServer: @unchecked Sendable {
               "file": ["type": "string", "description": "the env file in the caller's repository"],
               "origin": ["type": "string", "description": "manual, or derived:<file it was derived from>"]],
              required: ["from", "to"]),
+        tool("scan_links", "What the files of a project's or a repository's local clones say and the catalogue may not: compose services without a card, links implied by URLs, DSNs and topic variables in compose and example env files (new, already recorded, or derived earlier and gone), addresses that match no service, shared external networks. Reads only; nothing is written.",
+             ["target": ["type": "string", "description": "a project id or a repository address"]], required: ["target"]),
         tool("describe_field", "Write what a field of a service's results means (and its values). Fills a missing description; an existing one is not overwritten.",
              ["service": ["type": "string"], "path": ["type": "string", "description": "e.g. extra.acc_motion"],
               "meaning": ["type": "string"], "values": ["type": "object", "description": "value → meaning"],

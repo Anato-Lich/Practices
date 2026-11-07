@@ -41,6 +41,8 @@ public struct PracticeResult: Codable, Sendable {
     public let schema: [Field]?
     public let steps: [Step]
     var secrets: [SecretUpdate]?
+    /// Of a failed run: the declared, unchecked conditions of its services, with their hints.
+    public var conditions: [Condition]?
 
     // Filled on the Swift side.
     public var stdout: String = ""
@@ -50,7 +52,7 @@ public struct PracticeResult: Codable, Sendable {
     public var secretsUpdated: [String] = []
 
     enum CodingKeys: String, CodingKey {
-        case ok, error, traceback, ms, shape, columns, rows, tree, text, total, bytes, digest, schema, steps, secrets
+        case ok, error, traceback, ms, shape, columns, rows, tree, text, total, bytes, digest, schema, steps, secrets, conditions
     }
 }
 
@@ -142,6 +144,8 @@ public struct PracticeRunner: Sendable {
         let rawResult = try? JSONDecoder().decode(PracticeResult.self, from: raw)
         result.secretsUpdated = try apply(rawResult?.secrets ?? [], services: resolved.services)
         result.secrets = nil
+        let declared = result.ok ? [] : Checks.declared(resolved.services.map(\.service), registry: store.registry)
+        result.conditions = declared.isEmpty ? nil : declared
         result.stdout = scrub(stdout, values: secretValues)
         result.stderr = scrub(stderr, values: secretValues)
         result.envs = Dictionary(uniqueKeysWithValues: resolved.services.map { ($0.service.id, $0.env) })

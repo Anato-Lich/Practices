@@ -94,7 +94,9 @@ public struct PracticeStore: Sendable {
     public func versions(of practice: Practice) async throws -> [PracticeVersion] {
         guard let place = url(of: practice).flatMap(registry.place(of:)) else { return [] }
         // A space without commits yet has no history, not an error.
-        guard let log = try? await registry.git(place.root, ["log", "--follow", "--format=%H%x09%ct%x09%s", "--", place.path]) else { return [] }
+        // No --follow: it takes a new practice for a copy of an older, similar one (practices repeat
+        // their connection code) and counts that one's commits too.
+        guard let log = try? await registry.git(place.root, ["log", "--format=%H%x09%ct%x09%s", "--", place.path]) else { return [] }
         let lines = log.split(separator: "\n").reversed()
         return lines.enumerated().compactMap { i, line in
             let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)

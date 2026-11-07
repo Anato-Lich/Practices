@@ -1,6 +1,6 @@
 import Foundation
 
-/// Code in ~/Projects that mentions something — the last group of search: logic that is not a
+/// Code under the search roots that mentions something — the last group of search: logic that is not a
 /// practice yet.
 public struct CodeHit: Codable, Hashable, Sendable {
     public let path: String
@@ -14,10 +14,11 @@ public enum ProjectCode {
 
     static let extensions: Set<String> = ["py", "ts", "tsx", "js", "sql", "go", "swift"]
 
-    public static func search(_ query: String, root: String = Monitor.projectsRoot(), limit: Int = 200) async -> (hits: [CodeHit], files: Int) {
+    /// Without `root`: the registry's search roots (`local.yaml`).
+    public static func search(_ query: String, root: String? = nil, registry: Registry = Registry(), limit: Int = 200) async -> (hits: [CodeHit], files: Int) {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard q.utf8.count >= 4 else { return ([], 0) }
-        let files = Doctor.collect(root: root).text.filter { extensions.contains(($0 as NSString).pathExtension.lowercased()) }
+        let files = Doctor.collect(roots: root.map { [$0] } ?? registry.searchRoots).text.filter { extensions.contains(($0 as NSString).pathExtension.lowercased()) }
         let found = await MultiSearch([q]).scan(files)
         var hits: [CodeHit] = []
         for path in found.keys.sorted() {
