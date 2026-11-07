@@ -9,7 +9,6 @@ struct MainWindow: View {
     static let id = "main"
 
     @Environment(RegistryModel.self) private var registry
-    @Environment(MonitorModel.self) private var monitor
     enum SidebarItem: Hashable {
         case space(String)
         case project(String)
@@ -17,7 +16,6 @@ struct MainWindow: View {
         case practice(String)
         case pending
         case unassigned
-        case conflicts
         case doctor
     }
 
@@ -40,7 +38,6 @@ struct MainWindow: View {
                     }
                 }
                 Section {
-                    counted("Port conflicts", "point.3.filled.connected.trianglepath.dotted", monitor.conflicts.count).tag(SidebarItem.conflicts)
                     counted("Doctor", "stethoscope", registry.findings?.count ?? 0).tag(SidebarItem.doctor)
                 }
             }
@@ -65,8 +62,6 @@ struct MainWindow: View {
                     PendingView()
                 case .unassigned:
                     UnassignedView()
-                case .conflicts:
-                    ConflictsView()
                 case .doctor:
                     DoctorView()
                 case nil:

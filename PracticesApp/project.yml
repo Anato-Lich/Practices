@@ -26,7 +26,7 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: ""
-        # Not sandboxed: the monitor runs lsof and docker and signals other processes.
+        # Not sandboxed: it runs git, gh, glab and uv, and practices reach internal services.
         ENABLE_APP_SANDBOX: "NO"
         ENABLE_HARDENED_RUNTIME: "NO"
         # Both, like Tandem: the generated keys below are merged into this file, which exists

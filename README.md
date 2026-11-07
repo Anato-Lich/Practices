@@ -16,9 +16,6 @@ the first reader is the agent working in a project.
   history; *chains* combine them. Practices are copied into projects; through MCP the agent
   reads the catalogue and sends practices and links back as uncommitted changes the user
   accepts.
-- **Monitor** *(frozen)* — who holds which port, which container quietly died, and stop /
-  kill / logs for the ones a terminal will not stop. Works with OrbStack or Docker Desktop
-  through the `docker` CLI and its active context.
 
 Plan and stages: [`PLAN.md`](PLAN.md). Choices and their alternatives:
 [`DECISIONS.md`](DECISIONS.md).
@@ -37,7 +34,7 @@ Plan and stages: [`PLAN.md`](PLAN.md). Choices and their alternatives:
 ./run.sh                                  # xcodegen + xcodebuild + open (Debug)
 ./install.sh                              # Release build into /Applications
 tools/build-dev.sh                        # Command Line Tools only, when xcodebuild is unavailable
-cd PracticesCore && swift run practicesctl ports
+cd PracticesCore && swift run practicesctl spaces
 ```
 
 Tests (Swift Testing). With full Xcode selected: `swift test`. With the Command Line
@@ -50,14 +47,6 @@ swift test -Xswiftc -F -Xswiftc $F -Xlinker -F -Xlinker $F -Xlinker -rpath -Xlin
 ```
 
 ## `practicesctl`
-
-```
-practicesctl ports          occupied TCP ports and who holds them
-practicesctl containers     containers, failed ones first
-practicesctl conflicts      ports compose files in ~/Projects want that something holds
-practicesctl watch          container incidents as they happen
-practicesctl logs <name>    last 200 log lines
-```
 
 Catalogue (`~/.practices/spaces/<space>`):
 

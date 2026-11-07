@@ -71,6 +71,12 @@ public enum Scanner {
         return lower == "env.example" || [".default.env", ".env.example", ".env.sample", ".env.default"].contains { lower.hasSuffix($0) }
     }
 
+    static func isComposeFile(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        guard lower.hasSuffix(".yml") || lower.hasSuffix(".yaml") else { return false }
+        return lower.hasPrefix("docker-compose") || lower.hasPrefix("compose")
+    }
+
     /// The real file an example stands for: `.default.env` and `.env.example` → `.env`.
     static func realCounterpart(_ path: String) -> String {
         if path.lowercased().hasSuffix(".default.env") { return String(path.dropLast(12)) + ".env" }
@@ -92,7 +98,7 @@ public enum Scanner {
                 guard (try? fm.destinationOfSymbolicLink(atPath: full)) == nil, fm.fileExists(atPath: full, isDirectory: &isDir) else { continue }
                 if isDir.boolValue {
                     if !name.hasPrefix(".") && !Doctor.skippedDirs.contains(name) { walk(path, depth: depth + 1) }
-                } else if ComposeScanner.isComposeFile(name) {
+                } else if isComposeFile(name) {
                     compose.append(path)
                 } else if isExampleEnv(name) {
                     env.append(path)

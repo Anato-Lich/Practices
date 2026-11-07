@@ -1,6 +1,6 @@
 import Foundation
 
-/// Runs the command-line tools the monitor is built on (`lsof`, `docker`).
+/// Runs the command-line tools the catalogue relies on (`git`, `gh`, `glab`, `uv`).
 ///
 /// An app launched from Finder gets a minimal PATH, so tools are looked up in the usual
 /// install locations rather than trusted to be on it: Docker Desktop and OrbStack put

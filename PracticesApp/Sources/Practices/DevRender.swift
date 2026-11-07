@@ -2,11 +2,9 @@
 import SwiftUI
 import AppKit
 
-/// `Practices --render-popover out.png`: takes one real snapshot, renders the popover
-/// offscreen and exits. Lets the layout be checked without clicking the menu-bar item.
-/// `--render-window out.png [--space id | --project id | --service id | --practice ref |
-/// --pending | --search text | --doctor] [--expand project,…] [--wait seconds] [--light]`
-/// does the same for the main window.
+/// `Practices --render-window out.png [--space id | --project id | --service id | --practice ref |
+/// --pending | --search text | --doctor] [--expand project,…] [--wait seconds] [--light]`:
+/// renders the main window offscreen and exits. Lets the layout be checked without clicking.
 @MainActor
 enum DevRender {
     static func runIfRequested() {
@@ -28,51 +26,40 @@ enum DevRender {
             }
             return
         }
-        let window = args.firstIndex(of: "--render-window")
-        guard let i = args.firstIndex(of: "--render-popover") ?? window, i + 1 < args.count else { return }
+        guard let i = args.firstIndex(of: "--render-window"), i + 1 < args.count else { return }
         let path = args[i + 1]
         Task { @MainActor in
-            let model = MonitorModel()
             let registry = RegistryModel()
-            let content: AnyView
-            if window != nil {
-                registry.reload()
-                if args.contains("--doctor") { await registry.runDoctor() }
-                if let j = args.firstIndex(of: "--practice"), j + 1 < args.count {
-                    let ref = args[j + 1]
-                    registry.selection = .practice(ref)
-                    let practice = registry.model(for: ref)
-                    try? await Task.sleep(for: .seconds(1))
-                    practice.run()
-                    while practice.running { try? await Task.sleep(for: .milliseconds(200)) }
-                    if let k = args.firstIndex(of: "--step"), k + 1 < args.count { practice.selectedStep = Int(args[k + 1]) }
-                }
-                if let j = args.firstIndex(of: "--service"), j + 1 < args.count { registry.selection = .service(args[j + 1]) }
-                if let j = args.firstIndex(of: "--space"), j + 1 < args.count { registry.selection = .space(args[j + 1]) }
-                if let j = args.firstIndex(of: "--project"), j + 1 < args.count, let project = registry.project(args[j + 1]) {
-                    registry.selection = .project(project.id)
-                    await registry.loadGitStates(of: project)
-                }
-                if args.contains("--pending") {
-                    await registry.refreshPending()
-                    registry.selection = .pending
-                }
-                // `--expand a,b`: these projects open in the sidebar, with their services.
-                if let j = args.firstIndex(of: "--expand"), j + 1 < args.count {
-                    for id in args[j + 1].split(separator: ",").map(String.init) {
-                        registry.expanded.insert(.project(id))
-                        for service in registry.services where service.project == id { registry.expanded.insert(.service(service.id)) }
-                    }
-                }
-                if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
-                content = AnyView(MainWindow().environment(registry).environment(model)
-                    .frame(width: 1200, height: 780))
-            } else {
-                await model.refresh()
-                await model.rescanCompose()
-                content = AnyView(MonitorPopover().environment(model))
+            registry.reload()
+            if args.contains("--doctor") { await registry.runDoctor() }
+            if let j = args.firstIndex(of: "--practice"), j + 1 < args.count {
+                let ref = args[j + 1]
+                registry.selection = .practice(ref)
+                let practice = registry.model(for: ref)
+                try? await Task.sleep(for: .seconds(1))
+                practice.run()
+                while practice.running { try? await Task.sleep(for: .milliseconds(200)) }
+                if let k = args.firstIndex(of: "--step"), k + 1 < args.count { practice.selectedStep = Int(args[k + 1]) }
             }
-            let view = content
+            if let j = args.firstIndex(of: "--service"), j + 1 < args.count { registry.selection = .service(args[j + 1]) }
+            if let j = args.firstIndex(of: "--space"), j + 1 < args.count { registry.selection = .space(args[j + 1]) }
+            if let j = args.firstIndex(of: "--project"), j + 1 < args.count, let project = registry.project(args[j + 1]) {
+                registry.selection = .project(project.id)
+                await registry.loadGitStates(of: project)
+            }
+            if args.contains("--pending") {
+                await registry.refreshPending()
+                registry.selection = .pending
+            }
+            // `--expand a,b`: these projects open in the sidebar, with their services.
+            if let j = args.firstIndex(of: "--expand"), j + 1 < args.count {
+                for id in args[j + 1].split(separator: ",").map(String.init) {
+                    registry.expanded.insert(.project(id))
+                    for service in registry.services where service.project == id { registry.expanded.insert(.service(service.id)) }
+                }
+            }
+            if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
+            let view = MainWindow().environment(registry).frame(width: 1200, height: 780)
                 .background(Color(nsColor: .windowBackgroundColor))
                 .environment(\.colorScheme, args.contains("--light") ? .light : .dark)
             // ImageRenderer leaves ScrollView and AppKit-backed controls blank, so the view
