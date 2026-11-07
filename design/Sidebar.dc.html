@@ -44,15 +44,17 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
       </sc-for>
     </div>
   </div>
-  <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; padding: 0 12px; border-top: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">2 пространства · 31 проект · 145 сервисов</div>
+  <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-top: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{footer}}</span>
+    <a href="Settings.dc.html" aria-label="Настройка" title="Настройка" style="{{gearStyle}}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg></a></div>
 </nav>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"selected":{"editor":"text","default":"space:x-keeper","section":"Состояние"},"scroll":{"editor":"int","default":0,"min":0,"max":1400,"unit":"px","section":"Состояние"},"query":{"editor":"text","default":"","section":"Состояние"},"$preview":{"width":260,"height":860}}'>
+<script type="text/x-dc" data-dc-script data-props='{"selected":{"editor":"text","default":"space:x-keeper","section":"Состояние"},"scroll":{"editor":"int","default":0,"min":0,"max":1400,"unit":"px","section":"Состояние"},"query":{"editor":"text","default":"","section":"Состояние"},"mode":{"editor":"select","default":"","options":["","empty"],"section":"Состояние"},"$preview":{"width":260,"height":860}}'>
 class Component extends DCLogic {
   renderVals() {
     const selected = this.props.selected ?? 'space:x-keeper';
     const K = { api: '#5AA9FF', front: '#4FD1D9', data: '#4ED27A', bus: '#FFB04A', ext: '#FF7AA2', hw: '#E8C547', worker: '#B48CFF', other: '#9A9AA3' };
     const rows = [];
+    const empty = this.props.mode === 'empty';
     const add = (key, label, depth, opts = {}) => {
       const sel = key === selected, mono = opts.mono;
       rows.push({
@@ -60,13 +62,24 @@ class Component extends DCLogic {
         countColor: sel ? 'rgba(255,255,255,0.85)' : (opts.countColor || '#8A8A92'),
         dot: opts.kind ? 'width: 7px; height: 7px; border-radius: 50%; flex: none; background: ' + (sel ? '#FFFFFF' : K[opts.kind]) : 'display: none',
         labelStyle: 'flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap' + (mono ? '; font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 12px' : ''),
-        style: 'height: 24px; box-sizing: border-box; padding: 0 8px 0 ' + (8 + depth * 16) + 'px; display: flex; align-items: center; gap: 6px; border-radius: 5px; white-space: nowrap; background: ' + (sel ? '#0A84FF' : 'transparent') + '; color: ' + (sel ? '#FFFFFF' : '#F2F2F4'),
+        style: 'height: 24px; box-sizing: border-box; padding: 0 8px 0 ' + (8 + depth * 16) + 'px; display: flex; align-items: center; gap: 6px; border-radius: 5px; white-space: nowrap; background: ' + (sel ? '#0A84FF' : 'transparent') + '; color: ' + (sel ? '#FFFFFF' : opts.disabled ? '#6E6E76' : '#F2F2F4'),
       });
     };
     // Заголовок секции сворачивается: глиф ▾/▸ справа, появляется ярче при наведении.
+    const gear = (on) => 'width: 22px; height: 20px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 4px; text-decoration: none; color: ' + (on ? '#FFFFFF' : '#8A8A92') + '; background: ' + (on ? '#0A84FF' : 'transparent');
     const header = (label, fold) => rows.push({ key: '', label, disc: '', count: '', countColor: '#8A8A92', dot: 'display: none', labelStyle: 'flex: 1',
       fold: fold || '', foldStyle: fold ? 'flex: none; width: 12px; text-align: center; font-size: 10px; color: #6E6E76' : 'display: none',
       style: 'height: 26px; box-sizing: border-box; padding: 10px 8px 0; display: flex; align-items: flex-end; gap: 6px; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em; cursor: default' });
+    if (empty) {
+      // Первый запуск: пространств нет, очереди неактивны, дерево пустое.
+      header('');
+      add('pending', 'Ждут приёмки', 0, { count: '0', disabled: true });
+      add('unassigned', 'Не распределено', 0, { disabled: true });
+      add('map', 'Карта', 0, { disabled: true });
+      header('Пространства');
+      rows.push({ key: '', label: 'Пока нет — добавьте на экране «Начало»', disc: '', count: '', fold: '', foldStyle: 'display: none', countColor: '#8A8A92', dot: 'display: none', labelStyle: 'white-space: normal; line-height: 1.35', style: 'padding: 4px 8px; font-size: 12px; color: #6E6E76' });
+      return { rows, query: this.props.query ?? '', offset: '0px', footer: 'нет пространств', gearStyle: gear(selected === 'settings') };
+    }
     header('Недавние', '▾');
     add('service:xkeeper-pg', 'xkeeper-pg', 0, { kind: 'data', mono: true });
     add('practice:xkeeper-pg/device-meta', 'xkeeper-pg/device-meta', 0, { disc: '‹›', mono: true });
@@ -97,7 +110,7 @@ class Component extends DCLogic {
     for (const [id, n] of [['ble', 14], ['hyper-imu', 18], ['imu-sphere', 5], ['nn-mapmatch', 1], ['pakz-crypto', 1], ['route-verdict', 3], ['skillhub', 2], ['sphere-external', 3], ['wifi-locator', 6]]) add('project:' + id, id, 0, { disc: '▸', mono: true, count: String(n) });
     header('');
     add('doctor', 'Doctor', 0, { count: '3', countColor: '#FFB04A' });
-    return { rows, query: this.props.query ?? '', offset: '-' + (this.props.scroll ?? 0) + 'px' };
+    return { rows, query: this.props.query ?? '', offset: '-' + (this.props.scroll ?? 0) + 'px', footer: '2 пространства · 31 проект · 145 сервисов', gearStyle: gear(selected === 'settings') };
   }
 }
 </script>

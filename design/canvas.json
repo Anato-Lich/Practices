@@ -136,6 +136,30 @@
 "h": 860,
 "title": "Пустые состояния и ошибка операции",
 "radius": 11
+},
+"Welcome.dc.html": {
+"x": 0,
+"y": 5740,
+"w": 1280,
+"h": 860,
+"title": "Начало · первый запуск",
+"radius": 11
+},
+"WelcomeAgent.dc.html": {
+"x": 1360,
+"y": 5740,
+"w": 1280,
+"h": 860,
+"title": "Начало · настраивает агент",
+"radius": 11
+},
+"Settings.dc.html": {
+"x": 2720,
+"y": 5740,
+"w": 1280,
+"h": 860,
+"title": "Настройка",
+"radius": 11
 }
 },
 "order": [
@@ -154,7 +178,10 @@
 "ConnectSheet.dc.html",
 "ProjectMenus.dc.html",
 "ProjectDelete.dc.html",
-"States.dc.html"
+"States.dc.html",
+"Welcome.dc.html",
+"WelcomeAgent.dc.html",
+"Settings.dc.html"
 ],
 "notes": {
 "t1": {
@@ -184,6 +211,13 @@
 "y": 3940,
 "text": "Дополнения по списку: Doctor, лист подключения, удаление проекта, состояния",
 "maxW": 6720
+},
+"t5": {
+"kind": "title1",
+"x": 0,
+"y": 5440,
+"text": "Первый запуск и настройка (решение 36)",
+"maxW": 4000
 }
 },
 "designSystems": []
