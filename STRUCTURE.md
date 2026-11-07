@@ -54,12 +54,13 @@
 
 | Контур | Что это | Проекты-папки |
 |---|---|---|
-| `ble-panels` | панели администратора и перевозчика по BLE-меткам | `ble` (панели, якоря, проекторы, отчёты, ретрансляция), `nn-mapmatch` ? |
+| `ble-panels` | панели администратора и перевозчика по BLE-меткам | `ble` (панели, якоря, проекторы, отчёты, ретрансляция) |
 | `imu-sphere` | панель разбора IMU | `imu-sphere` |
-| `core` | общий приёмник и обработка, из которых берут оба | `hyper-imu`, `route-verdict`, `wifi-locator` |
+| `core` | общий приёмник и обработка, из которых берут оба | `hyper-imu`, `route-verdict`, `nn-mapmatch`, `wifi-locator`; сервер плиток `ble-panels-tiles` (лежит в репозитории ble-panels, но обслуживает оба фронта) |
 
-`nn-mapmatch` (`nn-live`) — к `ble-panels`, как вы сказали; по связям он читает Kafka и
-ClickHouse ядра и пишет в Kafka, так что технически он ядро, а по потребителю — панели. ?
+`nn-live` и ядро маршрутов (`route-verdict`) — ядро: читают Kafka/ClickHouse ядра, пишут в Kafka,
+их результат потребляют панели обоих продуктов. Плитки — один сервер, `ble-panels-tiles`
+(алиасы `imu-sphere-tiles`, `tiles`); пустая карточка `tiles` из скана склеена в него.
 
 ### SphereTele — роли по сервисам
 
@@ -67,8 +68,8 @@ ClickHouse ядра и пишет в Kafka, так что технически �
 |---|---|---|---|
 | front | ble-panels-frontend | imu-sphere-frontend | |
 | bff | ble-panels-api | imu-sphere-api | |
-| backend | ble-anchors, ble-panels-tiles, tiles ? | | wifi-db, route-verdict, valhalla |
-| processing | ble-panels-projector, nn-live ? | imu-sphere-worker | hyper-normalizer, hyper-calibrator, hyper-imu-sec, hyper-position, hyper-scan-forwarder, hyper-verdict-ingest, control-pair, route-verdict-clean-stream, wifi-locator-enrich |
+| backend | ble-anchors | | wifi-db, route-verdict, valhalla, ble-panels-tiles |
+| processing | ble-panels-projector | imu-sphere-worker | hyper-normalizer, hyper-calibrator, hyper-imu-sec, hyper-position, hyper-scan-forwarder, hyper-verdict-ingest, control-pair, route-verdict-clean-stream, nn-live, wifi-locator-enrich |
 | worker | ble-panels-metrics, bus-reports, track-store, wifi-learning | | validator ?, batch_worker ? |
 | infra | ble-anchors-pg, ble-panels-pg | imu-sphere-pg | kafka, clickhouse, hyper-redis, hyper-norm-redis, wifi-locator-pg, wifi-locator-redis |
 | ingest | ble-anchors-receiver | | hyper-receiver |
@@ -87,6 +88,22 @@ ClickHouse ядра и пишет в Kafka, так что технически �
 | Контур | Проекты-папки | Примечание |
 |---|---|---|
 | `core` (сейчас `platform`) | `platform`, `auth` | sso, system-api, devices-api, xkdb, xkeeper-pg, api-static, tiles-service, wifi-location-api, arm-pg; переименовать проект в «Ядро X-Keeper» |
+
+Откуда `platform` и `auth`: оба созданы 7 ноября при переносе прежнего реестра, не из ваших
+репозиториев-проектов. `platform` — контейнер для общих сервисов, у которых не было своего
+репозитория (system-api, xkdb, xkeeper-pg, devices-api, tiles-service…), плюс три служебных
+репозитория (`system-dev-nginx`, `server_monitoring`, `codex-plugin-marketplace`). `auth` — настоящий
+репозиторий `github.com/x-keeper/auth` (сервер SSO) и его база, вложен в `platform`. Если у ядра
+есть своё имя или репозиторий (system?), переименуем по нему.
+
+Связи между пространствами (проверено по происхождению каждой): Сфера → `xkdb` — настоящая,
+`control-pair` читает контрольный прибор (остальные `hyper-*` → `xkdb` — шум общего env-файла
+`normalizer/.default.env`, DECISIONS 28). Кипер → Сфера: `device-analysis-bff → wifi-db` была
+**ложной** — склейка по алиасу `localhost:8000`, удалена, алиас снят; `device-analysis-api →
+yandex-locator` — настоящая, свой ключ `YANDEX_API_KEY`, `/v1/locate` (внешний сервис, общий для
+двух пространств); `device-analysis-api → kafka` — ручная связь на единственную карточку `kafka`,
+а по содержанию (`device_data_stream`, `KAFKA_BOOTSTRAP`) это **Kafka X-Keeper, не Сферы** —
+нужна отдельная карточка `xkeeper-kafka` в ядре. ?
 | `analytics` | `cabinet-analysis`, `device-analysis` | как есть |
 | `factory` | `scada`, `mes`, `erp`, `x-vision`, `x-scanners`, `x-shopfloor` | как есть (`x-factory`) |
 | `service` ? | `rma`, `warehouse` | ремонты и склад; сейчас «отдельные проекты», связаны между собой |
