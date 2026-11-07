@@ -119,6 +119,7 @@ struct PendingView: View {
                     }
                     .frame(width: max(geometry.size.width, content), alignment: .leading)
                 }
+                .scrollIndicators(.visible, axes: .horizontal)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.Color.codeBg)
@@ -140,7 +141,7 @@ struct PendingView: View {
         return HStack(spacing: 10) {
             if case let (id, rest)? = change.servicePath {
                 Button { registry.selection = .service(id) } label: {
-                    Text(verbatim: id).foregroundStyle(registry.service(id).map { ServiceClass(for: $0).color } ?? Theme.Color.link)
+                    Text(verbatim: id).foregroundStyle(registry.service(id).map { ServiceClass(for: $0).color } ?? Theme.Color.link).lineLimit(1).fixedSize()
                 }
                 .buttonStyle(.plain)
                 Text(verbatim: "/").foregroundStyle(Theme.Color.textMuted)
@@ -153,6 +154,7 @@ struct PendingView: View {
                 .background(change.stateColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 4))
                 .fixedSize()
             Text(verbatim: note).foregroundStyle(Theme.Color.textMuted).lineLimit(1)
+            Text(verbatim: "↔ длинные строки прокручиваются").foregroundStyle(Theme.Color.textGutter).lineLimit(1).layoutPriority(-1)
             Spacer(minLength: 0)
             HStack(spacing: 6) {
                 if let practice {

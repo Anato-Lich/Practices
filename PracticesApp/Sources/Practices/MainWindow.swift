@@ -30,10 +30,12 @@ struct MainWindow: View {
             }
             VStack(spacing: 0) {
                 Color.clear.frame(height: 52)
+                if let failed = registry.failed { ErrorBar(what: failed.what, text: failed.text) }
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Theme.Color.windowBg)
-                StatusBar(items: statusItems)
+                StatusBar(items: statusItems,
+                          alert: registry.failed.map { "последняя операция с ошибкой · " + $0.at.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)) })
             }
             .overlayPreferenceValue(ShellToolbarKey.self, alignment: .top) { toolbar($0) }
         }
@@ -42,21 +44,17 @@ struct MainWindow: View {
         .ignoresSafeArea(.container, edges: .top)
         .overlay { Palette() }
         .preferredColorScheme(.dark)
-        .alert(Text(verbatim: "Practices"), isPresented: Binding(get: { registry.error != nil }, set: { if !$0 { registry.error = nil } })) {
-        } message: {
-            Text(verbatim: registry.error ?? "")
-        }
-        .confirmationDialog(Text(verbatim: "Удалить проект \(registry.removalCandidate ?? "")?"),
-                            isPresented: Binding(get: { registry.removalCandidate != nil }, set: { if !$0 { registry.removalCandidate = nil } })) {
-            Button(role: .destructive) {
-                if let id = registry.removalCandidate { Task { await registry.remove(project: id) } }
-            } label: { Text(verbatim: "Удалить") }
-            Button(role: .cancel) {} label: { Text(verbatim: "Отмена") }
-        } message: {
-            let id = registry.removalCandidate ?? ""
-            let ids = registry.services.filter { $0.project == id }.map(\.id)
-            let dangling = ids.flatMap { registry.registry.links(to: $0).filter { !ids.contains($0.from) } }.count
-            Text(verbatim: "Сервисы проекта (\(ids.count)) будут удалены, его репозитории попадут в ignore пространства. Связи из других сервисов на них останутся висеть: \(dangling).")
+        .overlay(alignment: .top) {
+            if let id = registry.removalCandidate, let project = registry.project(id) {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.45).onTapGesture { registry.removalCandidate = nil }
+                    HStack(spacing: 0) {
+                        if sidebarShown { Color.clear.frame(width: 261, height: 0) }
+                        RemoveProjectSheet(project: project).frame(maxWidth: .infinity)
+                    }
+                    .padding(.top, 52)
+                }
+            }
         }
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
@@ -209,6 +207,131 @@ struct MainWindow: View {
         } description: {
             Text("Add one with `practicesctl service add <id> --project <project>`.")
         }
+    }
+}
+
+/// «Не удалось <что>» under the toolbar (`design/States.dc.html`). No «Повторить»: the model keeps no retry.
+private struct ErrorBar: View {
+    @Environment(RegistryModel.self) private var registry
+    let what: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(verbatim: "✕").font(Theme.mono(12, .semibold)).foregroundStyle(Theme.Color.error)
+            Text(verbatim: "Не удалось " + what).font(Theme.ui(12)).lineLimit(1).fixedSize()
+            Text(verbatim: text.replacingOccurrences(of: "\n", with: " ")).font(Theme.mono(11.5)).foregroundStyle(Theme.Color.textSecondary)
+                .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+                .help(text)
+            Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) } label: {
+                Text(verbatim: "Скопировать текст")
+            }
+            .buttonStyle(CompactButtonStyle(height: 22, fontSize: 11.5))
+            Button { registry.failed = nil } label: {
+                Text(verbatim: "×").font(Theme.ui(13)).foregroundStyle(Theme.Color.textMuted).frame(width: 22, height: 22).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).help(Text(verbatim: "Закрыть"))
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 32)
+        .background(Theme.Color.error.opacity(0.12))
+        .overlay(alignment: .bottom) { Theme.Color.error.opacity(0.45).frame(height: 1) }
+    }
+}
+
+/// The removal of a project, confirmed with the registry's numbers (`design/ProjectDelete.dc.html`):
+/// a 480 px sheet under the toolbar. Only the catalogue's record goes; folders on disk stay.
+private struct RemoveProjectSheet: View {
+    @Environment(RegistryModel.self) private var registry
+    let project: Project
+    @State private var keepRepos = false
+
+    var body: some View {
+        let services = registry.services(of: project)
+        let ids = Set(services.map(\.id))
+        let practices = services.reduce(0) { $0 + (registry.practices[$1.id]?.count ?? 0) } + (registry.chains[project.id]?.count ?? 0)
+        let own = services.reduce(0) { $0 + registry.links(of: $1.id).count }
+        let dangling = services.flatMap { s in registry.links(to: s.id).filter { !ids.contains($0.from) }.map { "\($0.from) → \(s.id)" } }
+        let clone = project.repos.lazy.compactMap { registry.clones[$0.repo] }.first.map { ($0 as NSString).abbreviatingWithTildeInPath }
+
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(verbatim: "!").font(Theme.mono(16, .semibold)).foregroundStyle(Theme.Color.error)
+                    .frame(width: 32, height: 32).background(Theme.Color.error.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 4) {
+                    (Text(verbatim: "Удалить проект ") + Text(verbatim: project.id).font(Theme.mono(15, .semibold)) + Text(verbatim: " из каталога?"))
+                        .font(Theme.ui(15, .semibold))
+                    Group {
+                        if let clone {
+                            Text(verbatim: "Папка ") + Text(verbatim: clone).font(Theme.mono(12)) + Text(verbatim: " и репозитории на хостинге не трогаются.")
+                        } else {
+                            Text(verbatim: "Клоны и репозитории на хостинге не трогаются.")
+                        }
+                    }
+                    .font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                bullet(bold(ru(services.count, "сервис", "сервиса", "сервисов")) + Text(verbatim: " и ")
+                       + bold(ru(practices, "практика", "практики", "практик")) + Text(verbatim: " уйдут из каталога вместе с заметками и полями"))
+                if !project.repos.isEmpty {
+                    let repos = bold(ru(project.repos.count, "репозиторий", "репозитория", "репозиториев"))
+                    bullet(repos + Text(verbatim: keepRepos ? " останутся в «Не распределено»" : " попадут в ignore — «Не распределено» их больше не предложит"))
+                }
+                bullet(bold(ru(own, "связь", "связи", "связей")) + Text(verbatim: " из \(project.id) удалятся")
+                       + (dangling.isEmpty ? Text(verbatim: "")
+                          : Text(verbatim: "; ") + bold(ru(dangling.count, "связь повиснет", "связи повиснут", "связей повиснут"), Theme.Color.warn)
+                            + Text(verbatim: ": \(dangling[0])" + (dangling.count > 1 ? " и другие останутся у вызывающих" : " останется у вызывающего") + " с пометкой «цели нет»")))
+                if practices > 0 {
+                    bullet(Text(verbatim: "Запуски практик и копии ") + Text(verbatim: "practices:").font(Theme.mono(12))
+                           + Text(verbatim: " в чужом коде останутся, но перестанут сверяться с версией"))
+                }
+            }
+            if !project.repos.isEmpty {
+                Toggle(isOn: $keepRepos) { Text(verbatim: "Не помечать репозитории ignore — оставить в «Не распределено»") }
+                    .toggleStyle(.checkbox).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
+            }
+            HStack(spacing: 8) {
+                Text(verbatim: "Это git-коммит в ~/.practices: откатить можно через историю.")
+                    .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).frame(maxWidth: .infinity, alignment: .leading)
+                Button { registry.removalCandidate = nil } label: { Text(verbatim: "Отмена") }
+                    .buttonStyle(CompactButtonStyle(height: 28)).keyboardShortcut(.cancelAction)
+                Button {
+                    registry.removalCandidate = nil
+                    Task { await registry.remove(project: project.id, ignoreRepos: !keepRepos) }
+                } label: { Text(verbatim: "Удалить").font(Theme.ui(13, .semibold)).foregroundStyle(Theme.Color.error) }
+                    .buttonStyle(DestructiveButtonStyle())
+            }
+            .padding(.top, 4)
+        }
+        .padding(20)
+        .frame(width: 480, alignment: .leading)
+        .background(Theme.Color.cardBg)
+        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12))
+        .overlay(UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12).strokeBorder(Theme.Color.borderButton))
+        .shadow(color: .black.opacity(0.6), radius: 30, y: 24)
+        .task(id: project.id) { await registry.loadGitStates(of: project) }
+    }
+
+    private func bold(_ s: String, _ color: Color = Theme.Color.text) -> Text { Text(verbatim: s).bold().foregroundColor(color) }
+
+    private func bullet(_ text: Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(verbatim: "•")
+            text.fixedSize(horizontal: false, vertical: true)
+        }
+        .font(Theme.ui(12.5)).foregroundStyle(Theme.Color.textCode)
+    }
+}
+
+/// 28 high, error outline on no fill: the sheet's «Удалить».
+private struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 14).frame(height: 28)
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.Color.error))
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .contentShape(Rectangle())
     }
 }
 

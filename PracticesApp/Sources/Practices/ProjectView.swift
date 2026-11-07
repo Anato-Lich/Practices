@@ -16,6 +16,9 @@ struct ProjectView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(verbatim: project.name).font(Theme.ui(17, .semibold))
+                    if let dir = workdir {
+                        Text(verbatim: short(dir.path)).font(Theme.mono(12)).foregroundStyle(Theme.Color.textMuted).lineLimit(1).truncationMode(.head)
+                    }
                     if let description = project.description {
                         Text(verbatim: description).font(Theme.ui(13)).foregroundStyle(Theme.Color.textSecondary).textSelection(.enabled)
                     }
@@ -291,9 +294,9 @@ struct ProjectView: View {
                 Text(verbatim: repo.description.hasPrefix("github.com/") ? "GitHub ↗" : "GitLab ↗")
             }
         }
-        let nested = !(registry.childProjects[project.id] ?? []).isEmpty
-        Button { registry.removalCandidate = project.id } label: { Text(verbatim: "Удалить…") }
-            .disabled(nested).help(Text(verbatim: nested ? "Сначала удалите вложенные проекты" : "Удалить проект"))
+        Menu { ProjectMenuItems(id: project.id) } label: { Text(verbatim: "…") }
+            .menuIndicator(.hidden).fixedSize()
+            .help(Text(verbatim: "Ещё действия"))
     }
 
     private func folderPath(_ folder: Project.Folder) -> String? {
@@ -303,6 +306,23 @@ struct ProjectView: View {
     private func short(_ path: String) -> String {
         let home = NSHomeDirectory()
         return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+}
+
+/// The project's rare and destructive actions: the toolbar's «…» and the sidebar row's context menu
+/// (`design/ProjectMenus.dc.html`). «Переименовать…» and «Перенести в проект…» wait for a registry operation.
+struct ProjectMenuItems: View {
+    @Environment(RegistryModel.self) private var registry
+    let id: String
+
+    var body: some View {
+        Button { Task { await registry.scanLinks(of: id) } } label: { Text(verbatim: "Связи из кода") }
+        Divider()
+        let nested = !(registry.childProjects[id] ?? []).isEmpty
+        Button(role: .destructive) { registry.removalCandidate = id } label: {
+            Text(verbatim: nested ? "Удалить проект… (сначала вложенные)" : "Удалить проект…").foregroundStyle(Theme.Color.error)
+        }
+        .disabled(nested)
     }
 }
 

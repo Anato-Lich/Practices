@@ -9,6 +9,8 @@ struct Sidebar: View {
     @FocusState private var searchFocused: Bool
     @FocusState private var listFocused: Bool
     @AppStorage("recentCollapsed") private var recentCollapsed = false
+    /// Ids of the spaces whose sections are folded, space-separated.
+    @AppStorage("collapsedSpaces") private var collapsedSpaces = ""
 
     typealias Item = MainWindow.SidebarItem
 
@@ -21,8 +23,7 @@ struct Sidebar: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(rows) {
-                            RowView(row: $0, selected: $0.item != nil && $0.item == registry.selection, select: select, toggle: toggle,
-                                    collapse: { recentCollapsed.toggle() }, remove: { registry.removalCandidate = $0 })
+                            RowView(row: $0, selected: $0.item != nil && $0.item == registry.selection, select: select, toggle: toggle, collapse: collapse)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -60,16 +61,20 @@ struct Sidebar: View {
     private var header: some View {
         HStack(spacing: 0) {
             Spacer()
-            let anyOpen = registry.expanded.contains { if case .project = $0 { true } else { false } }
             Button {
-                if anyOpen { registry.expanded.removeAll() } else { registry.expanded.formUnion(registry.projects.map { .project($0.id) }) }
+                if NSEvent.modifierFlags.contains(.option) {
+                    collapsedSpaces = ""
+                    registry.expanded.formUnion(registry.projects.map { .project($0.id) })
+                } else {
+                    registry.expanded.removeAll()
+                }
             } label: {
-                Image(systemName: anyOpen ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
-                    .font(.system(size: 14)).foregroundStyle(Theme.Color.textMuted)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.Color.textMuted)
                     .frame(width: 28, height: 24).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(Text(verbatim: anyOpen ? "Свернуть всё" : "Развернуть всё"))
+            .help(Text(verbatim: "Свернуть всё · ⌥ развернуть всё"))
             SidebarToggle(shown: $shown)
         }
         .padding(.horizontal, 14)
@@ -188,8 +193,11 @@ struct Sidebar: View {
         let unassigned = registry.unassigned?.filter { !$0.ignored }.count ?? 0
         rows.append(Row(id: Item.unassigned.rowID, item: .unassigned, label: "Не распределено", count: unassigned > 0 ? "\(unassigned)  ⌘2" : "⌘2"))
         rows.append(Row(id: Item.map.rowID, item: .map, label: "Карта", count: "⌘3"))
+        let folded = Set(collapsedSpaces.split(separator: " ").map(String.init))
         for space in registry.spaces {
-            header(space.name)
+            let open = !folded.contains(space.id)
+            rows.append(Row(id: "header:space:" + space.id, label: space.name, header: true, collapsible: true, open: open))
+            guard open else { continue }
             let projects = registry.projects.filter { $0.space == space.id }.count
             let services = registry.services.filter { $0.space == space.id }.count
             rows.append(Row(id: Item.space(space.id).rowID, item: .space(space.id), label: "Обзор", count: "\(projects) · \(services)"))
@@ -212,6 +220,15 @@ struct Sidebar: View {
         registry.searchText = ""
         registry.selection = item
         listFocused = true
+    }
+
+    /// Folds a section: «Недавние» or a space.
+    private func collapse(_ headerID: String) {
+        guard headerID.hasPrefix("header:space:") else { recentCollapsed.toggle(); return }
+        let id = String(headerID.dropFirst("header:space:".count))
+        var folded = collapsedSpaces.split(separator: " ").map(String.init)
+        if folded.contains(id) { folded.removeAll { $0 == id } } else { folded.append(id) }
+        collapsedSpaces = folded.joined(separator: " ")
     }
 
     private func toggle(_ item: Item) {
@@ -246,20 +263,19 @@ struct Sidebar: View {
         let selected: Bool
         let select: (Item) -> Void
         let toggle: (Item) -> Void
-        let collapse: () -> Void
-        let remove: (String) -> Void
+        let collapse: (String) -> Void
 
         var body: some View {
             if row.header && row.collapsible {
                 HStack {
                     SectionTitle(row.label)
                     Spacer()
-                    Text(verbatim: row.open ? "▾" : "▸").font(.system(size: 10)).opacity(0.7).foregroundStyle(Theme.Color.textMuted)
+                    Text(verbatim: row.open ? "▾" : "▸").font(.system(size: 10)).foregroundStyle(Theme.Color.textDisabled).frame(width: 12)
                 }
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .bottomLeading)
                 .contentShape(Rectangle())
-                .onTapGesture(perform: collapse)
+                .onTapGesture { collapse(row.id) }
             } else if row.header {
                 SectionTitle(row.label)
                     .padding(.horizontal, 8)
@@ -289,7 +305,11 @@ struct Sidebar: View {
                 .onTapGesture { if let item = row.item { select(item) } }
                 .contextMenu {
                     if case .project(let id) = row.item {
-                        Button { remove(id) } label: { Text(verbatim: "Удалить проект…") }
+                        Button { select(.project(id)) } label: { Text(verbatim: "Открыть") }
+                        Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(id, forType: .string) } label: {
+                            Text(verbatim: "Скопировать id")
+                        }
+                        ProjectMenuItems(id: id)
                     }
                 }
             }

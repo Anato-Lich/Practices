@@ -228,15 +228,23 @@ struct ServiceView: View {
     }
 
     /// `[project] caller → endpoint  what  access`; the other side opens on click.
+    /// A target removed from the catalogue (its project deleted) stays here marked «цели нет».
     private func linkRow(other: String, _ link: PracticesCore.Link) -> some View {
+        let gone = registry.service(other) == nil
         let project = registry.service(other)?.project ?? ""
         let zone = registry.zoneColor(of: project)
         return Button { registry.selection = .service(other) } label: {
             HStack(spacing: 8) {
-                Text(verbatim: project).font(Theme.mono(10)).foregroundStyle(zone).lineLimit(1)
-                    .padding(.horizontal, 6).frame(minWidth: 96, alignment: .leading)
-                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(zone, lineWidth: 1))
-                Text(verbatim: other).frame(minWidth: 150, alignment: .leading)
+                if gone {
+                    Text(verbatim: "цели нет").font(Theme.mono(10)).foregroundStyle(Theme.Color.warn).lineLimit(1)
+                        .padding(.horizontal, 6).frame(minWidth: 96, alignment: .leading)
+                        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Theme.Color.warn, lineWidth: 1))
+                } else {
+                    Text(verbatim: project).font(Theme.mono(10)).foregroundStyle(zone).lineLimit(1)
+                        .padding(.horizontal, 6).frame(minWidth: 96, alignment: .leading)
+                        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(zone, lineWidth: 1))
+                }
+                Text(verbatim: other).foregroundStyle(gone ? Theme.Color.textMuted : Theme.Color.text).frame(minWidth: 150, alignment: .leading)
                 Text(verbatim: "→ " + (link.endpoint ?? "") + (link.env.map { "@\($0)" } ?? "")).foregroundStyle(Theme.Color.textMuted)
                 Text(verbatim: link.what ?? link.via ?? "").foregroundStyle(Theme.Color.textSecondary)
                     .truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
@@ -248,6 +256,7 @@ struct ServiceView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .allowsHitTesting(!gone)
         .help([link.via, link.why].compactMap { $0 }.joined(separator: " — "))
     }
 

@@ -56,7 +56,14 @@ final class RegistryModel {
     /// Marked copies of practices in ~/Projects; nil until the first scan.
     private(set) var copies: [PracticeCopy]?
     private(set) var doctorRunning = false
-    var error: String?
+    /// The last operation that failed: «Не удалось <what>», the error text, when (`design/States.dc.html`).
+    var failed: (what: String, text: String, at: Date)?
+    /// Views that only have the text; the bar then names no operation.
+    var error: String? {
+        get { failed?.text }
+        set { failed = newValue.map { ("выполнить операцию", $0, Date()) } }
+    }
+    func fail(_ what: String, _ error: any Error) { failed = (what, String(describing: error), Date()) }
     /// A project waiting for the user to confirm its removal.
     var removalCandidate: String?
 
@@ -88,7 +95,7 @@ final class RegistryModel {
             loadChecks()
             chains = Dictionary(projects.map { ($0.id, practiceStore.chains(project: $0.id)) }, uniquingKeysWith: first)
         } catch {
-            self.error = String(describing: error)
+            fail("прочитать каталог", error)
         }
     }
 
@@ -155,7 +162,7 @@ final class RegistryModel {
             let (repos, problems) = try await Repos.unassigned(registry: registry)
             unassigned = repos
             unassignedProblems = problems
-        } catch { self.error = String(describing: error) }
+        } catch { fail("получить список репозиториев", error) }
         loadingUnassigned = false
     }
 
@@ -164,7 +171,7 @@ final class RegistryModel {
             try await registry.assign(repo, to: project)
             unassigned?.removeAll { $0.repo == repo }
             reload()
-        } catch { self.error = String(describing: error) }
+        } catch { fail("назначить репозиторий", error) }
     }
 
     func ignore(_ repo: RepoID, in space: String, _ ignored: Bool = true) async {
@@ -172,15 +179,26 @@ final class RegistryModel {
             try await registry.ignore(repo, in: space, ignored)
             if let i = unassigned?.firstIndex(where: { $0.repo == repo }) { unassigned?[i].ignored = ignored }
             reload()
-        } catch { self.error = String(describing: error) }
+        } catch { fail(ignored ? "скрыть репозиторий" : "вернуть репозиторий", error) }
     }
 
-    func remove(project id: String) async {
+    func remove(project id: String, ignoreRepos: Bool = true) async {
         let space = project(id)?.space
-        do { _ = try await registry.remove(project: id) } catch { self.error = String(describing: error) }
+        do { _ = try await registry.remove(project: id, ignoreRepos: ignoreRepos) } catch { fail("удалить проект \(id)", error) }
         if let space { selection = .space(space) }
         reload()
         await refreshPending()
+    }
+
+    /// Services and links the project's clones give (`practicesctl scan <id> --write`), left for acceptance.
+    func scanLinks(of id: String) async {
+        let (registry, store) = (registry, store)
+        // The scan walks the clones: off the main thread.
+        do { _ = try await Task.detached { try Scanner.write(try Scanner.scan([id], registry: registry, store: store), registry: registry) }.value }
+        catch { fail("найти связи в коде \(id)", error) }
+        reload()
+        await refreshPending()
+        selection = .pending
     }
 
     // MARK: Pending
@@ -194,7 +212,7 @@ final class RegistryModel {
 
     /// Commits one pending change, or all of them.
     func accept(_ change: Pending? = nil) async {
-        do { try await registry.accept(space: change?.space, paths: change.map { [$0.path] } ?? []) } catch { self.error = String(describing: error) }
+        do { try await registry.accept(space: change?.space, paths: change.map { [$0.path] } ?? []) } catch { fail("принять " + (change?.path ?? "изменения"), error) }
         reload()
         await refreshPending()
     }
@@ -275,7 +293,7 @@ final class RegistryModel {
             try store.set(value, key: key, service: id, env: env)
             reload()
         } catch {
-            self.error = String(describing: error)
+            fail("сохранить \(key)", error)
         }
     }
 
@@ -284,13 +302,13 @@ final class RegistryModel {
             try store.remove(key: key, service: id, env: env)
             reload()
         } catch {
-            self.error = String(describing: error)
+            fail("удалить \(key)", error)
         }
     }
 
     func runDoctor() async {
         doctorRunning = true
-        do { findings = try await Doctor.run() } catch { self.error = String(describing: error) }
+        do { findings = try await Doctor.run() } catch { fail("запустить Doctor", error) }
         doctorRunning = false
     }
 

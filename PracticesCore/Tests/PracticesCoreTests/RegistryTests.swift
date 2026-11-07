@@ -294,6 +294,14 @@ struct TempHome {
         let log = try await registry.git(registry.dir(ofSpace: "sp"), ["log", "--format=%s"])
         #expect(log.contains("Remove project a"))
         #expect(await registry.pending().filter { $0.path.hasPrefix("projects/a/") }.isEmpty)
+
+        // Kept repositories stay off the ignore list, back in «Не распределено».
+        let kept = RepoID("github.com/o/b")!
+        try await registry.assign(kept, to: "b")
+        _ = try await registry.remove(project: "b", ignoreRepos: false)
+        #expect(throws: Registry.Failure.self) { try registry.project("b") }
+        #expect(try registry.space("sp").ignore == [repo])
+        #expect(await registry.pending().isEmpty)
     }
 
     @Test func linksAreKeptAtTheCallerAndReadFromBothSides() throws {

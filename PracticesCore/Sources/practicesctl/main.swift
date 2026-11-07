@@ -17,8 +17,8 @@ let usage = """
                                     hosting, plus local clones (--all: ignored ones too)
       assign <repo> <project> [--role r]     repo = a remote address in any form
       unassign <repo>
-      remove-project <id>           delete a project and its services; its repositories go to the
-                                    space's ignore list (refused while it has child projects)
+      remove-project <id> [--keep-repos]   delete a project and its services; its repositories go to the
+                                    space's ignore list unless --keep-repos (refused while it has child projects)
       ignore <repo> [--space id]    keep a repository out of `repos` (the space is the one whose
       unignore <repo> [--space id]  hosting lists it, unless given)
       services [project]            services, their environments and key status
@@ -259,14 +259,14 @@ case "unassign":
 
 case "remove-project":
     guard positional.count == 2 else { print(usage); exit(2) }
-    let id = positional[1], registry = Registry()
+    let id = positional[1], registry = Registry(), keep = args.contains("--keep-repos")
     let project: Project, services: Int, dangling: [(from: String, to: String)]
     do {
         project = try registry.project(id)
         services = try registry.services(project: id).count
-        dangling = try await registry.remove(project: id)
+        dangling = try await registry.remove(project: id, ignoreRepos: !keep)
     } catch { fail("practices: \(error)") }
-    print("removed \(id): \(services) services; repos ignored: " + project.repos.map(\.repo.description).joined(separator: ", "))
+    print("removed \(id): \(services) services; repos \(keep ? "kept unassigned" : "ignored"): " + project.repos.map(\.repo.description).joined(separator: ", "))
     dangling.forEach { print("dangling: \($0.from) → \($0.to)") }
 
 case "ignore", "unignore":

@@ -270,20 +270,24 @@ public struct Registry: Sendable {
     }
 
     /// Deletes a project with its services and puts its repositories on the space's `ignore` list,
-    /// so a scan does not offer them again. A project with child projects is refused. Returns the
-    /// links other services still have to the deleted ones: they stay in their `links.yaml` and dangle.
-    public func remove(project id: String) async throws -> [(from: String, to: String)] {
+    /// so a scan does not offer them again (unless `ignoreRepos` is false). A project with child projects
+    /// is refused. Returns the links other services still have to the deleted ones: they stay in their
+    /// `links.yaml` and dangle.
+    public func remove(project id: String, ignoreRepos: Bool = true) async throws -> [(from: String, to: String)] {
         let project = try project(id)
         let children = try projects().filter { $0.parent == id }.map(\.id)
         guard children.isEmpty else { throw Failure("project \(id) has child projects: " + children.joined(separator: ", ")) }
         guard let projectDir = dir(ofProject: id) else { throw Failure("no project \(id)") }
         let ids = try services(project: id).map(\.id)
         let dangling = ids.flatMap { to in links(to: to).filter { !ids.contains($0.from) }.map { (from: $0.from, to: to) } }
-        var space = try space(project.space)
-        space.ignore += project.repos.map(\.repo).filter { !space.ignore.contains($0) }
-        let spaceFile = try write(Self.yaml(space), to: dir(ofSpace: project.space).appendingPathComponent("space.yaml"))
+        var files = [projectDir]
+        if ignoreRepos {
+            var space = try space(project.space)
+            space.ignore += project.repos.map(\.repo).filter { !space.ignore.contains($0) }
+            files.append(try write(Self.yaml(space), to: dir(ofSpace: project.space).appendingPathComponent("space.yaml")))
+        }
         try FileManager.default.removeItem(at: projectDir)
-        try await commit("Remove project \(id)", [spaceFile, projectDir])
+        try await commit("Remove project \(id)", files)
         return dangling
     }
 

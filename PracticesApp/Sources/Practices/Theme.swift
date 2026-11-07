@@ -333,8 +333,11 @@ struct Breadcrumb: View {
 struct StatusBar: View {
     let items: [String]
     var trailing = "⌘K — перейти"
+    /// «последняя операция с ошибкой · 14:07» behind a red dot, first.
+    var alert: String?
     var body: some View {
         HStack(spacing: 14) {
+            if let alert { Text(verbatim: "●").foregroundStyle(Theme.Color.error) + Text(verbatim: " " + alert) }
             ForEach(items.indices, id: \.self) { Text(verbatim: items[$0]).lineLimit(1).truncationMode(.head) }
             Spacer(minLength: 0)
             Text(verbatim: trailing)

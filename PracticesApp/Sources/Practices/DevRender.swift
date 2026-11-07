@@ -62,6 +62,9 @@ enum DevRender {
             if args.contains("--map") { registry.selection = .map }
             if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
             if args.contains("--palette") { registry.paletteShown = true }
+            // `--remove`: the removal sheet of the `--project`; `--failed <what>`: the error bar.
+            if args.contains("--remove"), case .project(let id)? = registry.selection { registry.removalCandidate = id }
+            if let j = args.firstIndex(of: "--failed"), j + 1 < args.count { registry.failed = (args[j + 1], "git commit: exit 128 · .git/index.lock exists", Date()) }
             // The design's size; the traffic lights a real window draws, so the PNG compares with it.
             let view = MainWindow().environment(registry).frame(width: 1280, height: 860)
                 .overlay(alignment: .topLeading) {
