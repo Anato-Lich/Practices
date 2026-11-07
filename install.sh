@@ -35,5 +35,8 @@ osascript -e 'tell application id "dev.practices.app" to quit' >/dev/null 2>&1 |
 for _ in {1..50}; do pgrep -xq Practices || break; sleep 0.1; done
 rm -rf /Applications/Practices.app
 ditto "$APP" /Applications/Practices.app
-open /Applications/Practices.app
+open /Applications/Practices.app || true
+# Launch Services sometimes drops the open that follows a quit; one retry is enough.
+for _ in {1..30}; do pgrep -xq Practices && break; sleep 0.1; done
+pgrep -xq Practices || open /Applications/Practices.app
 echo "Installed: /Applications/Practices.app"
