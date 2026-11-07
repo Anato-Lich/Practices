@@ -337,7 +337,11 @@ public enum Scanner {
             for (name, service) in clone.compose.sorted(by: { order($0.key) < order($1.key) }) {
                 // The repository's own service, or — for an image, not a build — shared
                 // infrastructure known under this name (`hyper-kafka` is `kafka`) where it may be meant.
+                // A service built here from another repository (`nn-live` from nn-mapmatch) is known
+                // under `<repo>-<name>`: that id or alias in the same space is the same service.
+                let prefixed = "\(repo.description.split(separator: "/").last!)-\(name)"
                 if let same = catalog.first(where: { $0.repo == repo && ($0.id == name || $0.aliases.contains(name)) })
+                    ?? catalog.first(where: { $0.space == clone.space && ($0.id == prefixed || $0.aliases.contains(prefixed)) })
                     ?? (service.builds ? nil : catalog.first { $0.aliases.contains(name) && reaches($0, name) }) {
                     clone.ids[name] = same.id
                     continue
