@@ -56,6 +56,17 @@ main { flex:1; display:flex; flex-direction:column; min-width:0; }
 .scard.ext { opacity:.62; background:#fbfbfd; } .scard.planned { border-style:dashed; }
 .legend { display:flex; gap:14px; margin-bottom:16px; color:var(--muted); font-size:11.5px; } .legend i { display:inline-block; width:16px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
 .note { color:var(--muted); font-size:11.5px; margin-top:18px; }
+.chip { display:inline-block; font-size:10px; padding:0 5px; border-radius:3px; margin:3px 3px 0 0; border:1px solid; background:#fff; }
+.xcard h4 { margin:0 0 4px; } .xrow { display:flex; justify-content:space-between; gap:6px; padding:2px 4px; border-radius:4px; font-size:12px; }
+.xrow:hover { background:rgba(0,122,255,.08); } .xrow .badge { margin:0; flex:none; } .xcard { opacity:.8; background:#fbfbfd; }
+.hubs { margin-top:26px; padding-top:10px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.hubs h3 { margin:0 8px 0 0; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.pill { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:2px 4px 2px 10px; font-size:12px; cursor:default; }
+.pill .badge { margin:0; } .pill .go { border:0; background:none; font:inherit; color:var(--muted); padding:0 4px; } .pill.on { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,122,255,.2); }
+#view.hubfocus .scard:not(.use), #view.hubfocus .xrow:not(.use) { opacity:.25; }
+#edges path[data-hub]:not(.show) { display:none; }
+table.topics { border-collapse:collapse; margin-top:16px; background:#fff; border:1px solid var(--line); } .topics td, .topics th { border-bottom:1px solid var(--line); padding:5px 10px; text-align:left; vertical-align:top; font-size:12px; }
+.topics th { color:var(--muted); font-weight:500; } .topics td:first-child { font:11.5px var(--mono); max-width:320px; }
 /* level 3 */
 .focus3 { display:flex; gap:260px; align-items:center; }
 .focus3 .col { width:210px; } .center { width:260px; border:2px solid var(--accent); padding:12px 14px; } .center .n { font-size:15px; font-weight:600; }
@@ -97,7 +108,7 @@ const cut = (t, n) => t && t.length > n ? t.slice(0, n - 1) + '…' : t || '';
 
 let st = { level: 2, space: 'x-keeper', project: 'platform', service: null };
 let E = []; // edges of the current view: {a, b, ka, kb, color, w, label, title, mode}
-const go = p => { Object.assign(st, p); render(); };
+const go = p => { Object.assign(st, { hub: null }, p); render(); };
 const view = document.getElementById('view'), svg = document.getElementById('edges'), canvas = document.getElementById('canvas');
 
 function sidebar() {
@@ -127,11 +138,21 @@ function svcCard(s, ext) {
 }
 
 function level1() {
-  const el = {}, sp = D.spaces.find(s => s.id === st.space);
+  const el = {}, sp = D.spaces.find(s => s.id === st.space), agg = {}, weak = {}; let cross = 0;
+  for (const l of L) {
+    const a = svc[l.from], b = svc[l.to];
+    if (a.project === b.project) continue;
+    if (a.space !== b.space) { if (a.space === st.space || b.space === st.space) cross++; continue; }
+    if (a.space !== st.space) continue;
+    const k = [a.project, b.project].sort().join('|'); agg[k] = (agg[k] || 0) + 1;
+  }
+  const strong = Object.entries(agg).filter(([, n]) => n >= 3);
+  Object.entries(agg).filter(([, n]) => n < 3).forEach(([k, n]) => k.split('|').forEach(p => weak[p] = (weak[p] || 0) + n));
   const node = p => {
     const n = ownOf([p.id]).length, r = p.repos.length + p.folders.length;
     const c = $('div', 'card pcard'); c.dataset.k = p.id; el[p.id] = c;
     c.append($('b', '', p.name), $('div', 'meta', `${plural(n, 'сервис', 'сервиса', 'сервисов')} · ${plural(r, 'репозиторий', 'репозитория', 'репозиториев')}`));
+    if (weak[p.id]) c.append($('div', 'meta', `+${plural(weak[p.id], 'слабая связь', 'слабые связи', 'слабых связей')}`));
     c.onclick = () => go({ level: 2, project: p.id }); return c;
   };
   const block = p => {
@@ -144,17 +165,9 @@ function level1() {
   };
   const wrap = $('div', 'space'); D.projects.filter(p => p.space === st.space && !p.parent).forEach(p => wrap.append(block(p)));
   view.append(wrap);
-  const agg = {}; let cross = 0;
-  for (const l of L) {
-    const a = svc[l.from], b = svc[l.to];
-    if (a.project === b.project) continue;
-    if (a.space !== b.space) { if (a.space === st.space || b.space === st.space) cross++; continue; }
-    if (a.space !== st.space) continue;
-    const k = [a.project, b.project].sort().join('|'); agg[k] = (agg[k] || 0) + 1;
-  }
-  E = Object.entries(agg).map(([k, n]) => { const [a, b] = k.split('|');
+  E = strong.map(([k, n]) => { const [a, b] = k.split('|');
     return { a: el[a], b: el[b], ka: a, kb: b, color: '#636366', w: 1 + Math.log2(n) * 1.3, label: String(n), title: `${proj[a].name} ↔ ${proj[b].name}: ${n}`, mode: 'center' }; });
-  view.append($('div', 'note', `${Object.keys(agg).length} пар проектов связаны · ${cross} связей с другим пространством не показаны`));
+  view.append($('div', 'note', `${Object.keys(agg).length} пар проектов связаны, линии — где ≥ 3 связей · ${cross} связей с другим пространством не показаны`));
   return [sp.name, `${plural(D.projects.filter(p => p.space === st.space).length, 'проект', 'проекта', 'проектов')}`];
 }
 
@@ -164,30 +177,72 @@ function legend() {
   return g;
 }
 
+// Hub: ≥ 5 distinct callers among the view's links, or tagged shared. Its edges hide behind chips on the callers.
+function hubsOf(ls) {
+  const callers = {}; ls.forEach(l => (callers[l.to] ||= new Set()).add(l.from));
+  const ids = new Set(ls.flatMap(l => [l.from, l.to]));
+  return Object.fromEntries([...ids].filter(id => (callers[id]?.size || 0) >= 5 || svc[id].tags.includes('shared')).map(id => [id, callers[id] || new Set()]));
+}
+const shortName = s => { const n = s.name.split(' · ')[0]; return n.length > 14 ? s.id : n; };
+function viewOf(pid) { // pure part of level 2, also used by the node sanity check
+  const ids = tree(pid), own = ownOf(ids);
+  const ls = L.filter(l => ids.includes(svc[l.from].project) || ids.includes(svc[l.to].project)), hubs = hubsOf(ls);
+  const ext = [...new Set(ls.flatMap(l => [l.from, l.to]))].map(id => svc[id]).filter(s => !ids.includes(s.project) && !hubs[s.id]);
+  return { ids, own, ls, hubs, ext, plain: ls.filter(l => !hubs[l.from] && !hubs[l.to]), extProjects: [...new Set(ext.map(s => s.project))] };
+}
+
 function level2() {
-  const ids = tree(st.project), own = ownOf(ids), el = {};
-  const ls = L.filter(l => ids.includes(svc[l.from].project) || ids.includes(svc[l.to].project));
-  const ext = [...new Set(ls.flatMap(l => [l.from, l.to]))].map(id => svc[id]).filter(s => !ids.includes(s.project));
+  const { own, ls, hubs, ext, plain, extProjects } = viewOf(st.project), el = {};
   view.append(legend());
   const cols = $('div', 'cols');
+  const chips = s => { const b = $('div');
+    for (const l of ls.filter(l => l.from === s.id && hubs[l.to]).filter((l, i, a) => a.findIndex(m => m.to === l.to) === i)) {
+      const x = $('span', 'chip', '→ ' + shortName(svc[l.to])); x.style.color = x.style.borderColor = VIA[l.via] || '#8e8e93'; b.append(x); }
+    return b; };
   ['Фронты', 'API и воркеры', 'Данные'].forEach((h, i) => {
     const c = $('div', 'col'); c.append($('h3', '', h));
-    own.filter(s => column(s) === i).forEach(s => c.append(el[s.id] = svcCard(s)));
+    own.filter(s => column(s) === i && !hubs[s.id]).forEach(s => { const card = el[s.id] = svcCard(s); card.append(chips(s)); c.append(card); });
     if (c.children.length > 1) cols.append(c);
   });
   if (ext.length) {
     const c = $('div', 'col ext'); c.append($('h3', '', `Внешние · ${ext.length}`));
-    for (const pid of [...new Set(ext.map(s => s.project))]) {
-      const h = $('h4', '', proj[pid].name); h.onclick = () => go({ level: 2, project: pid, space: proj[pid].space }); c.append(h);
-      ext.filter(s => s.project === pid).forEach(s => c.append(el[s.id] = svcCard(s, true)));
+    for (const pid of extProjects) {
+      const xs = ext.filter(s => s.project === pid), card = $('div', 'card xcard');
+      const h = $('h4', '', `${proj[pid].name} · ${plural(xs.length, 'сервис', 'сервиса', 'сервисов')}`); h.onclick = () => go({ level: 2, project: pid, space: proj[pid].space }); card.append(h);
+      for (const s of xs) {
+        const r = el[s.id] = $('div', 'xrow'); r.dataset.k = s.id; r.title = s.description || '';
+        r.append($('span', '', cut(s.name, 26)), $('span', 'badge ' + kindClass(s.kind), s.kind));
+        r.onclick = () => go({ level: 3, service: s.id, project: s.project, space: s.space }); card.append(r);
+      }
+      c.append(card);
     }
     cols.append(c);
   }
   view.append(cols);
+  if (Object.keys(hubs).length) {
+    const strip = $('div', 'hubs'); strip.append($('h3', '', 'Общие'));
+    for (const [id, callers] of Object.entries(hubs).sort((a, b) => b[1].size - a[1].size)) {
+      const s = svc[id], p = el[id] = $('span', 'pill'); p.dataset.k = id; p.dataset.hub = id; p.title = s.name;
+      const open = $('button', 'go', '›'); open.title = 'Открыть сервис';
+      p.append($('span', '', shortName(s)), $('span', 'meta', String(callers.size)), $('span', 'badge ' + kindClass(s.kind), s.kind), open);
+      p.onclick = ev => { ev.stopPropagation(); if (ev.altKey || ev.target === open) return go({ level: 3, service: id, project: s.project, space: s.space });
+        st.hub = st.hub === id ? null : id; showHub(st.hub); };
+      strip.append(p);
+    }
+    view.append(strip);
+  }
   E = ls.map(l => ({ a: el[l.from], b: el[l.to], ka: l.from, kb: l.to, color: VIA[l.via] || '#8e8e93', w: 1.4, arrow: true,
-    title: `${l.from} → ${l.to} (${l.via}): ${l.what || ''}` }));
+    hub: hubs[l.to] ? l.to : hubs[l.from] ? l.from : null, title: `${l.from} → ${l.to} (${l.via}): ${l.what || ''}` }));
   const p = proj[st.project];
-  return [p.name, `${plural(own.length, 'сервис', 'сервиса', 'сервисов')} · ${plural(ls.length, 'связь', 'связи', 'связей')} · ${plural(ext.length, 'внешний', 'внешних', 'внешних')}`];
+  return [p.name, `${plural(own.length, 'сервис', 'сервиса', 'сервисов')} · ${plural(plain.length, 'связь', 'связи', 'связей')} на карте · ${plural(Object.keys(hubs).length, 'общий', 'общих', 'общих')} · ${plural(ext.length, 'внешний', 'внешних', 'внешних')}`];
+}
+
+function showHub(id) { // highlight the users of a hub and reveal its edges; null hides
+  view.classList.toggle('hubfocus', !!id);
+  const users = new Set(E.filter(e => id && e.hub === id).flatMap(e => [e.ka, e.kb]));
+  view.querySelectorAll('[data-k]').forEach(c => c.classList.toggle('use', users.has(c.dataset.k)));
+  view.querySelectorAll('.pill').forEach(p => p.classList.toggle('on', p.dataset.hub === id));
+  svg.querySelectorAll('path[data-hub]').forEach(p => p.classList.toggle('show', p.dataset.hub === id));
 }
 
 function level3() {
@@ -195,6 +250,7 @@ function level3() {
   const group = (ls, other) => { const m = {}; ls.forEach(l => (m[l[other]] ||= []).push(l)); return m; };
   const callers = group(L.filter(l => l.to === s.id), 'from'), callees = group(L.filter(l => l.from === s.id), 'to');
   const label = ls => cut(ls.map(l => (l.what || l.endpoint || l.via) + (l.access ? ` (${l.access})` : '')).join(' · '), 46);
+  if (/kafka|rabbitmq/.test(s.kind)) return broker(s);
   const row = $('div', 'focus3'), left = $('div', 'col'), right = $('div', 'col'), mid = $('div', 'card center');
   left.append($('h3', '', `Вызывают · ${Object.keys(callers).length}`)); right.append($('h3', '', `Вызывает · ${Object.keys(callees).length}`));
   Object.keys(callers).forEach(id => left.append(el[id] = svcCard(svc[id], svc[id].project !== s.project)));
@@ -211,6 +267,17 @@ function level3() {
   add('Осторожно', s.guards.map(g => $('div', '', g))); add('Практики', code(s.practices)); add('Репозиторий', s.repo && $('code', '', s.repo));
   add('Теги', s.tags.join(', ')); view.append(d);
   return [s.name, `${plural(Object.keys(callers).length, 'вызывающий', 'вызывающих', 'вызывающих')} · ${plural(Object.keys(callees).length, 'зависимость', 'зависимости', 'зависимостей')}`];
+}
+
+function broker(s) { // topic table instead of the caller fan: the fan of a bus is all the same edge
+  const topics = {}, ls = L.filter(l => l.to === s.id);
+  ls.forEach(l => { const t = topics[l.what || '— без топика —'] ||= { write: new Set(), read: new Set(), use: new Set() }; t[l.access === 'write' || l.access === 'read' ? l.access : 'use'].add(l.from); });
+  const mid = $('div', 'card center'); mid.append($('div', 'n', s.name), $('div', 'meta', `${s.id} · ${proj[s.project].name}`), $('span', 'badge k-bus', s.kind));
+  const tb = $('table', 'topics'), hr = $('tr'); ['Топик', 'Кто пишет', 'Кто читает', 'Использует'].forEach(h => hr.append($('th', '', h))); tb.append(hr);
+  const who = set => { const td = $('td'); [...set].forEach(id => { const a = $('div', '', svc[id].name); a.onclick = () => go({ level: 3, service: id, project: svc[id].project, space: svc[id].space }); td.append(a); }); return td; };
+  for (const [t, x] of Object.entries(topics).sort()) { const tr = $('tr'); tr.append($('td', '', t), who(x.write), who(x.read), who(x.use)); tb.append(tr); }
+  view.append(mid, tb);
+  return [s.name, `${plural(Object.keys(topics).length, 'топик', 'топика', 'топиков')} · ${plural(new Set(ls.map(l => l.from)).size, 'клиент', 'клиента', 'клиентов')}`];
 }
 
 function draw() {
@@ -235,18 +302,21 @@ function draw() {
       d = `M${x1},${A.cy} C${x1 + k},${A.cy} ${x2 - k},${B.cy} ${x2},${B.cy}`; mx = (x1 + x2) / 2; my = (A.cy + B.cy) / 2;
     }
     const p = document.createElementNS(NS, 'path');
-    p.setAttribute('d', d); p.setAttribute('stroke', e.color); p.setAttribute('stroke-width', e.w); p.dataset.k = e.ka + ' ' + e.kb;
+    p.setAttribute('d', d); p.setAttribute('stroke', e.color); p.setAttribute('stroke-width', e.w); p.dataset.k = e.ka + ' ' + e.kb; if (e.hub) p.dataset.hub = e.hub;
     if (e.arrow) p.setAttribute('marker-end', `url(#m-${Object.keys(VIA).find(k => VIA[k] === e.color) || 'x'})`);
     const t = document.createElementNS(NS, 'title'); t.textContent = e.title || ''; p.append(t); svg.append(p);
     if (e.label) { const x = document.createElementNS(NS, 'text'); x.setAttribute('x', mx); x.setAttribute('y', my + 3); x.setAttribute('text-anchor', 'middle'); x.dataset.k = p.dataset.k; x.textContent = e.label; svg.append(x); }
   }
+  if (st.level === 2) showHub(st.hub);
 }
 
 canvas.onmouseover = ev => {
   const c = ev.target.closest('[data-k]'), k = c && c.dataset.k;
   svg.classList.toggle('focus', !!k);
   svg.querySelectorAll('path[data-k],text').forEach(p => p.classList.toggle('on', !!k && p.dataset.k.split(' ').includes(k)));
+  const pill = ev.target.closest('.pill'); showHub(pill ? pill.dataset.hub : st.hub);
 };
+canvas.onclick = () => { if (st.hub) { st.hub = null; showHub(null); } };
 document.getElementById('seg').onclick = ev => { const l = +ev.target.dataset.l; if (l) go({ level: l }); };
 
 function render() {
