@@ -82,3 +82,21 @@ claude mcp add --scope user practices -- ~/.practices/bin/practicesctl mcp
 ```
 
 `--json` on the listing commands prints machine-readable output.
+
+## Передача другому человеку
+
+Общее — в git, личное — на машине (DECISIONS 36): код приложения и пространства — репозитории,
+`~/.practices/local.yaml`, секреты, регистрация MCP и блоки инструкций агентам — у каждого свои.
+
+```sh
+git clone <этот репозиторий> && cd Practices && ./install.sh   # ставит xcodegen и uv через brew, если их нет
+```
+
+Дальше — в приложении экран «Начало», или то же командами (их же может выполнить агент в диалоге):
+
+```
+practicesctl setup status                          # что уже настроено
+practicesctl setup roots ~/Projects/…              # где лежат клоны
+practicesctl space clone <url пространства>        # общий каталог; space remote/push/pull — у владельца
+practicesctl setup agents                          # MCP и блок инструкций для Claude Code, Codex, Cursor
+```

@@ -38,6 +38,12 @@ public struct LocalConfig: Codable, Sendable {
     }
 
     static func expand(_ path: String) -> String { (path as NSString).expandingTildeInPath }
+
+    func save(_ url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try ("# Machine-local: where clones are looked for, and folders of code without git.\n" + Registry.yaml(self))
+            .write(to: url, atomically: true, encoding: .utf8)
+    }
 }
 
 /// An uncommitted change in a space: what an agent wrote and the user has not accepted yet

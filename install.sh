@@ -3,6 +3,13 @@
 set -e
 cd "$(dirname "$0")"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+xcode-select -p >/dev/null 2>&1 || { echo "Xcode is not set up: install Xcode, then run: sudo xcode-select -s /Applications/Xcode.app"; exit 1; }
+for tool in xcodegen uv; do
+  command -v $tool >/dev/null 2>&1 && continue
+  command -v brew >/dev/null 2>&1 || { echo "$tool is missing and Homebrew is not installed: https://brew.sh"; exit 1; }
+  echo "Installing $tool with Homebrew…"
+  brew install $tool
+done
 (cd PracticesApp && xcodegen generate >/dev/null)
 echo "Building practicesctl…"
 # The CLI (and MCP server) lives in ~/.practices/bin next to its resource bundle (the Python
