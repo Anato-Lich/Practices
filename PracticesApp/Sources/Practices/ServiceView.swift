@@ -1,12 +1,14 @@
 import SwiftUI
 import PracticesCore
 
-/// A service card: endpoints, conditions, links, keys, guards, notes, documents and fields.
+/// A service card (`design/Service.dc.html`): header with badges and the last check, a kv-block,
+/// then endpoints, practices and links on the left; keys, guards, copies, docs and notes on the right.
 struct ServiceView: View {
     @Environment(RegistryModel.self) private var registry
     let service: Service
     @State private var editing: KeyEdit?
     @State private var connecting = false
+    @State private var env: String?
 
     struct KeyEdit: Identifiable {
         let key: String
@@ -16,39 +18,41 @@ struct ServiceView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 header
-                Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
-                    GridRow {
-                        VStack(spacing: 16) {
-                            endpoints
-                            if !service.conditionIDs.isEmpty { conditions }
-                            practices
-                            links
-                            if !service.guards.isEmpty { guards }
-                            notes
-                        }
-                        VStack(spacing: 16) {
-                            keys
-                            copies
-                            docs
-                        }
+                if let description = service.description {
+                    Text(verbatim: description).font(Theme.ui(13)).foregroundStyle(Theme.Color.textSecondary)
+                        .textSelection(.enabled).padding(.top, -4)
+                }
+                kvBlock
+                FractionColumns(left: 1.2, right: 1, spacing: 12) {
+                    VStack(spacing: 12) {
+                        endpoints
+                        practices
+                        incoming
+                        outgoing
+                    }
+                    VStack(spacing: 12) {
+                        keys
+                        if !service.guards.isEmpty { guards }
+                        copies
+                        docs
+                        notes
                     }
                 }
                 fields
             }
-            .padding(20)
-            .frame(maxWidth: 1100, alignment: .leading)
+            .padding(.horizontal, 20).padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle(service.name)
         .toolbarTrailing {
-            Button { Task { await registry.check(service.id) } } label: {
-                Label("Check", systemImage: "arrow.clockwise")
-            }
-            .disabled(registry.checking.contains(service.id))
-            Button { connecting = true } label: { Label("Connect to project…", systemImage: "arrow.right.doc.on.clipboard") }
+            ToolbarButton("Проверить", systemImage: "arrow.clockwise", prominent: true) { Task { await registry.check(service.id) } }
+                .disabled(registry.checking.contains(service.id))
+            Button { connecting = true } label: { Text(verbatim: "Подключить к проекту…") }
                 .help("Write this service's values into a project's env file")
-            Button { registry.revealService(service.id) } label: { Label("Show in Finder", systemImage: "folder") }
+            Button { registry.selection = .map } label: { Text(verbatim: "Карта") }
+            Button { registry.revealService(service.id) } label: { Text(verbatim: "Finder") }
         }
         .sheet(isPresented: $connecting) { ConnectSheet(service: service) }
         .sheet(item: $editing) { edit in
@@ -59,192 +63,262 @@ struct ServiceView: View {
     // MARK: Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text(verbatim: service.name).font(.title2.weight(.semibold))
-                Chip(text: service.kind, mono: true)
-                ForEach(service.tags, id: \.self) { tag in
-                    Chip(text: tag, tint: tag == "read-only" ? .orange : nil)
+        HStack(spacing: 8) {
+            Text(verbatim: service.name).font(Theme.ui(17, .semibold)).foregroundStyle(Theme.Color.text)
+            let kind = ServiceClass(for: service)
+            Badge(service.kind, color: kind.color, background: kind.rgbBadgeBackground)
+            ForEach(service.tags, id: \.self) { tag in
+                switch tag {
+                case "read-only": Badge(tag, color: Theme.Color.warn, background: Theme.Color.warn.opacity(0.16))
+                case "prod-data": Badge(tag, color: ServiceClass.ext.color, background: ServiceClass.ext.rgbBadgeBackground)
+                case "shared":
+                    Badge("shared · " + ru(registry.callers(of: service.id), "вызывающего", "вызывающих", "вызывающих"),
+                          color: Theme.Color.textChip, background: ServiceClass.other.rgbBadgeBackground)
+                default: Badge(tag, color: Theme.Color.textChip, background: ServiceClass.other.rgbBadgeBackground)
                 }
             }
-            if let description = service.description {
-                Text(verbatim: description).foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                Circle().fill(healthColor).frame(width: 8, height: 8)
+                Text(verbatim: checkSummary)
             }
-            // Where the card is (each part a way back), the repository it is built from, the
-            // other names it goes by.
-            ProjectPath(project: service.project)
-            let facts = [service.repo?.description, service.aliases.isEmpty ? nil : "aka " + service.aliases.joined(separator: ", ")].compactMap { $0 }
-            if !facts.isEmpty {
-                Text(verbatim: facts.joined(separator: "  ·  ")).font(.caption.monospaced()).foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
+            .font(Theme.ui(11)).foregroundStyle(Theme.Color.textSecondary)
         }
     }
 
-    // MARK: Cards
+    private var healthColor: Color {
+        switch registry.health(of: service.id) {
+        case .unknown: Theme.Color.textMuted
+        case .up: Theme.Color.ok
+        case .partial: Theme.Color.warn
+        case .down: Theme.Color.error
+        }
+    }
+
+    /// «4 из 4 точек отвечают · проверено 14:02», or «не проверялось».
+    private var checkSummary: String {
+        if registry.checking.contains(service.id) { return "проверяется…" }
+        guard let date = registry.lastCheck[service.id] else { return "не проверялось" }
+        let answering = service.endpoints.filter { result(of: $0)?.ok == true }.count
+        let when = Calendar.current.isDateInToday(date) ? date.formatted(.dateTime.hour().minute())
+            : date.formatted(.dateTime.day().month().hour().minute())
+        return "\(answering) из \(service.endpoints.count) точек отвечают · проверено \(when)"
+    }
+
+    private func result(of endpoint: Service.Endpoint) -> CheckResult? {
+        registry.checks[service.id]?.first { $0.endpoint == endpoint.id }
+    }
+
+    // MARK: kv-block
+
+    private var kvBlock: some View {
+        KVBlock {
+            if !service.aliases.isEmpty { KVRow("aliases", service.aliases.joined(separator: " · ")) }
+            if let repo = service.repo { KVRow("repo", repo.description) }
+            KVRow("envs", service.envs.joined(separator: " · "))
+            if !service.conditionIDs.isEmpty {
+                KVRow("requires") {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(service.conditionIDs, id: \.self) { requirement($0) }
+                    }
+                }
+            }
+            KVRow("mcp") {
+                Text(verbatim: ["get_service", "list_practices", "env_names"].map { "\($0) \(service.id)" }.joined(separator: " · "))
+                    .foregroundStyle(Theme.Color.textSecondary)
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    /// `⚑ corp-network — hint`; a failed check shows its message in error colour. A condition of
+    /// some endpoints only names them.
+    private func requirement(_ id: String) -> Text {
+        let condition = registry.condition(id)
+        let failed = registry.checks[service.id]?.first { $0.endpoint == "requires:\(id)" && !$0.ok }
+        let scope = service.requires.contains(id) ? [] : service.endpoints.filter { $0.requires.contains(id) }.map(\.id)
+        let hint = failed?.message ?? condition?.hint ?? condition?.name
+        return Text(verbatim: "⚑ \(id)").foregroundStyle(failed == nil ? Theme.Color.warn : Theme.Color.error)
+            + Text(verbatim: scope.isEmpty ? "" : " (\(scope.joined(separator: ", ")))").foregroundStyle(Theme.Color.textMuted)
+            + Text(verbatim: hint.map { " — \($0)" } ?? "").foregroundStyle(Theme.Color.textSecondary)
+    }
+
+    // MARK: Left column
 
     private var endpoints: some View {
-        Card(title: "Endpoints", trailing: lastCheckText) {
-            let results = registry.checks[service.id] ?? []
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(service.endpoints, id: \.id) { endpoint in
-                    let result = results.first { $0.endpoint == endpoint.id }
-                    HStack(spacing: 8) {
-                        HealthDot(health: result.map { $0.ok ? .up : .down } ?? .unknown)
-                        Text(verbatim: endpoint.id).font(.callout.monospaced())
-                        // The template names keys, never their values.
-                        Text(verbatim: endpoint.label ?? endpoint.address ?? endpoint.url ?? "")
-                            .font(.callout).foregroundStyle(.secondary).lineLimit(1)
-                        // Its own conditions, by name; the whole service's are in the card below.
-                        ForEach(endpoint.requires, id: \.self) { id in
-                            Chip(text: registry.condition(id)?.name ?? id, tint: .orange).lineLimit(1)
-                        }
-                        Spacer()
-                        if let result {
-                            Text(verbatim: result.ok ? (result.millis.map { "\($0) ms" } ?? "") : (result.message ?? ""))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(result.ok ? Color.secondary : Color.red)
-                        }
+        SectionCard("Точки входа · \(service.endpoints.count)", spacing: 6) {
+            ForEach(service.endpoints, id: \.id) { endpoint in
+                let result = result(of: endpoint)
+                HStack(spacing: 8) {
+                    Circle().fill(result.map { $0.ok ? Theme.Color.ok : Theme.Color.error } ?? Theme.Color.textMuted)
+                        .frame(width: 7, height: 7)
+                    Text(verbatim: endpoint.id).frame(minWidth: 70, alignment: .leading)
+                    if let label = endpoint.label { Text(verbatim: label).foregroundStyle(Theme.Color.textSecondary) }
+                    // The template names keys, never their values.
+                    Text(verbatim: endpoint.address ?? endpoint.url ?? "").foregroundStyle(Theme.Color.textMuted)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    if let result {
+                        Text(verbatim: result.ok ? (result.millis.map { "\($0) ms" } ?? "") : (result.message ?? ""))
+                            .monospacedDigit().lineLimit(1)
+                            .foregroundStyle(result.ok ? Theme.Color.textSecondary : Theme.Color.error)
+                            .help(result.message ?? "")
                     }
                 }
-                if service.endpoints.isEmpty { Text("No endpoints").foregroundStyle(.secondary).font(.callout) }
+                .font(Theme.mono(12)).lineLimit(1)
             }
+            if service.endpoints.isEmpty { empty("Точек входа нет") }
         }
-    }
-
-    private var conditions: some View {
-        Card(title: "Conditions", trailing: nil) {
-            let results = registry.checks[service.id] ?? []
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(service.conditionIDs, id: \.self) { id in
-                    let condition = registry.condition(id)
-                    let failed = results.first { $0.endpoint == "requires:\(id)" && !$0.ok }
-                    let scope = service.requires.contains(id) ? [] : service.endpoints.filter { $0.requires.contains(id) }.map(\.id)
-                    Label {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(verbatim: (condition?.name ?? id) + (scope.isEmpty ? "" : "  ·  " + scope.joined(separator: ", "))).font(.callout)
-                            if let hint = condition?.hint ?? failed?.message { Text(verbatim: hint).font(.caption).foregroundStyle(.secondary) }
-                        }
-                    } icon: {
-                        Image(systemName: failed == nil ? "network.badge.shield.half.filled" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(failed == nil ? Color.secondary : Color.red)
-                    }
-                }
-            }
-        }
-    }
-
-    private var links: some View {
-        Card(title: "Links", trailing: nil) {
-            let out = registry.links(of: service.id), incoming = registry.links(to: service.id)
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(out, id: \.self) { link in linkRow("→", link.to, link) }
-                ForEach(incoming, id: \.link) { from, link in linkRow("←", from, link, incoming: true) }
-                if out.isEmpty && incoming.isEmpty { Text("No links").foregroundStyle(.secondary).font(.callout) }
-            }
-        }
-    }
-
-    /// `→ xkeeper-pg/devices@prod` over `db x-keeper_devices.devices (read) — why`. For an
-    /// incoming link the other side is the caller and the endpoint is this service's.
-    private func linkRow(_ arrow: String, _ other: String, _ link: PracticesCore.Link, incoming: Bool = false) -> some View {
-        Button { registry.selection = .service(other) } label: {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(verbatim: "\(arrow) \(other)" + (link.endpoint.map { incoming ? " (to \($0))" : "/\($0)" } ?? "") + (link.env.map { "@\($0)" } ?? ""))
-                    .font(.callout.monospaced())
-                let how = [link.via, link.what, link.access.map { "(\($0))" }, link.why.map { "— \($0)" }].compactMap { $0 }
-                if !how.isEmpty { Text(verbatim: how.joined(separator: " ")).font(.caption).foregroundStyle(.secondary) }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private var practices: some View {
-        Card(title: "Practices", trailing: nil) {
-            let list = registry.practices[service.id] ?? []
-            VStack(alignment: .leading, spacing: 2) {
+        let list = registry.practices[service.id] ?? []
+        return SectionCard("Практики · \(list.count)", spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), alignment: .leading, spacing: 4) {
                 ForEach(list) { practice in
-                    let last = registry.lastRun(of: practice.ref)
+                    let run = runLabel(registry.lastRun(of: practice.ref))
                     Button { registry.selection = .practice(practice.ref) } label: {
-                        HStack {
-                            Text(verbatim: practice.name).font(.callout)
-                            Spacer()
-                            if let last {
-                                Text(verbatim: (last.version.map { "v\($0) · " } ?? "") + "\(last.millis) ms")
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(last.ok ? Color.secondary : Color.red)
-                            }
+                        HStack(spacing: 6) {
+                            Text(verbatim: "‹›").font(Theme.mono(10)).foregroundStyle(Theme.Color.textMuted)
+                            Text(verbatim: practice.name).lineLimit(1).truncationMode(.tail)
+                            Spacer(minLength: 4)
+                            Text(verbatim: run.0).font(Theme.mono(10.5)).foregroundStyle(run.1).lineLimit(1)
                         }
-                        .padding(.vertical, 4)
+                        .font(Theme.mono(12)).foregroundStyle(Theme.Color.text)
+                        .padding(.horizontal, 6).padding(.vertical, 4)
+                        .background(Theme.Color.windowBg, in: RoundedRectangle(cornerRadius: 5))
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
-                if list.isEmpty { Text("No practices yet").foregroundStyle(.secondary).font(.callout) }
+            }
+            if list.isEmpty { empty("Практик пока нет") }
+        }
+    }
+
+    /// «v3 · 212 ms»: ok under 500 ms, warn from 1 s, error for a failed run, muted with no run.
+    private func runLabel(_ run: RunRecord?) -> (String, Color) {
+        // shortcut: without a run the version is unknown (it is `git log`), so only a dash.
+        guard let run else { return ("—", Theme.Color.textMuted) }
+        let time = run.millis < 1000 ? "\(run.millis) ms" : String(format: "%.1f s", Double(run.millis) / 1000)
+        let text = (run.version.map { "v\($0) · " } ?? "") + time
+        let color = !run.ok ? Theme.Color.error : run.millis < 500 ? Theme.Color.ok
+            : run.millis >= 1000 ? Theme.Color.warn : Theme.Color.textSecondary
+        return (text, color)
+    }
+
+    private var incoming: some View {
+        let links = registry.links(to: service.id)
+        let callers = Set(links.map(\.from)).count
+        return SectionCard("Кто ходит сюда · " + ru(links.count, "связь", "связи", "связей") + " из "
+                           + ru(callers, "сервиса", "сервисов", "сервисов"), spacing: 4) {
+            ForEach(links.indices, id: \.self) { i in linkRow(other: links[i].from, links[i].link) }
+            if links.isEmpty { empty("Никто не ходит") }
+        }
+    }
+
+    @ViewBuilder private var outgoing: some View {
+        let links = registry.links(of: service.id)
+        if !links.isEmpty {
+            SectionCard("Куда ходит · " + ru(links.count, "связь", "связи", "связей"), spacing: 4) {
+                ForEach(links.indices, id: \.self) { i in linkRow(other: links[i].to, links[i]) }
             }
         }
     }
 
-    private var lastCheckText: String? {
-        guard let date = registry.lastCheck[service.id] else { return String(localized: "not checked yet") }
-        let when = Calendar.current.isDateInToday(date) ? date.formatted(date: .omitted, time: .shortened)
-            : date.formatted(date: .abbreviated, time: .shortened)
-        return String(localized: "checked \(when)")
+    /// `[project] caller → endpoint  what  access`; the other side opens on click.
+    private func linkRow(other: String, _ link: PracticesCore.Link) -> some View {
+        let project = registry.service(other)?.project ?? ""
+        let zone = registry.zoneColor(of: project)
+        return Button { registry.selection = .service(other) } label: {
+            HStack(spacing: 8) {
+                Text(verbatim: project).font(Theme.mono(10)).foregroundStyle(zone).lineLimit(1)
+                    .padding(.horizontal, 6).frame(minWidth: 96, alignment: .leading)
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(zone, lineWidth: 1))
+                Text(verbatim: other).frame(minWidth: 150, alignment: .leading)
+                Text(verbatim: "→ " + (link.endpoint ?? "") + (link.env.map { "@\($0)" } ?? "")).foregroundStyle(Theme.Color.textMuted)
+                Text(verbatim: link.what ?? link.via ?? "").foregroundStyle(Theme.Color.textSecondary)
+                    .truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+                Text(verbatim: link.access ?? "")
+                    .foregroundStyle(link.access == "write" ? Theme.Color.warn : Theme.Color.textMuted)
+            }
+            .font(Theme.mono(11.5)).foregroundStyle(Theme.Color.text).lineLimit(1)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help([link.via, link.why].compactMap { $0 }.joined(separator: " — "))
     }
+
+    // MARK: Right column
 
     private var keys: some View {
-        Card(title: "Keys", trailing: nil) {
-            let status = registry.keyStatus[service.id] ?? [:]
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                GridRow {
-                    Text("Key").foregroundStyle(.secondary)
-                    ForEach(service.envs, id: \.self) { Text(verbatim: $0).foregroundStyle(.secondary) }
-                }
-                .font(.caption)
-                ForEach(service.keys, id: \.name) { key in
-                    GridRow {
-                        HStack(spacing: 4) {
-                            Text(verbatim: key.name).font(.callout.monospaced()).lineLimit(1)
-                            if key.secret { Image(systemName: "lock.fill").font(.caption2).foregroundStyle(.tertiary) }
-                        }
-                        ForEach(service.envs, id: \.self) { env in
-                            let set = status[env]?.contains(key.name) == true
-                            Button { editing = KeyEdit(key: key.name, env: env) } label: {
-                                Text(set ? "set" : "not set")
-                                    .font(.caption)
-                                    .foregroundStyle(set ? .green : .orange)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Change value")
-                        }
-                    }
+        let env = self.env.flatMap { service.envs.contains($0) ? $0 : nil } ?? service.defaultEnv
+        let set = registry.keyStatus[service.id]?[env] ?? []
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                SectionTitle("Ключи · \(env)")
+                Spacer()
+                if service.envs.count > 1 {
+                    Picker(selection: Binding(get: { env }, set: { self.env = $0 })) {
+                        ForEach(service.envs, id: \.self) { Text(verbatim: $0).tag($0) }
+                    } label: { EmptyView() }
+                    .pickerStyle(.segmented).controlSize(.small).fixedSize()
                 }
             }
-            Text("Values are never shown — not here, not to the agent.")
-                .font(.caption).foregroundStyle(.tertiary).padding(.top, 6)
+            .padding(.bottom, 2)
+            ForEach(service.keys, id: \.name) { key in
+                let isSet = set.contains(key.name)
+                HStack(spacing: 8) {
+                    Text(verbatim: key.name).font(Theme.mono(12)).lineLimit(1)
+                    if key.secret { Text(verbatim: "🔒").font(Theme.mono(10)).foregroundStyle(Theme.Color.textMuted) }
+                    Spacer(minLength: 8)
+                    Button { editing = KeyEdit(key: key.name, env: env) } label: {
+                        Text(verbatim: isSet ? "задан" : "не задан").font(Theme.mono(11))
+                            .foregroundStyle(isSet ? Theme.Color.ok : Theme.Color.warn)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Change value")
+                }
+                .help(key.description ?? "")
+            }
+            Text(verbatim: "Значения не показываются нигде: ни здесь, ни агенту. Проект получает их через practicesctl run \(service.id) -- …")
+                .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).fixedSize(horizontal: false, vertical: true)
         }
+        .modifier(CardChrome())
+    }
+
+    private var guards: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionTitle("Защита · " + ru(service.guards.count, "правило", "правила", "правил"), color: Theme.Color.warn)
+                .padding(.bottom, 2)
+            ForEach(service.guards, id: \.self) { rule in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(verbatim: "▸").foregroundStyle(Theme.Color.warn)
+                    Text(verbatim: rule).fixedSize(horizontal: false, vertical: true)
+                }
+                .font(Theme.ui(12))
+            }
+        }
+        .modifier(CardChrome(background: Theme.Color.warn.opacity(0.05), border: Theme.Color.warn.opacity(0.35)))
     }
 
     private var copies: some View {
-        Card(title: "Copies in projects", trailing: nil) {
-            if let all = registry.copies {
-                let mine = all.filter { $0.ref.hasPrefix(service.id + "/") }
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(mine, id: \.self) { copy in
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(verbatim: shortPath(copy.path)).font(.callout).lineLimit(1).truncationMode(.head)
-                                Text(verbatim: copy.ref.split(separator: "/").last.map(String.init) ?? "").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text(copyState(copy)).font(.caption).foregroundStyle(copyColor(copy))
-                        }
+        let mine = registry.copies?.filter { $0.ref.hasPrefix(service.id + "/") }
+        return SectionCard("Копии в проектах" + (mine.map { " · \($0.count)" } ?? ""), spacing: 6) {
+            if let mine {
+                ForEach(mine, id: \.self) { copy in
+                    let state = copyState(copy)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(verbatim: shortPath(copy.path)).font(Theme.mono(12)).lineLimit(1).truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .help(copy.path)
+                        Text(verbatim: Practice(ref: copy.ref).name).font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
+                        Text(verbatim: state.0).font(Theme.mono(11)).foregroundStyle(state.1)
                     }
-                    if mine.isEmpty {
-                        Text("No marked copies in ~/Projects yet. `get_practice` hands code out with the marker line.")
-                            .font(.callout).foregroundStyle(.secondary)
-                    }
+                }
+                if mine.isEmpty {
+                    empty("Отмеченных копий в ~/Projects нет. get_practice отдаёт код со строкой-меткой.")
                 }
             } else {
                 ProgressView().controlSize(.small)
@@ -257,62 +331,40 @@ struct ServiceView: View {
         return path.hasPrefix(root) ? String(path.dropFirst(root.count)) : path
     }
 
-    private func copyState(_ copy: PracticeCopy) -> String {
+    private func copyState(_ copy: PracticeCopy) -> (String, Color) {
         switch copy.state {
-        case .current: "v\(copy.version ?? 0)"
-        case .outdated: String(localized: "v\(copy.version ?? 0) → v\(copy.latest) available")
-        case .modified: String(localized: "changed, not sent")
-        case .unknown: String(localized: "unknown version")
-        }
-    }
-
-    private func copyColor(_ copy: PracticeCopy) -> Color {
-        switch copy.state {
-        case .current: .green
-        case .outdated: .orange
-        case .modified: .blue
-        case .unknown: .secondary
-        }
-    }
-
-    private var guards: some View {
-        Card(title: "Guards", trailing: nil) {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(service.guards, id: \.self) { rule in
-                    Label { Text(verbatim: rule).font(.callout) } icon: {
-                        Image(systemName: "lock.shield").foregroundStyle(.orange)
-                    }
-                }
-            }
-        }
-    }
-
-    private var notes: some View {
-        Card(title: "Notes", trailing: nil) {
-            if let text = registry.notes(of: service.id), !text.isEmpty,
-               let attributed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-                Text(attributed).font(.callout).textSelection(.enabled)
-            } else {
-                Text("No notes").foregroundStyle(.secondary).font(.callout)
-            }
+        case .current: ("v\(copy.version ?? 0)", Theme.Color.ok)
+        case .outdated: ("v\(copy.version ?? 0) → v\(copy.latest)", Theme.Color.warn)
+        case .modified: ("изменена", Theme.Color.link)
+        case .unknown: ("версия неизвестна", Theme.Color.textMuted)
         }
     }
 
     private var docs: some View {
-        Card(title: "Documentation", trailing: nil) {
-            let docs = registry.docs(of: service.id)
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(docs, id: \.self) { doc in
-                    Button { registry.open(doc, of: service.id) } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(verbatim: doc.title).font(.callout)
-                            Text(verbatim: [doc.kind.rawValue, doc.section].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
+        let docs = registry.docs(of: service.id)
+        return SectionCard("Документация", spacing: 6) {
+            ForEach(docs, id: \.self) { doc in
+                Button { registry.open(doc, of: service.id) } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(verbatim: doc.title).font(Theme.ui(12)).foregroundStyle(Theme.Color.link)
+                        Text(verbatim: [doc.kind.rawValue, doc.section].compactMap { $0 }.joined(separator: " · "))
+                            .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
                     }
-                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                 }
-                if docs.isEmpty { Text("No documents").foregroundStyle(.secondary).font(.callout) }
+                .buttonStyle(.plain)
+            }
+            if docs.isEmpty { empty("Документов нет") }
+        }
+    }
+
+    private var notes: some View {
+        SectionCard("Заметки", spacing: 6) {
+            if let text = registry.notes(of: service.id), !text.isEmpty,
+               let attributed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                Text(attributed).font(Theme.ui(12)).foregroundStyle(Theme.Color.text).textSelection(.enabled)
+            } else {
+                empty("Заметок нет")
             }
         }
     }
@@ -321,29 +373,93 @@ struct ServiceView: View {
     private var fields: some View {
         let fields = registry.fields(of: service.id)
         if !fields.isEmpty {
-            Card(title: "Fields", trailing: "\(fields.filter { $0.meaning != nil }.count)/\(fields.count)") {
+            SectionCard("Поля · \(fields.filter { $0.meaning != nil }.count)/\(fields.count)", spacing: 8) {
                 Grid(alignment: .topLeading, horizontalSpacing: 14, verticalSpacing: 7) {
                     ForEach(fields, id: \.path) { field in
                         GridRow {
-                            Text(verbatim: field.path).font(.callout.monospaced())
-                            Text(verbatim: field.type ?? "").font(.callout.monospaced()).foregroundStyle(.secondary)
+                            Text(verbatim: field.path).font(Theme.mono(12))
+                            Text(verbatim: field.type ?? "").font(Theme.mono(12)).foregroundStyle(Theme.Color.textSecondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 if let meaning = field.meaning {
-                                    Text(verbatim: meaning).font(.callout)
+                                    Text(verbatim: meaning).font(Theme.ui(12))
                                 } else {
-                                    Text("No description").font(.callout).foregroundStyle(.orange)
+                                    Text(verbatim: "Нет описания").font(Theme.ui(12)).foregroundStyle(Theme.Color.warn)
                                 }
                                 if let values = field.values {
                                     Text(verbatim: values.sorted { $0.key < $1.key }.map { "\($0.key) — \($0.value)" }.joined(separator: " · "))
-                                        .font(.caption).foregroundStyle(.secondary)
+                                        .font(Theme.ui(11)).foregroundStyle(Theme.Color.textSecondary)
                                 }
                             }
                             Text(verbatim: (field.from ?? []).map { ($0 as NSString).lastPathComponent }.joined(separator: ", "))
-                                .font(.caption).foregroundStyle(.tertiary).lineLimit(2)
+                                .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).lineLimit(2)
                         }
                     }
                 }
             }
+        }
+    }
+
+    private func empty(_ text: String) -> some View {
+        Text(verbatim: text).font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted)
+    }
+}
+
+extension RegistryModel {
+    /// Distinct services that link to this one («shared · N вызывающих»).
+    func callers(of id: String) -> Int { Set(links(to: id).map(\.from)).count }
+}
+
+/// Badge: mono 10.5, padding 1 6, radius 4, a colour on its 0.16 background.
+private struct Badge: View {
+    let text: String
+    let color: Color
+    let background: Color
+    init(_ text: String, color: Color, background: Color) { self.text = text; self.color = color; self.background = background }
+    var body: some View {
+        Text(verbatim: text).font(Theme.mono(10.5)).foregroundStyle(color)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(background, in: RoundedRectangle(cornerRadius: 4))
+            .fixedSize()
+    }
+}
+
+/// SectionCard's chrome for cards with their own header (keys with an env picker, guards tinted warn).
+private struct CardChrome: ViewModifier {
+    var background = Theme.Color.cardBg
+    var border = Theme.Color.borderCard
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(border))
+    }
+}
+
+/// Two columns sharing the width as `left fr / right fr` (the design's `1.2fr 1fr`), tops aligned.
+private struct FractionColumns: Layout {
+    let left: CGFloat
+    let right: CGFloat
+    let spacing: CGFloat
+
+    private func widths(_ total: CGFloat) -> [CGFloat] {
+        let room = max(total - spacing, 0)
+        return [room * left / (left + right), room * right / (left + right)]
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 900
+        let w = widths(width)
+        let height = zip(subviews, w).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: nil)).height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let w = widths(bounds.width)
+        var x = bounds.minX
+        for (view, width) in zip(subviews, w) {
+            view.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: width, height: nil))
+            x += width + spacing
         }
     }
 }
@@ -386,6 +502,7 @@ struct SecretSheet: View {
     }
 }
 
+/// The old card, still used by ProjectView and SpaceView until they move to `SectionCard`.
 struct Card<Content: View>: View {
     let title: LocalizedStringKey
     let trailing: String?

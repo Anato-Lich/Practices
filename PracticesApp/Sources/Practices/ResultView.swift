@@ -1,8 +1,8 @@
 import SwiftUI
 import PracticesCore
 
-/// A practice's output as a table, a JSON tree or text — whichever shape it has — with
-/// stdout beside it (mock-up board 2).
+/// A practice's output as a table, a JSON tree or text — whichever shape it has — with JSON
+/// and stdout one click away. A single row reads as «поле / тип / значение» (design board).
 struct ResultView: View {
     let shape: String?
     let columns: [String]
@@ -10,29 +10,27 @@ struct ResultView: View {
     let tree: JSONValue?
     let text: String?
     let stdout: String
+    var schema: [PracticeResult.Field] = []
     @State private var tab: Tab = .auto
 
     enum Tab: Hashable { case auto, json, stdout }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $tab) {
-                Text(shape == "table" ? "Table" : shape == "tree" ? "Tree" : "Text").tag(Tab.auto)
-                Text("JSON").tag(Tab.json)
-                Text(verbatim: "stdout").tag(Tab.stdout)
+        VStack(alignment: .leading, spacing: 4) {
+            // Not in the design: the JSON and stdout views the window had; kept as quiet links.
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                tabLink(shape == "table" ? "таблица" : shape == "tree" ? "дерево" : "текст", .auto)
+                tabLink("json", .json)
+                if !stdout.isEmpty { tabLink("stdout", .stdout) }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .padding(.vertical, 6)
-            Divider()
             switch tab {
             case .auto:
                 switch shape {
-                case "table": ResultTable(columns: columns, rows: rows)
+                case "table": ResultTable(columns: columns, rows: rows, schema: schema)
                 case "tree": JSONTree(value: tree ?? .null)
-                case "none": ContentUnavailableView("No result", systemImage: "circle.dashed")
-                default: MonoText(text: text ?? "")
+                case "none": quiet("нет результата")
+                default: ResultText(text: text ?? "")
                 }
             case .json:
                 JSONTree(value: shape == "table" ? .array(rows.map { row in
@@ -40,40 +38,110 @@ struct ResultView: View {
                     return .object(Dictionary(pairs.map { ($0.0, $0.1) }, uniquingKeysWith: { a, _ in a }), order: columns)
                 }) : (tree ?? .string(text ?? "")))
             case .stdout:
-                if stdout.isEmpty { ContentUnavailableView("Nothing printed", systemImage: "text.alignleft") }
-                else { MonoText(text: stdout) }
+                ResultText(text: stdout)
             }
+        }
+    }
+
+    private func tabLink(_ title: String, _ value: Tab) -> some View {
+        Button { tab = value } label: {
+            Text(verbatim: title).font(Theme.mono(11)).foregroundStyle(tab == value ? Theme.Color.text : Theme.Color.textMuted)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func quiet(_ text: String) -> some View {
+        Text(verbatim: text).font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The design's table: mono 12, header muted 500 over a `border` line, rows padding 5 8 over
+/// `border.soft`. One row is shown transposed: field, type (builtin-type colour), value (secondary).
+struct ResultTable: View {
+    let columns: [String]
+    let rows: [[JSONValue]]
+    var schema: [PracticeResult.Field] = []
+
+    static let typeColor = Color(hex: 0x4FD1D9)
+    static let cellWidth: CGFloat = 160
+
+    var body: some View {
+        if rows.count == 1 {
+            let row = rows[0]
+            ScrollView {
+                VStack(spacing: 0) {
+                    line([header("поле"), header("тип"), header("значение")], border: Theme.Color.border)
+                    ForEach(columns.indices, id: \.self) { i in
+                        let value = i < row.count ? row[i] : .null
+                        line([cell(columns[i], Theme.Color.text),
+                              cell(schema.first { $0.path == columns[i] }?.type ?? value.typeName, Self.typeColor),
+                              cell(value.cellText, Theme.Color.textSecondary)], border: Theme.Color.borderSoft)
+                    }
+                }
+            }
+        } else {
+            ScrollView([.vertical, .horizontal]) {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
+                    Section {
+                        ForEach(rows.indices, id: \.self) { r in
+                            line(columns.indices.map { c in cell(c < rows[r].count ? rows[r][c].cellText : "", Theme.Color.text) },
+                                 border: Theme.Color.borderSoft, fixed: true)
+                        }
+                    } header: {
+                        line(columns.map(header), border: Theme.Color.border, fixed: true).background(Theme.Color.windowBg)
+                    }
+                }
+            }
+        }
+    }
+
+    private func header(_ title: String) -> Text {
+        Text(verbatim: title).font(Theme.mono(12, .medium)).foregroundColor(Theme.Color.textMuted)
+    }
+
+    private func cell(_ value: String, _ color: Color) -> Text {
+        Text(verbatim: value).font(Theme.mono(12)).foregroundColor(color)
+    }
+
+    /// Cells share the width in the transposed view; a wide table gets fixed columns and scrolls.
+    private func line(_ cells: [Text], border: Color, fixed: Bool = false) -> some View {
+        HStack(spacing: 0) {
+            ForEach(cells.indices, id: \.self) { i in
+                cells[i].lineLimit(1).truncationMode(.tail).textSelection(.enabled)
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .frame(width: fixed ? Self.cellWidth : nil, alignment: .leading)
+                    .frame(maxWidth: fixed ? nil : .infinity, alignment: .leading)
+            }
+        }
+        .overlay(alignment: .bottom) { border.frame(height: 1) }
+    }
+}
+
+extension JSONValue {
+    /// The value's type as the runner's schema names it.
+    var typeName: String {
+        switch self {
+        case .null: "null"
+        case .bool: "bool"
+        case .int: "int"
+        case .number: "float"
+        case .string: "str"
+        case .array: "list"
+        case .object: "dict"
         }
     }
 }
 
-struct ResultTable: View {
-    let columns: [String]
-    let rows: [[JSONValue]]
-
-    struct Row: Identifiable {
-        let id: Int
-        let cells: [String]
-    }
-    struct Column: Identifiable {
-        let id: Int
-        let name: String
-    }
-
+/// Selectable mono text in the result area (the shared `MonoText` keeps its look for the diff).
+struct ResultText: View {
+    let text: String
+    var color = Theme.Color.textCode
     var body: some View {
-        let data = rows.enumerated().map { Row(id: $0.offset, cells: $0.element.map(\.cellText)) }
-        let cols = columns.enumerated().map { Column(id: $0.offset, name: $0.element) }
-        Table(data) {
-            TableColumnForEach(cols) { column in
-                TableColumn(column.name) { row in
-                    Text(verbatim: column.id < row.cells.count ? row.cells[column.id] : "")
-                        .font(.system(size: 12, design: .monospaced))
-                        .lineLimit(1)
-                        .textSelection(.enabled)
-                        .help(column.id < row.cells.count ? row.cells[column.id] : "")
-                }
-                .width(min: 60, ideal: 140)
-            }
+        ScrollView([.vertical, .horizontal]) {
+            Text(verbatim: text).font(Theme.mono(12)).foregroundStyle(color).textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.vertical, 6)
         }
     }
 }
@@ -107,13 +175,14 @@ struct JSONTree: View {
         List {
             OutlineGroup(Node(key: "result", value: value).children ?? [Node(key: "result", value: value)], children: \.children) { node in
                 HStack(spacing: 6) {
-                    Text(verbatim: node.key).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-                    Text(verbatim: node.summary).font(.system(size: 12, design: .monospaced)).lineLimit(1)
+                    Text(verbatim: node.key).font(Theme.mono(12)).foregroundStyle(Theme.Color.textMuted)
+                    Text(verbatim: node.summary).font(Theme.mono(12)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
                         .textSelection(.enabled)
                 }
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 }
 

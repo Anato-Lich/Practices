@@ -40,12 +40,11 @@ struct Sidebar: View {
         .frame(width: 260)
         .background(Theme.Color.sidebarBg)
         .background {
-            // ⌘1–3 and ⌘K: shortcuts need a button in the window.
+            // ⌘1–3: shortcuts need a button in the window. ⌘K opens the palette (Palette.swift).
             Group {
                 Button("") { select(.pending) }.keyboardShortcut("1")
                 Button("") { select(.unassigned) }.keyboardShortcut("2")
                 Button("") { select(.map) }.keyboardShortcut("3")
-                Button("") { searchFocused = true }.keyboardShortcut("k")
             }
             .opacity(0).allowsHitTesting(false)
         }

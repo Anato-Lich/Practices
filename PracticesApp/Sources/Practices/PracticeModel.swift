@@ -22,6 +22,8 @@ final class PracticeModel {
     private(set) var runs: [RunRecord] = []
     /// A step of a chain chosen to look at; nil shows the final result.
     var selectedStep: Int?
+    /// Environment per service for the next run; a service not named runs in its first one.
+    var envs: [String: String] = [:]
 
     private var runTask: Task<Void, Never>?
 
@@ -76,8 +78,7 @@ final class PracticeModel {
                     try store.writeDraft(code, for: practice)
                     if signature == nil || !(signature?.ok ?? false) { await refreshSignature() }
                 }
-                // Each service in its first environment: the window has no way to pick another.
-                result = try await PracticeRunner().run(practice, params: params)
+                result = try await PracticeRunner().run(practice, params: params, envs: envs)
             } catch is CancellationError {
                 failure = String(localized: "Stopped")
             } catch {

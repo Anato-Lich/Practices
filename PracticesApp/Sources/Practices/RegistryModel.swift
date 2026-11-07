@@ -42,6 +42,8 @@ final class RegistryModel {
     /// Projects and services whose rows are open in the sidebar.
     var expanded: Set<MainWindow.SidebarItem> = []
     var searchText = ""
+    /// The ⌘K palette over the window.
+    var paletteShown = false
     /// Open practices keep their state (code being edited, last result) while switching.
     private var practiceModels: [String: PracticeModel] = [:]
     /// service id → env → keys that have a value.

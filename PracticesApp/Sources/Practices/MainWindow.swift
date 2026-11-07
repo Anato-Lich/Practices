@@ -40,6 +40,7 @@ struct MainWindow: View {
         .background(Theme.Color.windowBg)
         .foregroundStyle(Theme.Color.text)
         .ignoresSafeArea(.container, edges: .top)
+        .overlay { Palette() }
         .preferredColorScheme(.dark)
         .alert(Text(verbatim: "Practices"), isPresented: Binding(get: { registry.error != nil }, set: { if !$0 { registry.error = nil } })) {
         } message: {
@@ -84,7 +85,7 @@ struct MainWindow: View {
             case .unassigned:
                 UnassignedView()
             case .map:
-                Text(verbatim: "Карта").font(Theme.ui(13)).foregroundStyle(Theme.Color.textMuted)
+                MapView()
             case .doctor:
                 DoctorView()
             case nil:
