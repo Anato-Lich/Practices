@@ -88,7 +88,8 @@ private struct MapTitle: View {
         HStack(spacing: 10) {
             Breadcrumb(crumbs: crumbs, title: title)
             Text(verbatim: subtitle).font(Theme.ui(13)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
-            levels
+                .layoutPriority(-1)
+            levels.fixedSize()
         }
     }
 

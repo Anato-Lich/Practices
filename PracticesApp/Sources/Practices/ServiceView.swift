@@ -174,7 +174,8 @@ struct ServiceView: View {
     private var practices: some View {
         let list = registry.practices[service.id] ?? []
         return SectionCard("Практики · \(list.count)", spacing: 8) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), alignment: .leading, spacing: 4) {
+            // Three columns in the design at 1280; narrower windows get fewer so names stay whole.
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 10)], alignment: .leading, spacing: 4) {
                 ForEach(list) { practice in
                     let run = runLabel(registry.lastRun(of: practice.ref))
                     Button { registry.selection = .practice(practice.ref) } label: {
