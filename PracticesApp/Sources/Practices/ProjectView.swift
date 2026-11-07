@@ -161,7 +161,11 @@ struct ProjectView: View {
                 .font(Theme.mono(12)).lineLimit(1)
             }
             if project.repos.isEmpty && project.folders.isEmpty {
-                Text(verbatim: "нет репозиториев").font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted)
+                EmptyState(glyph: "▢", tint: ServiceClass.worker.color, title: "Репозиториев нет",
+                           text: "Проект описан, но к нему не привязан ни один клон. Заберите репозиторий из «Не распределено».",
+                           code: "practicesctl assign <repo> \(project.id)") {
+                    StateButton("Не распределено") { registry.selection = .unassigned }
+                }
             }
         }
     }
@@ -205,8 +209,15 @@ struct ProjectView: View {
                                       @ViewBuilder footer: () -> Footer) -> some View {
         let color = ServiceClass(rawValue: column.rawValue)!.color
         return VStack(alignment: .leading, spacing: 6) {
-            SectionTitle("\(title) · \(services.count)", color: color).padding(.bottom, 4)
-            ForEach(services) { row($0, dot: color) }
+            if services.isEmpty {
+                EmptyState(glyph: "◌", tint: color, title: "\(title) · 0",
+                           text: column == .front
+                               ? "Фронт появится, когда в репозитории найдётся package.json с dev-сервером — или добавьте сервис вручную."
+                               : "Появится из скана compose (practicesctl scan \(project.id) --write) — или добавьте сервис вручную.")
+            } else {
+                SectionTitle("\(title) · \(services.count)", color: color).padding(.bottom, 4)
+                ForEach(services) { row($0, dot: color) }
+            }
             Spacer(minLength: 0)
             footer()
         }

@@ -12,11 +12,12 @@ struct PendingView: View {
     var body: some View {
         Group {
             if registry.pending.isEmpty {
-                ContentUnavailableView {
-                    Label { Text(verbatim: "Нечего принимать") } icon: { Image(systemName: "checkmark.seal") }
-                } description: {
-                    Text(verbatim: "Что агенты пишут в пространства, ждёт здесь, пока вы не примете.")
-                }
+                EmptyState(glyph: "✓", tint: Theme.Color.ok, title: "Всё принято",
+                           text: "Правок агентов нет. Новые появятся после update_practice или add_link и останутся здесь до вашего решения.",
+                           code: registry.spaces.compactMap { s in
+                               registry.spaceGit[s.id].map { "\(s.id): \($0.branch ?? "HEAD") · \($0.uncommitted == 0 ? "чисто" : "\($0.uncommitted) не закоммичено")" }
+                           }.joined(separator: "   "))
+                    .padding(20)
             } else {
                 HStack(spacing: 0) {
                     list

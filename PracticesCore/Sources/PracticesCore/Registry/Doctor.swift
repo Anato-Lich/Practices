@@ -21,7 +21,9 @@ public struct DoctorFinding: Hashable, Sendable, Codable {
 public enum Doctor {
 
     static let skippedDirs: Set<String> = ["node_modules", ".venv", "venv", ".git", "build", "dist", "target",
-                                           "DerivedData", ".build", "__pycache__", ".claude", ".ua", ".mypy_cache"]
+                                           "DerivedData", ".build", "__pycache__", ".claude", ".ua", ".mypy_cache",
+                                           // Agent worktrees repeat the clone's files once per branch.
+                                           ".worktrees"]
     static let textExtensions: Set<String> = ["md", "txt", "py", "ts", "tsx", "js", "json", "yml", "yaml",
                                               "toml", "sh", "ini", "cfg", "conf", "sql", "swift", "ipynb", "html"]
 
