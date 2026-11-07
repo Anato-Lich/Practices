@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — подключить сервис к проекту</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="service:xkeeper-pg" scroll="{{scroll}}" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+      <a href="Main.dc.html" style="text-decoration: none">x-keeper</a><span style="color: #8A8A92">/</span><a href="Project.dc.html" style="text-decoration: none; color: #5AA9FF">platform</a><span style="color: #8A8A92">/</span>
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: inherit">xkeeper-pg</h1>
+      <span style="margin-left: auto; display: flex; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
+        <button type="button" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #0A84FF; border-radius: 6px; background: #0A84FF; font: inherit; color: #FFFFFF; cursor: pointer"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v5h-5"></path></svg>Проверить</button>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Подключить к проекту…</button>
+        <a href="MapService.dc.html" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none">Карта</a>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Finder</button>
+      </span>
+    </header>
+
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+        <h2 style="margin: 0; font-size: 17px; font-weight: 600">X-Keeper Postgres</h2>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(78,210,122,0.16); color: #4ED27A">postgres</span>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(255,176,74,0.16); color: #FFB04A">read-only</span>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(255,122,162,0.16); color: #FF7AA2">prod-data</span>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(154,154,163,0.16); color: #C9C9D0">shared · 7 вызывающих</span>
+        <span style="margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #A6A6AE"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #4ED27A"></span>4 из 4 точек отвечают · проверено 14:02</span>
+      </div>
+      <div style="color: #A6A6AE; margin-top: -4px">Четыре базы X-Keeper (web_admin, api_panel, accounts, x-keeper_devices), одна учётная запись на чтение. Никогда не писать.</div>
+
+      <div style="box-sizing: border-box; padding: 8px 14px; border-radius: 8px; background: #161618; border: 1px solid #38383D; display: grid; grid-template-columns: 90px 1fr; gap: 3px 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 1.5">
+        <span style="color: #8A8A92">aliases</span><span>x_logistic · x_devices · x_accounts · x_panel</span>
+        <span style="color: #8A8A92">envs</span><span>prod</span>
+        <span style="color: #8A8A92">requires</span><span><span style="color: #FFB04A">⚑ corp-network</span> <span style="color: #A6A6AE">— Корпоративная сеть X-Keeper (WireGuard): включите туннель</span></span>
+        <span style="color: #8A8A92">mcp</span><span style="color: #A6A6AE">get_service xkeeper-pg · list_practices xkeeper-pg · env_names xkeeper-pg</span>
+      </div>
+
+      <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: start">
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; gap: 6px">
+            <h3 style="margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92">Точки входа · 4</h3>
+            <sc-for list="{{endpoints}}" as="e" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+                <span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #4ED27A"></span>
+                <span style="min-width: 70px">{{e.id}}</span>
+                <span style="color: #A6A6AE">{{e.label}}</span>
+                <span style="color: #8A8A92">{{e.tmpl}}</span>
+                <span style="margin-left: auto; color: #A6A6AE; font-variant-numeric: tabular-nums">{{e.ms}}</span>
+              </div>
+            </sc-for>
+          </section>
+
+          <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; gap: 4px">
+            <h3 style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92">Практики · 9</h3>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px">
+              <sc-for list="{{practices}}" as="p" hint-placeholder-count="9">
+                <a href="Practice.dc.html" style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 5px; background: #1C1C1E; color: inherit; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px"><span aria-hidden="true" style="color: #8A8A92; font-size: 10px">‹›</span><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{p.name}}</span><span style="margin-left: auto; font-size: 10.5px; color: {{p.color}}">{{p.last}}</span></a>
+              </sc-for>
+            </div>
+          </section>
+
+          <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; gap: 4px">
+            <h3 style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92">Кто ходит сюда · 16 связей из 7 сервисов</h3>
+            <sc-for list="{{links}}" as="l" hint-placeholder-count="16">
+              <a href="MapService.dc.html" style="{{l.style}}">
+                <span style="{{l.zone}}">{{l.project}}</span>
+                <span style="min-width: 150px">{{l.from}}</span>
+                <span style="color: #8A8A92">→ {{l.ep}}</span>
+                <span style="color: #A6A6AE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1">{{l.what}}</span>
+                <span style="color: {{l.accessColor}}">{{l.access}}</span>
+              </a>
+            </sc-for>
+          </section>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; gap: 6px">
+            <h3 style="margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92">Ключи · prod</h3>
+            <sc-for list="{{keys}}" as="k" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px"><span>{{k.name}}</span><span style="color: #8A8A92; font-size: 10px">{{k.lock}}</span><button type="button" style="margin-left: auto; border: 0; background: transparent; padding: 0; font: inherit; font-size: 11px; color: {{k.color}}; cursor: pointer">{{k.state}}</button></div>
+            </sc-for>
+            <span style="font-size: 11px; color: #8A8A92">Значения не показываются нигде: ни здесь, ни агенту. Проект получает их через practicesctl run xkeeper-pg -- …</span>
+          </section>
+
+          <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(255,176,74,0.05); border: 1px solid rgba(255,176,74,0.35); display: flex; flex-direction: column; gap: 6px">
+            <h3 style="margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #FFB04A">Защита · 5 правил</h3>
+            <sc-for list="{{guards}}" as="g" hint-placeholder-count="5">
+              <div style="display: flex; gap: 8px; align-items: flex-start; font-size: 12px"><span aria-hidden="true" style="color: #FFB04A; flex: none">▸</span><span>{{g}}</span></div>
+            </sc-for>
+          </section>
+
+          <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; gap: 6px">
+            <h3 style="margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92">Копии в проектах · 3</h3>
+            <sc-for list="{{copies}}" as="c" hint-placeholder-count="3">
+              <div style="display: flex; align-items: baseline; gap: 8px; font-size: 12px"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1">{{c.path}}</span><span style="color: #8A8A92; font-size: 11px">{{c.ref}}</span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: {{c.color}}">{{c.state}}</span></div>
+            </sc-for>
+          </section>
+        </div>
+      </div>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>…/projects/platform/services/xkeeper-pg/service.yaml</span><span>links.yaml: 1 файл ждёт приёмки</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(0,0,0,0.45)"></div>
+  <!-- Лист macOS: выезжает из-под тулбара, 640 px, как в ConnectSheet.swift. Значения не показываются никогда — только имена и состояние строки. -->
+  <div role="dialog" aria-label="Подключить сервис к проекту" style="position: absolute; left: 450px; top: 52px; width: 640px; box-sizing: border-box; padding: 20px; border-radius: 0 0 12px 12px; background: #26262A; border: 1px solid #45454B; border-top: 0; box-shadow: 0 24px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; flex-direction: column; gap: 2px"><h2 style="margin: 0; font-size: 15px; font-weight: 600">Подключить <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #4ED27A">xkeeper-pg</span> к проекту</h2><span style="font-size: 12px; color: #8A8A92">значения попадут в env-файл проекта под именами, которые ждёт его код</span></div>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">~/Projects/X-Keeper/device_analysis</span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; color: #B48CFF; border: 1px solid #B48CFF">device-analysis</span>
+      <button type="button" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Выбрать папку…</button>
+    </div>
+    <div style="display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center">
+      <span style="color: #A6A6AE">Файл</span>
+      <input type="text" value=".env" style="height: 28px; box-sizing: border-box; padding: 0 8px; border: 1px solid #45454B; border-radius: 6px; background: #1C1C1E; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; outline: none">
+      <button type="button" aria-haspopup="menu" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Существующие ▾</button>
+      <span style="color: #A6A6AE">Окружение</span>
+      <span style="display: inline-flex; width: max-content; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; padding: 2px; font-size: 12px"><button type="button" aria-pressed="true" style="font: inherit; border: 0; padding: 2px 12px; border-radius: 4px; background: #0A84FF; color: #FFFFFF; cursor: pointer">prod</button><button type="button" aria-pressed="false" style="font: inherit; border: 0; padding: 2px 12px; border-radius: 4px; background: transparent; color: #F2F2F4; cursor: pointer">stage</button></span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #4ED27A">.env в .gitignore ✓</span>
+    </div>
+    <div style="border-top: 1px solid #3A3A3F"></div>
+    <div style="display: grid; grid-template-columns: 20px 170px 1fr 150px; gap: 10px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92"><span></span><span>ключ сервиса</span><span>переменная в проекте</span><span>в файле</span></div>
+    <div style="display: flex; flex-direction: column; gap: 2px">
+        <div style="display: grid; grid-template-columns: 20px 170px 1fr 150px; gap: 10px; align-items: center; height: 30px">
+          <input type="checkbox" checked aria-label="Включить XK_PG_HOST" style="width: 14px; height: 14px; margin: 0; accent-color: #0A84FF">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #A6A6AE">XK_PG_HOST</span>
+          <input type="text" value="XK_PG_HOST" placeholder="XK_PG_HOST"  style="height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid #45454B; border-radius: 6px; background: #1C1C1E; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; outline: none">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92">без изменений</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 20px 170px 1fr 150px; gap: 10px; align-items: center; height: 30px">
+          <input type="checkbox" checked aria-label="Включить XK_PG_PORT_DEVICES" style="width: 14px; height: 14px; margin: 0; accent-color: #0A84FF">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #A6A6AE">XK_PG_PORT_DEVICES</span>
+          <input type="text" value="PG_PORT" placeholder="XK_PG_PORT_DEVICES"  style="height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid #45454B; border-radius: 6px; background: #1C1C1E; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; outline: none">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #FF6B6B">нет значения в реестре</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 20px 170px 1fr 150px; gap: 10px; align-items: center; height: 30px">
+          <input type="checkbox" checked aria-label="Включить XK_PG_USER" style="width: 14px; height: 14px; margin: 0; accent-color: #0A84FF">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #A6A6AE">XK_PG_USER</span>
+          <input type="text" value="XK_PG_USER" placeholder="XK_PG_USER"  style="height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid #45454B; border-radius: 6px; background: #1C1C1E; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; outline: none">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #4ED27A">добавится</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 20px 170px 1fr 150px; gap: 10px; align-items: center; height: 30px">
+          <input type="checkbox" checked aria-label="Включить XK_PG_PASSWORD" style="width: 14px; height: 14px; margin: 0; accent-color: #0A84FF">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #A6A6AE">XK_PG_PASSWORD</span>
+          <input type="text" value="XK_PG_PASSWORD" placeholder="XK_PG_PASSWORD"  style="height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid #45454B; border-radius: 6px; background: #1C1C1E; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; outline: none">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #FFB04A">изменится</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 20px 170px 1fr 150px; gap: 10px; align-items: center; height: 30px">
+          <input type="checkbox"  aria-label="Включить XK_PG_DB" style="width: 14px; height: 14px; margin: 0; accent-color: #0A84FF">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #5C5C64">XK_PG_DB</span>
+          <input type="text" value="" placeholder="XK_PG_DB" disabled style="height: 26px; box-sizing: border-box; padding: 0 8px; border: 1px solid #45454B; border-radius: 6px; background: #1C1C1E; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #F2F2F4; outline: none">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"></span>
+        </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px; padding-top: 4px">
+      <span style="font-size: 11px; color: #8A8A92; flex: 1">Остальные строки файла не трогаются. Файл под git значений не получит — вместо этого запишется ссылка <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace;">practicesctl run</span>.</span>
+      <button type="button" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Отмена</button>
+      <button type="button" style="height: 28px; padding: 0 14px; border: 1px solid #0A84FF; border-radius: 6px; background: #0A84FF; font: inherit; color: #FFFFFF; cursor: pointer">Записать 4 строки</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"scroll":{"editor":"int","default":560,"min":0,"max":1400,"unit":"px","section":"Боковая панель"},"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ZONE = { 'cabinet-analysis': '#B48CFF', okk: '#B48CFF', 'x-analysis': '#B48CFF', flyrelay: '#9A9AA3', testers: '#9A9AA3', xmr: '#9A9AA3' };
+    const link = (project, from, ep, what, access) => ({
+      project, from, ep, what, access, accessColor: access === 'write' ? '#FFB04A' : '#8A8A92',
+      zone: 'font-size: 10px; min-width: 96px; padding: 0 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ' + ZONE[project] + '; border: 1px solid ' + ZONE[project],
+      style: 'display: flex; align-items: center; gap: 8px; padding: 2px 0; font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 11.5px; color: #F2F2F4; text-decoration: none',
+    });
+    return {
+      scroll: String(this.props.scroll ?? 560),
+      endpoints: [
+        { id: 'logistic', label: 'web_admin', tmpl: '', ms: '38 ms' }, { id: 'panel', label: 'api_panel', tmpl: '', ms: '41 ms' },
+        { id: 'accounts', label: 'accounts', tmpl: '', ms: '36 ms' }, { id: 'devices', label: 'x-keeper_devices', tmpl: '${XK_PG_HOST}:${XK_PG_PORT_DEVICES}', ms: '52 ms' },
+      ],
+      practices: [
+        { name: 'cabinet-devices', last: 'v2 · 310 ms', color: '#A6A6AE' }, { name: 'device-meta', last: 'v3 · 212 ms', color: '#A6A6AE' }, { name: 'device-second-sim', last: 'v1', color: '#8A8A92' },
+        { name: 'group-by-server', last: 'v1', color: '#8A8A92' }, { name: 'live-snapshot', last: 'v1 · 1.4 s', color: '#FFB04A' }, { name: 'model-catalog', last: 'v2', color: '#8A8A92' },
+        { name: 'printer-checks', last: 'v1', color: '#8A8A92' }, { name: 'query', last: 'v4 · 95 ms', color: '#4ED27A' }, { name: 'resolve-device-ids', last: 'v4 · 180 ms', color: '#A6A6AE' },
+      ],
+      links: [
+        link('cabinet-analysis', 'cabinet-analysis-api', 'panel', 'objects, groups (WHERE "userId" = кабинет)', 'read'),
+        link('cabinet-analysis', 'cabinet-analysis-api', 'devices', 'devices (meta, create_dt, server_id), data_process', 'read'),
+        link('cabinet-analysis', 'cabinet-analysis-api', 'logistic', 'registryDevicesModels — каталог моделей, кэш 600 c', 'read'),
+        link('cabinet-analysis', 'export-engine', 'devices', 'devices, data_processed', 'read'),
+        link('cabinet-analysis', 'export-engine', 'panel', 'objects (secondSimNumber и реестровые поля)', 'read'),
+        link('cabinet-analysis', 'export-engine', 'logistic', 'registryDevicesModels, secondSim, tempTable', 'read'),
+        link('flyrelay', 'flyrelay', 'devices', 'data_processed, retranslation_device — захват изменений', 'read'),
+        link('flyrelay', 'flyrelay', 'devices', 'UPDATE retranslation_device (last_success, last_fa…)', 'write'),
+        link('flyrelay', 'flyrelay', 'panel', 'objects, "customFields", "customFieldsValues"', 'read'),
+        link('okk', 'okk-analysis-service', 'logistic', 'заявки и приборы заявок (именованные запросы)', 'read'),
+        link('okk', 'okk-analysis-service', 'devices', 'приборы и data_processed по хэшам', 'read'),
+        link('okk', 'okk-analysis-service', 'accounts', 'users (id по email)', 'read'),
+        link('okk', 'okk-analysis-service', 'panel', 'objects ("deviceHash" по "userId")', 'read'),
+        link('testers', 'x-testers', 'logistic', 'проверки принтеров этикеток (web_admin)', 'read'),
+        link('x-analysis', 'x-analysis-backend', 'panel', 'objects (sim1 по "userId")', 'read'),
+        link('xmr', 'xmr-backend', 'logistic', 'device_checks, device_label_printer_checks — не подтверждено', 'read'),
+      ],
+      keys: [
+        { name: 'XK_PG_HOST', lock: '', state: 'задан', color: '#4ED27A' }, { name: 'XK_PG_USER', lock: '', state: 'задан', color: '#4ED27A' },
+        { name: 'XK_PG_PASSWORD', lock: '🔒', state: 'задан', color: '#4ED27A' }, { name: 'XK_PG_PORT_DEVICES', lock: '', state: 'не задан', color: '#FFB04A' },
+      ],
+      guards: [
+        'Каждое соединение: default_transaction_read_only = on',
+        'Запрос с глаголом записи падает до соединения (ReadOnlyViolation)',
+        'Писать в api_panel напрямую запрещено; изменения списков идут через devices-api (panel.upsert)',
+        'Источник рвёт простаивающие соединения: повторять OperationalError/InterfaceError',
+        'У каждой базы свои user/password и SSL (verify-ca, хосты — голые IP)',
+      ],
+      copies: [
+        { path: 'X-Keeper/cabinet_analysis-api/app/sources/xkeeper_pg.py', ref: 'device-meta', state: 'v3', color: '#4ED27A' },
+        { path: 'X-Keeper/export_engine/creds.py', ref: 'resolve-device-ids', state: 'v2 → v4', color: '#FFB04A' },
+        { path: 'X-Keeper/okk/analysis_service/service/db/xk.py', ref: 'cabinet-devices', state: 'изменена', color: '#6CB2FF' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

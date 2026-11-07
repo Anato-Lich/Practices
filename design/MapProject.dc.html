@@ -32,7 +32,7 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
         <div aria-hidden="true" style="position: absolute; left: 10px; top: 44px; width: 220px; height: 500px; border-radius: 10px; background: rgba(79,209,217,0.05); border: 1px solid rgba(79,209,217,0.25)"></div>
         <div aria-hidden="true" style="position: absolute; left: 280px; top: 44px; width: 220px; height: 500px; border-radius: 10px; background: rgba(90,169,255,0.05); border: 1px solid rgba(90,169,255,0.25)"></div>
         <div aria-hidden="true" style="position: absolute; left: 550px; top: 44px; width: 220px; height: 500px; border-radius: 10px; background: rgba(78,210,122,0.05); border: 1px solid rgba(78,210,122,0.25)"></div>
-        <div aria-hidden="true" style="position: absolute; left: 792px; top: 44px; width: 188px; height: 500px; border-radius: 10px; background: rgba(255,122,162,0.04); border: 1px dashed rgba(255,122,162,0.3)"></div>
+        <div aria-hidden="true" style="position: absolute; left: 796px; top: 44px; width: 184px; height: 520px; border-radius: 10px; background: rgba(255,122,162,0.04); border: 1px dashed rgba(255,122,162,0.3)"></div>
 
         <svg aria-hidden="true" width="980" height="680" viewBox="0 0 980 680" style="position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible">
           <defs>
@@ -41,31 +41,33 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
             <marker id="m-net" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#9A9AA3"></path></marker>
             <marker id="m-build" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#B48CFF"></path></marker>
           </defs>
-          <g fill="none" stroke-width="1.4" stroke-opacity="0.75">
+          <!-- Разводка «шиной»: выход из карточки вправо в проход между колонками, вертикаль в проходе, горизонталь только в свободном коридоре
+               (над заголовками колонок y≈20–40, под последней карточкой колонки или между соседними колонками). Линии под карточками. -->
+          <g fill="none" stroke-width="1.4" stroke-opacity="0.75" stroke-linejoin="round">
             <g stroke="#5AA9FF" marker-end="url(#m-http)">
-              <path d="M490,122 C530,122 530,230 490,230"></path>
-              <path d="M490,230 C530,230 530,446 490,446"></path>
-              <path d="M490,230 C645,230 645,117 802,117"></path>
-              <path d="M490,230 C645,230 645,139 802,139"></path>
-              <path d="M490,230 C645,230 645,277 802,277"></path>
-              <path d="M490,230 C645,230 645,299 802,299"></path>
-              <path d="M490,230 C645,230 645,321 802,321"></path>
-              <path d="M490,230 C645,230 645,343 802,343"></path>
-              <path d="M490,230 C645,230 645,387 802,387"></path>
-              <path d="M490,230 C645,230 645,459 802,459"></path>
-              <path d="M802,531 C520,531 120,420 120,168"></path>
+              <path d="M390,168 V184"></path>
+              <path d="M490,265 H503 V446 H490"></path>
+              <path d="M490,202 H505 V20 H791 V117 H806"></path>
+              <path d="M490,209 H511 V25 H787 V139 H806"></path>
+              <path d="M490,216 H545 V291 H806"></path>
+              <path d="M490,223 H539 V313 H806"></path>
+              <path d="M490,230 H533 V335 H806"></path>
+              <path d="M490,237 H527 V357 H806"></path>
+              <path d="M490,251 H515 V401 H806"></path>
+              <path d="M490,258 H509 V475 H806"></path>
+              <path d="M806,543 H791 V566 H275 V160 H220"></path>
             </g>
             <g stroke="#4ED27A" marker-end="url(#m-db)">
-              <path d="M490,230 C525,230 525,122 560,122"></path>
-              <path d="M490,230 L560,230"></path>
+              <path d="M490,188 H517 V122 H560"></path>
+              <path d="M490,195 H560"></path>
             </g>
             <g stroke="#9A9AA3" marker-end="url(#m-net)">
-              <path d="M220,122 C510,122 510,161 802,161"></path>
-              <path d="M490,230 C645,230 645,365 802,365"></path>
+              <path d="M220,100 H245 V30 H783 V161 H806"></path>
+              <path d="M490,244 H521 V379 H806"></path>
             </g>
             <g stroke="#B48CFF" marker-end="url(#m-build)">
-              <path d="M220,122 C510,122 510,183 802,183"></path>
-              <path d="M220,122 C510,122 510,205 802,205"></path>
+              <path d="M220,122 H255 V35 H779 V183 H806"></path>
+              <path d="M220,144 H265 V40 H775 V205 H806"></path>
             </g>
           </g>
         </svg>
@@ -82,7 +84,7 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
         <h2 style="position: absolute; left: 20px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #4FD1D9">Фронты · 1</h2>
         <h2 style="position: absolute; left: 290px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #5AA9FF">API и воркеры · 4</h2>
         <h2 style="position: absolute; left: 560px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #4ED27A">Данные · 2</h2>
-        <h2 style="position: absolute; left: 802px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #FF7AA2">Внешние · 13</h2>
+        <h2 style="position: absolute; left: 806px; top: 52px; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #FF7AA2">Внешние · 13</h2>
 
         <sc-for list="{{cards}}" as="c" hint-placeholder-count="7">
           <a href="MapService.dc.html" title="{{c.desc}}" style="{{c.style}}">
@@ -92,19 +94,19 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
           </a>
         </sc-for>
 
-        <div style="position: absolute; left: 802px; top: 76px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+        <div style="position: absolute; left: 806px; top: 76px; width: 166px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
           <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #5AA9FF; text-decoration: none; margin-bottom: 2px; line-height: 16px">platform · 5</a>
           <sc-for list="{{platform}}" as="x" hint-placeholder-count="5"><a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{x.id}}</span><span style="{{x.kindStyle}}">{{x.kind}}</span></a></sc-for>
         </div>
-        <div style="position: absolute; left: 802px; top: 236px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+        <div style="position: absolute; left: 806px; top: 250px; width: 166px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
           <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #FF7AA2; text-decoration: none; margin-bottom: 2px; line-height: 16px">external · 6</a>
           <sc-for list="{{external}}" as="x" hint-placeholder-count="6"><a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{x.id}}</span><span style="{{x.kindStyle}}">{{x.kind}}</span></a></sc-for>
         </div>
-        <div style="position: absolute; left: 802px; top: 418px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+        <div style="position: absolute; left: 806px; top: 434px; width: 166px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
           <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #FF7AA2; text-decoration: none; margin-bottom: 2px; line-height: 16px">sphere-external · 1</a>
           <a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span>yandex-locator</span><span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(255,122,162,0.16); color: #FF7AA2">ext</span></a>
         </div>
-        <div style="position: absolute; left: 802px; top: 490px; width: 170px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
+        <div style="position: absolute; left: 806px; top: 502px; width: 166px; box-sizing: border-box; padding: 8px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; display: flex; flex-direction: column; gap: 2px">
           <a href="MapProject.dc.html" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; font-weight: 600; color: #B48CFF; text-decoration: none; margin-bottom: 2px; line-height: 16px">cabinet-analysis · 1</a>
           <a href="MapService.dc.html" style="display: flex; justify-content: space-between; gap: 6px; height: 22px; align-items: center; padding: 0 4px; border-radius: 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #F2F2F4; text-decoration: none"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">cabinet-analysis-frontend</span><span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(79,209,217,0.16); color: #4FD1D9">front</span></a>
         </div>
@@ -117,7 +119,7 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
               <a href="MapService.dc.html" aria-label="Открыть сервис" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; color: #8A8A92; text-decoration: none">›</a>
             </span>
           </sc-for>
-          <span style="font-size: 11px; color: #8A8A92; margin-left: 8px">наведение на плашку подсвечивает вызывающих; ⌥-клик открывает карту сервиса</span>
+          <span style="font-size: 11px; color: #8A8A92; margin-left: 8px">линии под карточками: вертикали в проходах, горизонтали в коридорах над колонками и под карточками; наведение на карточку подсвечивает её связи, на плашку — вызывающих; ⌥-клик открывает карту сервиса</span>
         </div>
       </div>
     </div>

@@ -41,17 +41,18 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
         <div style="height: 40px; box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 10px; flex: none; border-bottom: 1px solid #3A3A3F; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
           <a href="Service.dc.html" style="text-decoration: none; color: #4ED27A">arm-pg</a><span style="color: #8A8A92">/</span><span>practices/query.py</span>
           <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(78,210,122,0.16); color: #4ED27A">new · +18</span>
-          <span style="color: #8A8A92">черновик агента · не запускалась · DECISIONS 20</span>
+          <span style="color: #8A8A92">черновик агента · не запускалась · DECISIONS 20</span><span style="color: #5C5C64">↔ длинные строки прокручиваются</span>
           <span style="margin-left: auto; display: flex; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
             <a href="Practice.dc.html" style="height: 26px; padding: 0 10px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none">Открыть практику</a>
             <button type="button" style="height: 26px; padding: 0 10px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Отклонить</button>
             <button type="button" style="height: 26px; padding: 0 12px; border: 1px solid #0A84FF; border-radius: 6px; background: #0A84FF; font: inherit; color: #FFFFFF; cursor: pointer">Принять</button>
           </span>
         </div>
-        <div style="flex: 1; min-height: 0; overflow: hidden; background: #161618; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 19px">
+        <div style="flex: 1; min-height: 0; position: relative; overflow: hidden; background: #161618; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 19px">
           <sc-for list="{{diff}}" as="d" hint-placeholder-count="20">
             <div style="{{d.style}}"><span style="width: 36px; flex: none; text-align: right; padding-right: 10px; color: #5C5C64">{{d.n}}</span><span style="width: 14px; flex: none; color: {{d.signColor}}">{{d.sign}}</span><span style="white-space: pre">{{d.text}}</span></div>
           </sc-for>
+          <div aria-hidden="true" style="position: absolute; left: 50px; right: 12px; bottom: 4px; height: 7px; border-radius: 4px; background: rgba(255,255,255,0.06)"><div style="width: 62%; height: 7px; border-radius: 4px; background: rgba(255,255,255,0.22)"></div></div>
         </div>
       </div>
     </div>
@@ -78,7 +79,7 @@ class Component extends DCLogic {
       '# practices: arm-pg/query@draft', 'import os, psycopg', '', 'def run(sql: str, limit: int = 200):', '    """Произвольный SELECT к ARM Postgres (invitest); только чтение."""',
       '    if not sql.lstrip().lower().startswith("select"):', '        raise ValueError("only SELECT")',
       '    dsn = (f"host={os.environ[\'ARM_PG_HOST\']} port={os.environ[\'ARM_PG_PORT\']} "', '           f"dbname={os.environ[\'ARM_PG_DB\']} user={os.environ[\'ARM_PG_USER\']} "', '           f"password={os.environ[\'ARM_PG_PASSWORD\']}")',
-      '    with psycopg.connect(dsn, options="-c default_transaction_read_only=on") as conn:', '        cur = conn.execute(sql)', '        cols = [c.name for c in cur.description]',
+      '    with psycopg.connect(dsn, options="-c default_transaction_read_only=on -c statement_timeout=15000 -c application_name=practices") as conn:', '        cur = conn.execute(sql)', '        cols = [c.name for c in cur.description]',
       '        return [dict(zip(cols, row)) for row in cur.fetchmany(limit)]', '', '# Черновик агента по коду invitest/db.py: не запускалась (DECISIONS 20).',
     ];
     return {

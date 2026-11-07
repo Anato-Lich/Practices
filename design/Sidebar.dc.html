@@ -18,7 +18,10 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
     <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57"></span>
     <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E"></span>
     <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #28C840"></span>
-    <button type="button" aria-label="Скрыть боковую панель" style="margin-left: auto; width: 28px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: #8A8A92; display: flex; align-items: center; justify-content: center; cursor: pointer">
+    <button type="button" aria-label="Свернуть всё (⌥ — развернуть всё)" title="Свернуть всё · ⌥ развернуть всё" style="margin-left: auto; width: 28px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: #8A8A92; display: flex; align-items: center; justify-content: center; cursor: pointer">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5"></path><path d="m7 15 5 5 5-5"></path></svg>
+    </button>
+    <button type="button" aria-label="Скрыть боковую панель" style="width: 28px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: #8A8A92; display: flex; align-items: center; justify-content: center; cursor: pointer">
       <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path></svg>
     </button>
   </div>
@@ -36,6 +39,7 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
           <span aria-hidden="true" style="{{r.dot}}"></span>
           <span style="{{r.labelStyle}}">{{r.label}}</span>
           <span style="flex: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; font-variant-numeric: tabular-nums; color: {{r.countColor}}">{{r.count}}</span>
+          <span aria-hidden="true" style="{{r.foldStyle}}">{{r.fold}}</span>
         </div>
       </sc-for>
     </div>
@@ -52,16 +56,18 @@ class Component extends DCLogic {
     const add = (key, label, depth, opts = {}) => {
       const sel = key === selected, mono = opts.mono;
       rows.push({
-        key, label, disc: opts.disc || '', count: opts.count || '',
+        key, label, disc: opts.disc || '', count: opts.count || '', fold: '', foldStyle: 'display: none',
         countColor: sel ? 'rgba(255,255,255,0.85)' : (opts.countColor || '#8A8A92'),
         dot: opts.kind ? 'width: 7px; height: 7px; border-radius: 50%; flex: none; background: ' + (sel ? '#FFFFFF' : K[opts.kind]) : 'display: none',
         labelStyle: 'flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap' + (mono ? '; font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 12px' : ''),
         style: 'height: 24px; box-sizing: border-box; padding: 0 8px 0 ' + (8 + depth * 16) + 'px; display: flex; align-items: center; gap: 6px; border-radius: 5px; white-space: nowrap; background: ' + (sel ? '#0A84FF' : 'transparent') + '; color: ' + (sel ? '#FFFFFF' : '#F2F2F4'),
       });
     };
-    const header = (label) => rows.push({ key: '', label, disc: '', count: '', countColor: '#8A8A92', dot: 'display: none', labelStyle: '',
-      style: 'height: 26px; box-sizing: border-box; padding: 10px 8px 0; display: flex; align-items: flex-end; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em' });
-    header('Недавние');
+    // Заголовок секции сворачивается: глиф ▾/▸ справа, появляется ярче при наведении.
+    const header = (label, fold) => rows.push({ key: '', label, disc: '', count: '', countColor: '#8A8A92', dot: 'display: none', labelStyle: 'flex: 1',
+      fold: fold || '', foldStyle: fold ? 'flex: none; width: 12px; text-align: center; font-size: 10px; color: #6E6E76' : 'display: none',
+      style: 'height: 26px; box-sizing: border-box; padding: 10px 8px 0; display: flex; align-items: flex-end; gap: 6px; font-size: 11px; font-weight: 600; color: #8A8A92; text-transform: uppercase; letter-spacing: 0.04em; cursor: default' });
+    header('Недавние', '▾');
     add('service:xkeeper-pg', 'xkeeper-pg', 0, { kind: 'data', mono: true });
     add('practice:xkeeper-pg/device-meta', 'xkeeper-pg/device-meta', 0, { disc: '‹›', mono: true });
     add('project:device-analysis', 'device-analysis', 0, { disc: '▸', mono: true });
@@ -69,7 +75,7 @@ class Component extends DCLogic {
     add('pending', 'Ждут приёмки', 0, { count: '12  ⌘1', countColor: '#FFB04A' });
     add('unassigned', 'Не распределено', 0, { count: '⌘2' });
     add('map', 'Карта', 0, { count: '⌘3' });
-    header('X-Keeper');
+    header('X-Keeper', '▾');
     add('space:x-keeper', 'Обзор', 0, { count: '22 · 92' });
     add('project:analytics', 'analytics', 0, { disc: '▾', mono: true, count: '21' });
     add('project:cabinet-analysis', 'cabinet-analysis', 1, { disc: '▸', mono: true, count: '4' });
@@ -86,7 +92,7 @@ class Component extends DCLogic {
     add('service:xkeeper-pg', 'xkeeper-pg', 1, { kind: 'data', mono: true, disc: '▾', count: '9' });
     for (const p of ['cabinet-devices', 'device-meta', 'device-second-sim', 'group-by-server', 'live-snapshot', 'model-catalog', 'printer-checks', 'query', 'resolve-device-ids']) add('practice:xkeeper-pg/' + p, p, 2, { disc: '‹›', mono: true });
     for (const [id, n] of [['rma', 2], ['testers', 2], ['warehouse', 1], ['x-factory', 5], ['x-scanners', 3], ['x-shopfloor', 10], ['x-vision', 8], ['xmr', 2], ['xsm', 9]]) add('project:' + id, id, 0, { disc: '▸', mono: true, count: String(n) });
-    header('SphereTele');
+    header('SphereTele', '▾');
     add('space:spheretele', 'Обзор', 0, { count: '9 · 53' });
     for (const [id, n] of [['ble', 14], ['hyper-imu', 18], ['imu-sphere', 5], ['nn-mapmatch', 1], ['pakz-crypto', 1], ['route-verdict', 3], ['skillhub', 2], ['sphere-external', 3], ['wifi-locator', 6]]) add('project:' + id, id, 0, { disc: '▸', mono: true, count: String(n) });
     header('');

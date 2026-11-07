@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — Doctor</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="doctor" scroll="790" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600">Doctor</h1>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #A6A6AE">~/Projects · 212 файлов .env и compose · сравнение с реестром · имена и пути, не значения</span>
+      <button type="button" style="margin-left: auto; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v5h-5"></path></svg>Запустить снова</button>
+    </header>
+
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid rgba(255,107,107,0.45)"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1; color: #FF6B6B">2</span><span style="font-size: 11px; color: #A6A6AE">секрета в открытом виде</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid rgba(255,176,74,0.45)"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1; color: #FFB04A">1</span><span style="font-size: 11px; color: #A6A6AE">расходится с реестром</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid #38383D"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1; color: #5AA9FF">1</span><span style="font-size: 11px; color: #A6A6AE">один секрет в нескольких проектах</span></div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 8px; background: #26262A; border: 1px solid #38383D"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 22px; font-weight: 600; line-height: 1.1; color: #A6A6AE">1</span><span style="font-size: 11px; color: #A6A6AE">копия реестра — можно заменить на practicesctl run</span></div>
+      </div>
+
+      <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+          <section style="box-sizing: border-box; border-radius: 10px; background: #26262A; border: 1px solid {{g.border}}; display: flex; flex-direction: column; overflow: hidden">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #38383D; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: {{g.color}}"><span>{{g.title}}</span><span style="margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; color: #8A8A92">{{g.footer}}</span></div>
+            <sc-for list="{{g.items}}" as="f" hint-placeholder-count="2">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #2E2E33">
+                <span aria-hidden="true" style="{{f.iconStyle}}">{{f.icon}}</span>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+                  <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">{{f.path}}</span>
+                  <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #A6A6AE">{{f.keys}}</span>
+                  <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">{{f.related}}</span>
+                </div>
+                <a href="{{f.href}}" style="{{f.serviceStyle}}">{{f.service}}</a>
+                <button type="button" style="height: 26px; padding: 0 10px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; font-size: 12px; color: #F2F2F4; cursor: pointer">Finder</button>
+              </div>
+            </sc-for>
+          </section>
+        </sc-for>
+      </div>
+      <span style="font-size: 11px; color: #8A8A92">Doctor только читает: ничего в проектах не меняет. Значения в отчёт не попадают, в каталог тоже.</span>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>doctor: 212 файлов · 3,8 с</span><span>в боковой панели — <span style="color: #FFB04A">3</span>: утечки и расхождения</span><span>проверено 14:02</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mono = 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; ';
+    const C = { leak: '#FF6B6B', drift: '#FFB04A', shared: '#5AA9FF', duplicate: '#A6A6AE' };
+    const ICON = { leak: '!', drift: '≠', shared: '⧉', duplicate: '=' };
+    const item = (kind, path, keys, related, service) => ({
+      path, keys, related, service: service || '', href: service ? 'Service.dc.html' : 'Doctor.dc.html',
+      icon: ICON[kind], iconStyle: mono + 'width: 22px; height: 22px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; font-weight: 600; color: ' + C[kind] + '; background: ' + C[kind] + '22',
+      serviceStyle: service ? mono + 'font-size: 11px; height: 26px; padding: 0 10px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #4ED27A; text-decoration: none' : 'display: none',
+    });
+    const group = (kind, title, footer, items) => ({ title, footer, items, color: C[kind], border: kind === 'leak' ? 'rgba(255,107,107,0.45)' : kind === 'drift' ? 'rgba(255,176,74,0.45)' : '#38383D' });
+    return {
+      groups: [
+        group('leak', 'Секреты в открытом виде · 2', 'значение из реестра записано в файл — вынести и удалить копию', [
+          item('leak', '~/Projects/X-Keeper/device_analysis/.env', 'XK_PG_PASSWORD, CLICKHOUSE_PASSWORD', 'совпадает с xkeeper-pg@prod, device-analysis-clickhouse@prod · файл не под git', 'xkeeper-pg'),
+          item('leak', '~/Projects/X-Keeper/okk/docker-compose.yml', 'KAFKA_SASL_PASSWORD', 'совпадает с kafka@prod · файл под git ⚠', 'kafka'),
+        ]),
+        group('drift', 'Расходится с реестром · 1', 'ключ есть в реестре с другим значением — одно из них устарело', [
+          item('drift', '~/Projects/SphereTele/wifi-locator/.env.local', 'WIFI_DB_PASSWORD', 'реестр: wifi-db@prod, другое значение · файл изменён позже реестра', 'wifi-db'),
+        ]),
+        group('shared', 'Один секрет в нескольких проектах · 1', 'одно значение под разными именами — сервис, которого в реестре ещё нет', [
+          item('shared', '~/Projects/X-Keeper/xsm/.env', 'SSO_CLIENT_SECRET', '= ~/Projects/X-Keeper/x-vision/.env KEYCLOAK_SECRET · = ~/Projects/X-Keeper/rma/.env SSO_SECRET'),
+        ]),
+        group('duplicate', 'Копии реестра · 1', 'все ключи совпадают с реестром — файл можно заменить на practicesctl run', [
+          item('duplicate', '~/Projects/X-Keeper/platform/devices-api/.env', 'XK_PG_HOST, XK_PG_PORT_DEVICES, XK_PG_USER, XK_PG_PASSWORD, XK_PG_DB', 'practicesctl run xkeeper-pg@prod -- docker compose up', 'xkeeper-pg'),
+        ]),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

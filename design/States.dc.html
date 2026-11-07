@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — пустые состояния и ошибки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="width: 1280px; height: 860px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225">
+    <h1 style="margin: 0; font-size: 15px; font-weight: 600">Состояния</h1>
+    <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #A6A6AE">пустые экраны и ошибки · каждая плашка — фрагмент своего экрана в натуральную величину</span>
+  </header>
+
+  <!-- 7. Ошибка операции: полоса под тулбаром экрана, не тост. Пропадает по × или при следующей удачной операции; в строке состояния остаётся красная точка. -->
+  <div role="alert" style="flex: none; display: flex; align-items: center; gap: 10px; height: 32px; box-sizing: border-box; padding: 0 20px; background: rgba(255,107,107,0.12); border-bottom: 1px solid rgba(255,107,107,0.45); font-size: 12px">
+    <span aria-hidden="true" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #FF6B6B; font-weight: 600">✕</span>
+    <span>Не удалось принять <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">platform/services/xkeeper-pg/links.yaml</span></span>
+    <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: #A6A6AE">git commit: exit 128 · .git/index.lock exists</span>
+    <button type="button" style="margin-left: auto; height: 22px; padding: 0 8px; border: 1px solid #45454B; border-radius: 5px; background: #2C2C30; font: inherit; font-size: 11.5px; color: #F2F2F4; cursor: pointer">Повторить</button>
+    <button type="button" style="height: 22px; padding: 0 8px; border: 1px solid #45454B; border-radius: 5px; background: #2C2C30; font: inherit; font-size: 11.5px; color: #F2F2F4; cursor: pointer">Скопировать текст</button>
+    <button type="button" aria-label="Закрыть" style="width: 22px; height: 22px; border: 0; border-radius: 5px; background: transparent; font: inherit; color: #8A8A92; cursor: pointer">×</button>
+  </div>
+
+  <div style="flex: 1; min-height: 0; padding: 16px 20px; box-sizing: border-box; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px 16px">
+    <sc-for list="{{panels}}" as="p" hint-placeholder-count="6">
+      <figure style="margin: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px">
+        <figcaption style="display: flex; gap: 8px; align-items: baseline; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92"><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #5C5C64">{{p.n}}</span>{{p.title}}<span style="margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px">{{p.where}}</span></figcaption>
+        <div style="{{p.frame}}">
+          <span aria-hidden="true" style="{{p.glyphStyle}}">{{p.glyph}}</span>
+          <span style="font-size: 13px; font-weight: 600; color: {{p.titleColor}}">{{p.head}}</span>
+          <span style="font-size: 12px; color: #A6A6AE; text-align: center; max-width: 320px; line-height: 1.45">{{p.text}}</span>
+          <span style="{{p.codeStyle}}">{{p.code}}</span>
+          <span style="display: flex; gap: 6px; margin-top: 6px"><a href="{{p.href}}" style="{{p.btn1Style}}">{{p.btn1}}</a><a href="{{p.href}}" style="{{p.btn2Style}}">{{p.btn2}}</a></span>
+        </div>
+      </figure>
+    </sc-for>
+  </div>
+  <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span><span style="color: #FF6B6B">●</span> последняя операция с ошибкой · 14:07</span><span>x-keeper: main · 8 файлов не закоммичены</span><span style="margin-left: auto">⌘K — перейти</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mono = 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; ';
+    const btn = (primary) => 'height: 26px; padding: 0 10px; display: inline-flex; align-items: center; border-radius: 6px; font-size: 12px; text-decoration: none; ' + (primary ? 'border: 1px solid #0A84FF; background: #0A84FF; color: #FFFFFF' : 'border: 1px solid #45454B; background: #2C2C30; color: #F2F2F4');
+    // Один шаблон на все пустые состояния: глиф, заголовок, одна строка «что сделать», кнопка. Без иллюстраций.
+    const panel = (n, title, where, glyph, glyphColor, head, text, opts = {}) => ({
+      n, title, where, glyph, head, text,
+      glyphStyle: mono + 'width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 18px; font-weight: 600; color: ' + glyphColor + '; background: ' + glyphColor + '1F',
+      titleColor: opts.error ? '#FF6B6B' : '#F2F2F4',
+      frame: 'flex: 1; min-height: 0; box-sizing: border-box; padding: 16px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; ' + (opts.frame || 'background: #26262A; border: 1px solid #38383D'),
+      code: opts.code || '', codeStyle: opts.code ? mono + 'font-size: 11px; color: ' + (opts.error ? '#FF6B6B' : '#8A8A92') + '; text-align: center; white-space: pre-wrap; max-width: 340px; margin-top: 4px' : 'display: none',
+      btn1: opts.btn1 || '', btn1Style: opts.btn1 ? btn(true) : 'display: none', btn2: opts.btn2 || '', btn2Style: opts.btn2 ? btn(false) : 'display: none', href: opts.href || 'Main.dc.html',
+    });
+    return {
+      panels: [
+        panel('1', 'Колонка без сервисов', 'Проект · Карта проекта', '◌', '#4FD1D9', 'Фронты · 0',
+          'Фронт появится, когда в репозитории найдётся package.json с dev-сервером — или добавьте сервис вручную.',
+          { frame: 'background: rgba(79,209,217,0.04); border: 1.5px dashed rgba(79,209,217,0.35)', btn2: 'Добавить сервис…', href: 'Project.dc.html' }),
+        panel('2', 'Проект без репозиториев', 'Проект', '▢', '#B48CFF', 'Репозиториев нет',
+          'Проект описан, но к нему не привязан ни один клон. Выберите папку или заберите репозиторий из «Не распределено».',
+          { code: 'practicesctl repo add x-keeper/okk <url>', btn1: 'Выбрать папку…', btn2: 'Не распределено', href: 'Unassigned.dc.html' }),
+        panel('3', 'Пустая приёмка', 'Ждут приёмки', '✓', '#4ED27A', 'Всё принято',
+          'Правок агентов нет. Новые появятся после update_practice или add_link и останутся здесь до вашего решения.',
+          { code: 'x-keeper: main · чисто    spheretele: main · чисто', href: 'Pending.dc.html' }),
+        panel('4', 'Пустое «Не распределено»', 'Не распределено', '✓', '#4ED27A', 'Всё распределено',
+          'Каждый репозиторий gh и glab относится к проекту или помечен ignore. Список ничего не решает (DECISIONS 15).',
+          { btn2: 'Показать игнорируемые · 21', href: 'Unassigned.dc.html' }),
+        panel('5', 'Пустой результат практики', 'Практика', '∅', '#A6A6AE', '0 строк · 95 ms',
+          'Запрос выполнен, но ничего не вернул. Проверьте параметры — у device-meta это imei; история запусков слева.',
+          { code: 'imei=[IMEI]  ·  v3  ·  prod', btn2: 'Повторить с другими параметрами', href: 'Practice.dc.html' }),
+        panel('6', 'Ошибка запуска практики', 'Практика', '✕', '#FF6B6B', 'Не выполнилась · 15 004 ms',
+          'Последняя строка трейсбека показывается здесь, полный — по кнопке. Условия сервиса проверяются первыми: здесь не сработал VPN.',
+          { error: true, frame: 'background: #26262A; border: 1px solid rgba(255,107,107,0.45)', code: 'psycopg.OperationalError: connection timed out\n⚑ требуется VPN x-keeper — условие не выполнено', btn1: 'Повторить', btn2: 'Полный трейсбек', href: 'Practice.dc.html' }),
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

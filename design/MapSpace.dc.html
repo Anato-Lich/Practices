@@ -29,21 +29,27 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
     <div style="flex: 1; min-height: 0; position: relative; overflow: hidden; padding: 20px">
       <div style="position: relative; width: 980px; height: 660px">
         <svg aria-hidden="true" width="980" height="660" viewBox="0 0 980 660" style="position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible">
-          <g fill="none" stroke="#9A9AA3" stroke-opacity="0.55" stroke-linecap="round">
-            <path d="M121,116 L401,292" stroke-width="4.7"></path>
-            <path d="M307,116 L440,292" stroke-width="3.6"></path>
-            <path d="M392,84 L620,84" stroke-width="3.6"></path>
-            <path d="M760,116 L870,160" stroke-width="3.6"></path>
-            <path d="M493,116 L470,292" stroke-width="3.3"></path>
-            <path d="M190,324 L316,324" stroke-width="3"></path>
-            <path d="M430,356 L800,404" stroke-width="3"></path>
+          <!-- Ортогональная разводка: вертикали только в проходах между карточками, горизонтали — в коридорах между рядами и рамками. Линии под карточками. -->
+          <g fill="none" stroke="#9A9AA3" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M206,84 H214 V238 H380 V292" stroke-width="4.7"></path>
+            <path d="M392,98 H400 V246 H450 V292" stroke-width="3.6"></path>
+            <path d="M307,52 V36 H705 V52" stroke-width="3.6"></path>
+            <path d="M705,116 V192 H800" stroke-width="3.6"></path>
+            <path d="M493,116 V254 H470 V292" stroke-width="3.3"></path>
+            <path d="M190,324 H316" stroke-width="3"></path>
+            <path d="M430,356 V396 H785 V324 H800" stroke-width="3"></path>
+          </g>
+          <!-- Выбранная карточка (device-analysis): её связи акцентом, остальные приглушены при наведении -->
+          <g fill="none" stroke="#0A84FF" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M392,98 H400 V246 H450 V292" stroke-width="3.6"></path>
+            <path d="M307,52 V36 H705 V52" stroke-width="3.6"></path>
           </g>
           <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#F2F2F4" text-anchor="middle" style="paint-order: stroke" stroke="#1C1C1E" stroke-width="5">
-            <text x="261" y="207">13</text><text x="373" y="207">6</text><text x="506" y="80">6</text><text x="815" y="141">6</text><text x="481" y="207">5</text><text x="253" y="320">4</text><text x="615" y="383">4</text>
+            <text x="300" y="234">13</text><text x="412" y="175">6</text><text x="506" y="32">6</text><text x="752" y="188">6</text><text x="505" y="190">5</text><text x="253" y="320">4</text><text x="615" y="392">4</text>
           </g>
         </svg>
 
-        <div style="position: absolute; left: 20px; top: 20px; width: 566px; height: 192px; box-sizing: border-box; border: 1.5px dashed rgba(180,140,255,0.6); border-radius: 12px; background: rgba(180,140,255,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #B48CFF; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">analytics · 21</a></div>
+        <div style="position: absolute; left: 20px; top: 20px; width: 566px; height: 196px; box-sizing: border-box; border: 1.5px dashed rgba(180,140,255,0.6); border-radius: 12px; background: rgba(180,140,255,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #B48CFF; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">analytics · 21</a></div>
         <div style="position: absolute; left: 300px; top: 260px; width: 380px; height: 112px; box-sizing: border-box; border: 1.5px dashed rgba(90,169,255,0.6); border-radius: 12px; background: rgba(90,169,255,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #5AA9FF; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">platform · 17</a></div>
         <div style="position: absolute; left: 300px; top: 420px; width: 380px; height: 192px; box-sizing: border-box; border: 1.5px dashed rgba(255,176,74,0.6); border-radius: 12px; background: rgba(255,176,74,0.05)"><a href="MapProject.dc.html" style="position: absolute; left: 12px; top: 8px; font-weight: 600; color: #FFB04A; text-decoration: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">x-factory · 5</a></div>
 
@@ -56,7 +62,7 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
         </sc-for>
 
         <div style="position: absolute; left: 20px; top: 624px; display: flex; gap: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #8A8A92">
-          <span>линии — пары с ≥ 4 связями, толщина ∝ log₂</span>
+          <span>линии — пары с ≥ 4 связями, толщина ∝ log₂</span><span>разводка ортогональная: вертикали в проходах, горизонтали в коридорах; наведение подсвечивает связи карточки</span>
           <span>17 связей с SphereTele не показаны</span>
           <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #4FD1D9; vertical-align: middle; margin-right: 4px"></i>front</span>
           <span><i aria-hidden="true" style="display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: #5AA9FF; vertical-align: middle; margin-right: 4px"></i>api</span>
@@ -74,16 +80,16 @@ a{color:#6CB2FF}a:hover{color:#9CCBFF}
 class Component extends DCLogic {
   renderVals() {
     const K = { api: '#5AA9FF', front: '#4FD1D9', data: '#4ED27A', bus: '#FFB04A', ext: '#FF7AA2', hw: '#E8C547', worker: '#B48CFF', other: '#9A9AA3' };
-    const card = (x, y, id, repos, comp) => {
+    const card = (x, y, id, repos, comp, hot) => {
       const segs = Object.entries(comp), total = segs.reduce((a, [, n]) => a + n, 0);
-      const c = { id, meta: total + ' серв · ' + repos + ' репо', style: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: 170px; height: 64px; box-sizing: border-box; padding: 8px 10px; border: 1px solid #38383D; border-radius: 8px; background: #26262A; color: #F2F2F4; text-decoration: none; display: flex; flex-direction: column; justify-content: center' };
+      const c = { id, meta: total + ' серв · ' + repos + ' репо', style: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: 170px; height: 64px; box-sizing: border-box; padding: 8px 10px; border: 1px solid ' + (hot ? '#0A84FF' : '#38383D') + '; border-radius: 8px; background: #26262A; color: #F2F2F4; text-decoration: none; display: flex; flex-direction: column; justify-content: center' };
       for (let i = 0; i < 5; i++) c['s' + (i + 1)] = segs[i] ? 'flex: ' + segs[i][1] + '; border-radius: 2px; background: ' + K[segs[i][0]] : 'display: none';
       return c;
     };
     return {
       cards: [
-        card(36, 52, 'cabinet-analysis', 2, { front: 1, api: 3 }), card(222, 52, 'device-analysis', 2, { front: 1, api: 4, data: 2 }), card(408, 52, 'okk', 1, { api: 1, data: 1, bus: 1, other: 1 }),
-        card(36, 132, 'rnr', 1, { front: 1, api: 1, data: 1, bus: 1, other: 1 }), card(222, 132, 'x-analysis', 1, { api: 1 }),
+        card(36, 52, 'cabinet-analysis', 2, { front: 1, api: 3 }), card(222, 52, 'device-analysis', 2, { front: 1, api: 4, data: 2 }, true), card(408, 52, 'okk', 1, { api: 1, data: 1, bus: 1, other: 1 }),
+        card(36, 140, 'rnr', 1, { front: 1, api: 1, data: 1, bus: 1, other: 1 }), card(222, 140, 'x-analysis', 1, { api: 1 }),
         card(620, 52, 'external', 0, { ext: 11 }), card(800, 160, 'xsm', 8, { front: 1, api: 3, data: 1, other: 4 }),
         card(316, 292, 'platform', 3, { api: 6, data: 2, hw: 1, other: 6 }), card(502, 292, 'auth', 1, { api: 1, data: 1 }),
         card(20, 292, 'warehouse', 1, { api: 1 }), card(20, 372, 'rma', 1, { front: 1, api: 1 }), card(20, 452, 'flyrelay', 1, { other: 1 }), card(20, 532, 'testers', 2, { api: 1, other: 1 }),

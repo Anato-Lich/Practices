@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Practices — проект device-analysis</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#6CB2FF}a:hover{color:#9CCBFF}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 860px; box-sizing: border-box; display: flex; overflow: hidden; background: #1C1C1E; border: 1px solid #3A3A3F; border-radius: 11px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #F2F2F4">
+  <dc-import name="Sidebar" selected="project:device-analysis" hint-size="260px,860px"></dc-import>
+  <main style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 52px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 20px; border-bottom: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+      <a href="Main.dc.html" style="text-decoration: none">x-keeper</a><span style="color: #8A8A92">/</span><a href="Project.dc.html" style="text-decoration: none; color: #B48CFF">analytics</a><span style="color: #8A8A92">/</span>
+      <h1 style="margin: 0; font-size: 15px; font-weight: 600; font-family: inherit">device-analysis</h1>
+      <span style="margin-left: auto; display: flex; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; font-size: 13px">
+        <a href="MapProject.dc.html" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none">Карта</a>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Finder</button>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">Terminal</button>
+        <button type="button" style="height: 28px; padding: 0 12px; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; font: inherit; color: #F2F2F4; cursor: pointer">VS Code</button>
+        <a href="https://github.com/x-keeper/device_analysis" style="height: 28px; padding: 0 12px; display: inline-flex; align-items: center; border: 1px solid #45454B; border-radius: 6px; background: #2C2C30; color: #F2F2F4; text-decoration: none">GitHub ↗</a>
+        <button type="button" aria-label="Ещё действия" aria-haspopup="menu" aria-expanded="true" style="height: 28px; width: 32px; border: 1px solid #45454B; border-radius: 6px; background: #3A3A3F; font: inherit; color: #F2F2F4; cursor: pointer">…</button>
+      </span>
+    </header>
+
+    <div style="flex: 1; min-height: 0; overflow: hidden; padding: 16px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: baseline; gap: 10px">
+        <h2 style="margin: 0; font-size: 17px; font-weight: 600">Device analysis</h2>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #8A8A92">~/Projects/X-Keeper/device_analysis</span>
+      </div>
+
+      <div style="box-sizing: border-box; padding: 10px 14px; border-radius: 8px; background: #161618; border: 1px solid #38383D; display: grid; grid-template-columns: 90px 1fr; gap: 5px 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; line-height: 1.5">
+        <span style="color: #8A8A92">id</span><span>device-analysis</span>
+        <span style="color: #8A8A92">parent</span><a href="Project.dc.html" style="text-decoration: none; color: #B48CFF">analytics</a>
+        <span style="color: #8A8A92">repos</span><span>2 · <span style="color: #4FD1D9">frontend</span>, <span style="color: #5AA9FF">backend</span></span>
+        <span style="color: #8A8A92">services</span><span>7 · <span style="color: #4FD1D9">1 front</span> · <span style="color: #5AA9FF">4 api</span> · <span style="color: #4ED27A">2 data</span></span>
+        <span style="color: #8A8A92">links</span><span style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
+          <span>22 наружу →</span>
+          <sc-for list="{{out}}" as="o" hint-placeholder-count="6"><a href="MapProject.dc.html" style="{{o.style}}">{{o.label}}</a></sc-for>
+          <span style="color: #8A8A92">· 4 внутри</span>
+        </span>
+        <span style="color: #8A8A92">mcp</span><span style="color: #A6A6AE">get_project device-analysis · scan_links device-analysis</span>
+      </div>
+
+      <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: #26262A; border: 1px solid #38383D; display: flex; flex-direction: column; gap: 8px">
+        <h3 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #8A8A92">Репозитории</h3>
+        <sc-for list="{{repos}}" as="r" hint-placeholder-count="2">
+          <div style="display: flex; align-items: center; gap: 10px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">
+            <span style="{{r.roleStyle}}">{{r.role}}</span>
+            <a href="{{r.url}}" style="text-decoration: none; color: #F2F2F4">{{r.repo}}</a>
+            <span style="color: #8A8A92">{{r.clone}}</span>
+            <span style="margin-left: auto; color: #A6A6AE">{{r.branch}}</span>
+            <span style="color: {{r.stateColor}}">{{r.state}}</span>
+            <span style="color: #8A8A92">{{r.last}}</span>
+          </div>
+        </sc-for>
+      </section>
+
+      <div style="flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+        <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(79,209,217,0.05); border: 1px solid rgba(79,209,217,0.35); display: flex; flex-direction: column; gap: 6px">
+          <h3 style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #4FD1D9">Фронты · 1</h3>
+          <sc-for list="{{front}}" as="s" hint-placeholder-count="1">
+            <a href="Service.dc.html" style="display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 6px; background: #26262A; border: 1px solid #38383D; color: inherit; text-decoration: none">
+              <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #4FD1D9"></span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600">{{s.id}}</span><span style="{{s.badge}}">{{s.kind}}</span><span style="{{s.flag}}">⚑</span></span>
+              <span style="font-size: 11px; color: #A6A6AE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+            </a>
+          </sc-for>
+        </section>
+        <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(90,169,255,0.05); border: 1px solid rgba(90,169,255,0.35); display: flex; flex-direction: column; gap: 6px">
+          <h3 style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #5AA9FF">API и воркеры · 4</h3>
+          <sc-for list="{{api}}" as="s" hint-placeholder-count="4">
+            <a href="Service.dc.html" style="display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 6px; background: #26262A; border: 1px solid #38383D; color: inherit; text-decoration: none">
+              <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #5AA9FF"></span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600">{{s.id}}</span><span style="{{s.badge}}">{{s.kind}}</span><span style="{{s.flag}}">⚑</span></span>
+              <span style="font-size: 11px; color: #A6A6AE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+            </a>
+          </sc-for>
+        </section>
+        <section style="box-sizing: border-box; padding: 12px 14px; border-radius: 10px; background: rgba(78,210,122,0.05); border: 1px solid rgba(78,210,122,0.35); display: flex; flex-direction: column; gap: 6px">
+          <h3 style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #4ED27A">Данные · 2</h3>
+          <sc-for list="{{data}}" as="s" hint-placeholder-count="2">
+            <a href="Service.dc.html" style="display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 6px; background: #26262A; border: 1px solid #38383D; color: inherit; text-decoration: none">
+              <span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #4ED27A"></span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600">{{s.id}}</span><span style="{{s.badge}}">{{s.kind}}</span><span style="{{s.flag}}">⚑</span></span>
+              <span style="font-size: 11px; color: #A6A6AE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.name}}</span>
+            </a>
+          </sc-for>
+          <span style="margin-top: auto; font-size: 11px; color: #8A8A92"><span style="color: #FFB04A">⚑</span> docker-network-analysis-stage — внешняя docker-сеть analysis_stage; требуют api, clickhouse, redis</span>
+        </section>
+      </div>
+    </div>
+    <div style="height: 24px; box-sizing: border-box; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid #3A3A3F; background: #222225; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92"><span>~/.practices/spaces/x-keeper/projects/device-analysis</span><span>клоны: 2 из 2</span><span style="margin-left: auto">⌘K — перейти</span></div>
+  </main>
+  <!-- Меню «…» в тулбаре проекта: редкие и деструктивные действия. «Карта/Finder/Terminal/VS Code/GitHub» остаются кнопками. -->
+  <div role="menu" aria-label="Ещё действия" style="position: absolute; box-sizing: border-box; width: 250px; padding: 5px; border-radius: 8px; background: #2C2C30; border: 1px solid #45454B; box-shadow: 0 12px 32px rgba(0,0,0,0.55); font-size: 13px; display: flex; flex-direction: column; left: 1010px; top: 46px">
+    <span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; ">Переименовать…</span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; ">Перенести в проект… <span style="margin-left: auto; color: #8A8A92">▸</span></span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; ">Связи из кода <span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92">scan_links</span></span>
+    <span aria-hidden="true" style="display: block; height: 1px; margin: 4px 8px; background: #45454B"></span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; color: #FF6B6B">Удалить проект…</span>
+  </div>
+  <!-- Контекстное меню строки дерева: те же действия, что у кнопок тулбара, плюс удаление внизу за разделителем. -->
+  <div role="menu" aria-label="device-analysis" style="position: absolute; box-sizing: border-box; width: 220px; padding: 5px; border-radius: 8px; background: #2C2C30; border: 1px solid #45454B; box-shadow: 0 12px 32px rgba(0,0,0,0.55); font-size: 13px; display: flex; flex-direction: column; left: 126px; top: 404px">
+    <span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; background: #0A84FF; color: #FFFFFF">Открыть</span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; ">Карта проекта <span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92">⌘↩</span></span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; ">Показать в Finder</span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; ">Скопировать id <span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #8A8A92">⌥↩</span></span>
+    <span aria-hidden="true" style="display: block; height: 1px; margin: 4px 8px; background: #45454B"></span><span style="display: flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 5px; color: #FF6B6B">Удалить проект…</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const K = { api: '#5AA9FF', front: '#4FD1D9', data: '#4ED27A', bus: '#FFB04A', ext: '#FF7AA2', hw: '#E8C547', worker: '#B48CFF', other: '#9A9AA3' };
+    const RGB = { api: '90,169,255', front: '79,209,217', data: '78,210,122', bus: '255,176,74', ext: '255,122,162', hw: '232,197,71', worker: '180,140,255', other: '154,154,163' };
+    const badge = (k) => 'font-family: ui-monospace, \'SF Mono\', Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; background: rgba(' + RGB[k] + ',0.16); color: ' + K[k];
+    const svc = (id, kind, cls, name, flag) => ({ id, kind, name, badge: badge(cls), flag: flag ? 'color: #FFB04A; font-size: 11px' : 'display: none' });
+    const ZONE = { platform: '#5AA9FF', external: '#FF7AA2', auth: '#5AA9FF', 'hyper-imu': '#9A9AA3', 'sphere-external': '#FF7AA2', 'wifi-locator': '#9A9AA3' };
+    const out = (p, n) => ({ label: p + ' ' + n, style: 'text-decoration: none; font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid ' + ZONE[p] + '; color: ' + ZONE[p] });
+    return {
+      out: [out('platform', 6), out('external', 6), out('auth', 3), out('hyper-imu', 1), out('sphere-external', 1), out('wifi-locator', 1)],
+      repos: [
+        { role: 'frontend', roleStyle: badge('front'), repo: 'github.com/x-keeper/device_analysis', url: 'https://github.com/x-keeper/device_analysis', clone: '~/Projects/X-Keeper/device_analysis', branch: 'main', state: '2 незакоммиченных ↑1', stateColor: '#FFB04A', last: '6 нояб.' },
+        { role: 'backend', roleStyle: badge('api'), repo: 'github.com/x-keeper/device_analysis-api', url: 'https://github.com/x-keeper/device_analysis-api', clone: '~/Projects/X-Keeper/device_analysis-api', branch: 'main', state: '↓3', stateColor: '#FFB04A', last: '5 нояб.' },
+      ],
+      front: [svc('device-analysis-web', 'http', 'front', 'Device Analysis (фронтенд + BFF) · analysis.x-keeper.net')],
+      api: [svc('device-analysis-bff', 'http', 'api', 'Device analysis · BFF — X-SID, роли, прокси в бэкенд'), svc('device-analysis-api', 'http', 'api', 'Device Analysis API (backend) — FastAPI, только через BFF', true), svc('analysis-tiles', 'http', 'api', 'analysis-tiles'), svc('osrm', 'http', 'api', 'OSRM (маршрутизация) — только внутри compose')],
+      data: [svc('device-analysis-clickhouse', 'clickhouse', 'data', 'ClickHouse Device Analysis — raw_device_data, результаты', true), svc('device-analysis-redis', 'redis', 'data', 'Redis Device Analysis — токены System API, кэш кабинетов', true)],
+    };
+  }
+}
+</script>
+</body>
+</html>
