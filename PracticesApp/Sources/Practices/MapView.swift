@@ -167,6 +167,8 @@ private struct SpaceMapView: View {
     @Environment(RegistryModel.self) private var registry
     let state: MapState
     static let threshold = 3
+    /// The card under the pointer: its pairs accent, the rest dimmed.
+    @State private var hover: String?
 
     var body: some View {
         let map = ServiceMap.space(state.space, in: state.catalogue)
@@ -175,24 +177,29 @@ private struct SpaceMapView: View {
             let layout = SpaceLayout(map, services: services, width: geo.size.width - 40)
             let rect = Dictionary(layout.cards.map { ($0.project.id, $0.rect) }, uniquingKeysWith: { a, _ in a })
             let strong = map.pairs.filter { $0.count >= Self.threshold && rect[$0.a] != nil && rect[$0.b] != nil }
+            let routes = MapGeometry.routes(strong.map { p in
+                let (a, b) = (rect[p.a]!, rect[p.b]!)
+                return a.minX <= b.minX ? (from: a, to: b) : (from: b, to: a)
+            }, obstacles: layout.obstacles, bounds: CGRect(origin: .zero, size: layout.size))
+            let order = strong.indices.sorted { lit(strong[$0]) == lit(strong[$1]) ? $0 < $1 : !lit(strong[$0]) }
             ScrollView([.vertical, .horizontal]) {
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack(alignment: .topLeading) {
-                        MapLines(lines: strong.map { p -> MapLine in
-                            var path = Path()
-                            path.move(to: center(rect[p.a]!)); path.addLine(to: center(rect[p.b]!))
-                            return MapLine(path: path, color: Color(hex: 0x9A9AA3), width: 1 + log2(CGFloat(p.count)), opacity: 0.55)
+                        MapLines(lines: order.map { i -> MapLine in
+                            let on = lit(strong[i])
+                            return MapLine(path: MapGeometry.rounded(routes[i]), color: on ? Theme.Color.accent : Color(hex: 0x9A9AA3),
+                                           width: 1 + log2(CGFloat(strong[i].count)), opacity: on ? 0.95 : hover == nil ? 0.55 : 0.2)
                         })
                         ForEach(strong.indices, id: \.self) { i in
-                            let a = center(rect[strong[i].a]!)
-                            let b = center(rect[strong[i].b]!)
                             Text(verbatim: "\(strong[i].count)").font(Theme.mono(10.5)).foregroundStyle(Theme.Color.text)
                                 .padding(.horizontal, 3).background(Theme.Color.windowBg, in: RoundedRectangle(cornerRadius: 3))
-                                .position(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+                                .position(label(routes[i]))
                         }
                         ForEach(layout.frames.indices, id: \.self) { i in zoneFrame(layout.frames[i]) }
                         ForEach(layout.cards.indices, id: \.self) { i in
+                            let id = layout.cards[i].project.id
                             card(layout.cards[i].project, services: services, weak: map.pairs).placed(layout.cards[i].rect)
+                                .onHover { hover = $0 ? id : nil }
                         }
                     }
                     .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
@@ -203,7 +210,13 @@ private struct SpaceMapView: View {
         }
     }
 
-    private func center(_ r: CGRect) -> CGPoint { CGPoint(x: r.midX, y: r.midY) }
+    private func lit(_ p: (a: String, b: String, count: Int)) -> Bool { hover == p.a || hover == p.b }
+
+    /// A pair's count sits in the middle of its route's longest segment.
+    private func label(_ route: [CGPoint]) -> CGPoint {
+        let (a, b) = zip(route, route.dropFirst()).max { hypot($0.1.x - $0.0.x, $0.1.y - $0.0.y) < hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }!
+        return CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+    }
 
     /// Dashed frame of a parent (radius 12, 1.5 dashed at 0.6, fill 0.05); its label opens it.
     private func zoneFrame(_ f: (project: Project, rect: CGRect, services: Int)) -> some View {
@@ -257,6 +270,8 @@ private struct ProjectMapView: View {
     @Environment(RegistryModel.self) private var registry
     let state: MapState
     @State private var hover: String?
+    /// The card or external row under the pointer: its lines accent, the rest dimmed.
+    @State private var hoverCard: String?
 
     var body: some View {
         if let id = state.project {
@@ -274,6 +289,7 @@ private struct ProjectMapView: View {
                         ForEach(layout.columns.indices, id: \.self) { c in
                             ForEach(layout.columns[c].services, id: \.id) { s in
                                 card(s, chips: map.chips[s.id] ?? []).opacity(lit.map { $0.contains(s.id) ? 1 : 0.35 } ?? 1)
+                                    .onHover { hoverCard = $0 ? s.id : nil }
                                     .placed(layout.rects[s.id]!)
                             }
                         }
@@ -316,15 +332,22 @@ private struct ProjectMapView: View {
         }
     }
 
-    /// Plain links as curves; with a hub shown, its callers' links to the strip below.
+    /// Plain links routed orthogonally, a hovered card's on top in accent; with a hub shown, its
+    /// callers' links to the strip below.
     private func lines(_ map: ServiceMap.ProjectMap, _ layout: ProjectLayout, hub: String?, dim: Bool) -> [MapLine] {
         let grouped = Dictionary(grouping: map.edges) { [$0.from, $0.link.to] }
-        var lines = grouped.compactMap { key, edges -> MapLine? in
-            guard let a = layout.rects[key[0]], let b = layout.rects[key[1]] else { return nil }
-            var line = MapGeometry.line(a, b, links: edges.map(\.link))
-            if dim { line.opacity *= 0.35 }
+        // Sorted, so a link keeps its lane from one render to the next.
+        let keys = grouped.keys.filter { layout.rects[$0[0]] != nil && layout.rects[$0[1]] != nil }.sorted { $0.joined(separator: " ") < $1.joined(separator: " ") }
+        let ends = keys.map { (from: layout.rects[$0[0]]!, to: layout.rects[$0[1]]!) }
+        let routes = MapGeometry.routes(ends, obstacles: layout.obstacles, bounds: CGRect(origin: .zero, size: layout.size))
+        var lines = keys.indices.map { i -> MapLine in
+            var line = MapGeometry.line(ends[i].from, ends[i].to, links: grouped[keys[i]]!.map(\.link), route: routes[i])
+            if let card = hoverCard {
+                if keys[i].contains(card) { line.color = Theme.Color.accent; line.opacity = 0.95 } else { line.opacity *= 0.35 }
+            } else if dim { line.opacity *= 0.35 }
             return line
         }
+        if let card = hoverCard { lines = keys.indices.filter { !keys[$0].contains(card) }.map { lines[$0] } + keys.indices.filter { keys[$0].contains(card) }.map { lines[$0] } }
         guard let hub else { return lines }
         let target = CGPoint(x: layout.size.width / 2, y: layout.size.height)
         for (caller, hubs) in map.chips where hubs.contains(hub) {
@@ -388,6 +411,7 @@ private struct ProjectMapView: View {
                 .padding(.horizontal, 4).frame(height: 22)
                 .contentShape(Rectangle())
                 .onTapGesture { state.focus(s.id) }
+                .onHover { hoverCard = $0 ? s.id : nil }
                 .opacity(lit.map { $0.contains(s.id) ? 1 : 0.35 } ?? 1)
             }
         }
