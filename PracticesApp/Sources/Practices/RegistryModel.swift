@@ -57,6 +57,8 @@ final class RegistryModel {
     private(set) var copies: [PracticeCopy]?
     private(set) var doctorRunning = false
     var error: String?
+    /// A project waiting for the user to confirm its removal.
+    var removalCandidate: String?
 
     let registry = Registry()
     let store = SecretStore()
@@ -171,6 +173,14 @@ final class RegistryModel {
             if let i = unassigned?.firstIndex(where: { $0.repo == repo }) { unassigned?[i].ignored = ignored }
             reload()
         } catch { self.error = String(describing: error) }
+    }
+
+    func remove(project id: String) async {
+        let space = project(id)?.space
+        do { _ = try await registry.remove(project: id) } catch { self.error = String(describing: error) }
+        if let space { selection = .space(space) }
+        reload()
+        await refreshPending()
     }
 
     // MARK: Pending

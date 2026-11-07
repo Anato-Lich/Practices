@@ -8,6 +8,7 @@ struct Sidebar: View {
     @Binding var shown: Bool
     @FocusState private var searchFocused: Bool
     @FocusState private var listFocused: Bool
+    @AppStorage("recentCollapsed") private var recentCollapsed = false
 
     typealias Item = MainWindow.SidebarItem
 
@@ -19,7 +20,10 @@ struct Sidebar: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(rows) { RowView(row: $0, selected: $0.item != nil && $0.item == registry.selection, select: select, toggle: toggle) }
+                        ForEach(rows) {
+                            RowView(row: $0, selected: $0.item != nil && $0.item == registry.selection, select: select, toggle: toggle,
+                                    collapse: { recentCollapsed.toggle() }, remove: { registry.removalCandidate = $0 })
+                        }
                     }
                     .padding(.horizontal, 8)
                 }
@@ -54,8 +58,18 @@ struct Sidebar: View {
 
     /// 52 high, like the toolbar; the traffic lights sit on the left.
     private var header: some View {
-        HStack {
+        HStack(spacing: 0) {
             Spacer()
+            let anyOpen = registry.expanded.contains { if case .project = $0 { true } else { false } }
+            Button {
+                if anyOpen { registry.expanded.removeAll() } else { registry.expanded.formUnion(registry.projects.map { .project($0.id) }) }
+            } label: {
+                Image(systemName: anyOpen ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
+                    .font(.system(size: 14)).foregroundStyle(Theme.Color.textMuted)
+                    .frame(width: 28, height: 24).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(Text(verbatim: anyOpen ? "Свернуть всё" : "Развернуть всё"))
             SidebarToggle(shown: $shown)
         }
         .padding(.horizontal, 14)
@@ -111,6 +125,9 @@ struct Sidebar: View {
         var count = ""
         var countColor = Theme.Color.textMuted
         var header = false
+        /// A header that folds the rows under it; `open` is its state.
+        var collapsible = false
+        var open = true
     }
 
     /// The sidebar as a flat list, the way the design draws it.
@@ -146,13 +163,18 @@ struct Sidebar: View {
         }
 
         if !registry.recent.isEmpty {
-            header("Недавние")
-            for item in registry.recent {
+            rows.append(Row(id: "header:recent", label: "Недавние", header: true, collapsible: true, open: !recentCollapsed))
+            for item in registry.recent where !recentCollapsed {
                 var row: Row
                 switch item {
-                case .service(let id): row = Row(id: "", item: item, label: id, mono: true, kind: registry.service(id).map(ServiceClass.init(for:)))
+                // A removed project or service may still be remembered; its row would lead nowhere.
+                case .service(let id):
+                    guard let service = registry.service(id) else { continue }
+                    row = Row(id: "", item: item, label: id, mono: true, kind: ServiceClass(for: service))
                 case .practice(let ref): row = Row(id: "", item: item, label: ref, disc: "‹›", mono: true)
-                case .project(let id): row = Row(id: "", item: item, label: id, disc: "▸", mono: true)
+                case .project(let id):
+                    guard registry.project(id) != nil else { continue }
+                    row = Row(id: "", item: item, label: id, disc: "▸", mono: true)
                 default: continue
                 }
                 row.id = "recent:" + item.rowID
@@ -224,9 +246,21 @@ struct Sidebar: View {
         let selected: Bool
         let select: (Item) -> Void
         let toggle: (Item) -> Void
+        let collapse: () -> Void
+        let remove: (String) -> Void
 
         var body: some View {
-            if row.header {
+            if row.header && row.collapsible {
+                HStack {
+                    SectionTitle(row.label)
+                    Spacer()
+                    Text(verbatim: row.open ? "▾" : "▸").font(.system(size: 10)).opacity(0.7).foregroundStyle(Theme.Color.textMuted)
+                }
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .bottomLeading)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: collapse)
+            } else if row.header {
                 SectionTitle(row.label)
                     .padding(.horizontal, 8)
                     .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .bottomLeading)
@@ -253,6 +287,11 @@ struct Sidebar: View {
                 .background(selected ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
                 .onTapGesture { if let item = row.item { select(item) } }
+                .contextMenu {
+                    if case .project(let id) = row.item {
+                        Button { remove(id) } label: { Text(verbatim: "Удалить проект…") }
+                    }
+                }
             }
         }
     }

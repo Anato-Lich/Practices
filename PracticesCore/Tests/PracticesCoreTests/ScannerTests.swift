@@ -105,6 +105,14 @@ import Foundation
         #expect(throws: Registry.Failure.self) { _ = try Scanner.scan(["nothing"], registry: home.registry, store: home.store) }
     }
 
+    @Test func aBuildWithAWebFrameworkIsAFrontend() throws {
+        let home = try catalogue(["github.com/acme/shop"])
+        try home.write("services:\n  web: {build: ./web}\n  api: {build: .}\n", "code/shop/docker-compose.yml")
+        try home.write("{\"devDependencies\": {\"vite\": \"^5\"}}\n", "code/shop/web/package.json")
+        let services = try Scanner.scan(registry: home.registry, store: home.store).repos[0].services
+        #expect(services.map { "\($0.id) \($0.kind)" } == ["shop-api http", "shop-web frontend"])
+    }
+
     @Test func variablesBecomeLinksAndEnvIsNeverRead() throws {
         let home = try catalogue(["github.com/acme/shop", "github.com/acme/lone", "github.com/acme/tiles"])
         try card(home, Service(id: "kafka", name: "Kafka", kind: "kafka", aliases: ["hyper-kafka"],

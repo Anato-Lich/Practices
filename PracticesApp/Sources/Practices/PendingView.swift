@@ -110,11 +110,15 @@ struct PendingView: View {
         let lines = DiffLine.parse(diff, new: selected?.state == "new")
         VStack(spacing: 0) {
             if let selected { header(selected, lines) }
-            ScrollView([.vertical, .horizontal]) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(lines.indices, id: \.self) { diffRow(lines[$0]) }
+            // An explicit width: `maxWidth: .infinity` in a two-way ScrollView is the viewport, which cut long lines.
+            let content = 36 + 10 + 14 + 12 + CGFloat((lines.map(\.text.count).max() ?? 0) + 2) * Self.charWidth
+            GeometryReader { geometry in
+                ScrollView([.vertical, .horizontal]) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(lines.indices, id: \.self) { diffRow(lines[$0]) }
+                    }
+                    .frame(width: max(geometry.size.width, content), alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.Color.codeBg)
@@ -165,6 +169,9 @@ struct PendingView: View {
         .frame(height: 40)
         .overlay(alignment: .bottom) { Theme.Color.border.frame(height: 1) }
     }
+
+    /// The advance of a character in `Theme.mono(12)`.
+    private static let charWidth = ("0" as NSString).size(withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)]).width
 
     private func diffRow(_ line: DiffLine) -> some View {
         HStack(spacing: 0) {

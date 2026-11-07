@@ -180,6 +180,15 @@ public enum Scanner {
         return kinds.first { name == $0.key || name == $0.key + "-server" || name.hasSuffix("-" + $0.key) }?.value ?? "http"
     }
 
+    /// A build context whose `package.json` depends on a web framework.
+    static func isFrontend(_ service: ComposeService) -> Bool {
+        let words = ["vite", "react", "vue", "next", "nuxt", "@angular/core", "svelte"]
+        return service.contexts.contains { context in
+            guard let text = try? String(contentsOfFile: context.path + "/package.json", encoding: .utf8) else { return false }
+            return words.contains { text.contains("\"\($0)\"") }
+        }
+    }
+
     // MARK: Addresses
 
     struct Target: Hashable {
@@ -311,7 +320,7 @@ public enum Scanner {
                     clone.report.problems.append("\(name): its id \(id) is taken — if it is that service, add \(name) to its aliases")
                     continue
                 }
-                let candidate = Service(id: id, name: name, kind: kind(ofImage: service.image), repo: repo, aliases: id == name ? [] : [name])
+                let candidate = Service(id: id, name: name, kind: isFrontend(service) ? "frontend" : kind(ofImage: service.image), repo: repo, aliases: id == name ? [] : [name])
                 known.append(candidate)
                 clone.report.services.append(candidate)
                 clone.ids[name] = id

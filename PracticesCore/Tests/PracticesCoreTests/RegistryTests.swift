@@ -272,6 +272,30 @@ struct TempHome {
         #expect(registry.path(ofProject: "erp") == ["x-factory", "scada", "erp"])
     }
 
+    @Test func removingAProjectIgnoresItsReposAndReportsDanglingLinks() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        try await registry.add(Space(id: "sp", name: "sp"))
+        try await registry.add(Project(id: "a", space: "sp", name: "a"))
+        try await registry.add(Project(id: "b", space: "sp", name: "b"))
+        try await registry.add(Project(id: "c", space: "sp", name: "c", parent: "a"))
+        let repo = RepoID("github.com/o/a")!
+        try await registry.assign(repo, to: "a")
+        try await registry.add(Service(id: "a-svc", name: "a", kind: "http"), to: "a")
+        try await registry.add(Service(id: "b-svc", name: "b", kind: "http"), to: "b")
+        try await registry.commit("link", [try registry.addLink(Link(to: "a-svc"), from: "b-svc")])
+
+        await #expect(throws: Registry.Failure.self) { try await registry.remove(project: "a") }
+        #expect(try await registry.remove(project: "c").isEmpty)
+        let dangling = try await registry.remove(project: "a")
+        #expect(dangling.map { "\($0.from) \($0.to)" } == ["b-svc a-svc"])
+        #expect(throws: Registry.Failure.self) { try registry.project("a") }
+        #expect(try registry.space("sp").ignore == [repo])
+        let log = try await registry.git(registry.dir(ofSpace: "sp"), ["log", "--format=%s"])
+        #expect(log.contains("Remove project a"))
+        #expect(await registry.pending().filter { $0.path.hasPrefix("projects/a/") }.isEmpty)
+    }
+
     @Test func linksAreKeptAtTheCallerAndReadFromBothSides() throws {
         let home = TempHome()
         try home.place(Service(id: "api", name: "api", kind: "http"))

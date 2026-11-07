@@ -291,6 +291,9 @@ struct ProjectView: View {
                 Text(verbatim: repo.description.hasPrefix("github.com/") ? "GitHub ↗" : "GitLab ↗")
             }
         }
+        let nested = !(registry.childProjects[project.id] ?? []).isEmpty
+        Button { registry.removalCandidate = project.id } label: { Text(verbatim: "Удалить…") }
+            .disabled(nested).help(Text(verbatim: nested ? "Сначала удалите вложенные проекты" : "Удалить проект"))
     }
 
     private func folderPath(_ folder: Project.Folder) -> String? {

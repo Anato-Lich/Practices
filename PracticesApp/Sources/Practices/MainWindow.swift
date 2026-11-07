@@ -46,6 +46,18 @@ struct MainWindow: View {
         } message: {
             Text(verbatim: registry.error ?? "")
         }
+        .confirmationDialog(Text(verbatim: "Удалить проект \(registry.removalCandidate ?? "")?"),
+                            isPresented: Binding(get: { registry.removalCandidate != nil }, set: { if !$0 { registry.removalCandidate = nil } })) {
+            Button(role: .destructive) {
+                if let id = registry.removalCandidate { Task { await registry.remove(project: id) } }
+            } label: { Text(verbatim: "Удалить") }
+            Button(role: .cancel) {} label: { Text(verbatim: "Отмена") }
+        } message: {
+            let id = registry.removalCandidate ?? ""
+            let ids = registry.services.filter { $0.project == id }.map(\.id)
+            let dangling = ids.flatMap { registry.registry.links(to: $0).filter { !ids.contains($0.from) } }.count
+            Text(verbatim: "Сервисы проекта (\(ids.count)) будут удалены, его репозитории попадут в ignore пространства. Связи из других сервисов на них останутся висеть: \(dangling).")
+        }
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
             registry.reload()
