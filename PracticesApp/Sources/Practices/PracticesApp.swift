@@ -19,7 +19,7 @@ struct PracticesApp: App {
 
     var body: some Scene {
         MenuBarExtra(isInserted: $inMenuBar) {
-            MenuBarMenu()
+            MenuBarMenu().environment(registry)
         } label: {
             // The label always exists (it is the menu-bar item), unlike the menu.
             Image(systemName: "books.vertical")
