@@ -37,6 +37,8 @@ final class RegistryModel {
     /// The last three cards opened (sidebar «Недавние»); kept between launches.
     private(set) var recent: [MainWindow.SidebarItem] =
         (UserDefaults.standard.data(forKey: "recent")).flatMap { try? JSONDecoder().decode([MainWindow.SidebarItem].self, from: $0) } ?? []
+    /// The last space, project or service opened: where the map starts.
+    private(set) var lastCard: MainWindow.SidebarItem?
     /// space id → `git status` of the space's own repository (status bar).
     private(set) var spaceGit: [String: GitState] = [:]
     /// Projects and services whose rows are open in the sidebar.
@@ -135,7 +137,9 @@ final class RegistryModel {
     private func remember() {
         guard let item = selection else { return }
         switch item {
-        case .project, .service, .practice: break
+        case .space: lastCard = item; return
+        case .project, .service: lastCard = item
+        case .practice: break
         default: return
         }
         recent = Array(([item] + recent.filter { $0 != item }).prefix(3))

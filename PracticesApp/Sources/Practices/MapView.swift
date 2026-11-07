@@ -60,7 +60,7 @@ struct MapView: View {
     /// The sidebar shows `.map` once the map is open, so the last card opened says where to start.
     private func start() {
         guard state.space.isEmpty else { return }
-        switch registry.selection == .map ? registry.recent.first : registry.selection {
+        switch registry.selection == .map ? registry.lastCard ?? registry.recent.first : registry.selection {
         case .service(let id)? where state.lookup(id) != nil: state.focus(id)
         case .project(let id)? where registry.project(id) != nil: state.open(project: id)
         case .space(let id)?: state.space = id
