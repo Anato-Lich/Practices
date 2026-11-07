@@ -368,8 +368,11 @@ public enum Scanner {
             }
             var listed = files(in: root)
             let inGit = tracked(listed.compose + listed.env, in: root)
+            // `*.local.*` compose files are a developer's own stand, skipped like untracked ones.
+            let isLocal = { (file: String) in (file as NSString).lastPathComponent.lowercased().contains(".local.") }
             for file in listed.compose + listed.env where !inGit.contains(file) { clone.report.problems.append("\(file): not in git, skipped") }
-            listed.compose.removeAll { !inGit.contains($0) }
+            for file in listed.compose where inGit.contains(file) && isLocal(file) { clone.report.problems.append("\(file): local stand, skipped") }
+            listed.compose.removeAll { !inGit.contains($0) || isLocal($0) }
             listed.env.removeAll { !inGit.contains($0) }
             clone.envFiles = listed.env
             var networks = Set<String>()

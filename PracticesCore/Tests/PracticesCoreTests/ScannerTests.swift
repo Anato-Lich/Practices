@@ -329,14 +329,15 @@ import Yams
         let clone = home.url.appendingPathComponent("code/shop")
         try FileManager.default.removeItem(at: clone.appendingPathComponent(".git"))
         try home.write("services:\n  api: {build: .}\n", "code/shop/docker-compose.yml")
-        try home.write("services:\n  tiles: {image: x/tiles}\n", "code/shop/docker-compose.local.yml")
-        for args in [["init", "-q"], ["remote", "add", "origin", "https://github.com/acme/shop.git"], ["add", "docker-compose.yml"],
+        try home.write("services:\n  tiles: {image: x/tiles}\n", "code/shop/docker-compose.dev2.yml")
+        try home.write("services:\n  cache: {image: redis}\n", "code/shop/compose.local.yaml")
+        for args in [["init", "-q"], ["remote", "add", "origin", "https://github.com/acme/shop.git"], ["add", "docker-compose.yml", "compose.local.yaml"],
                      ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"]] {
             _ = try await Shell.run("git", ["-C", clone.path] + args)
         }
         let shop = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
         #expect(shop.services.map(\.id) == ["shop-api"])
-        #expect(shop.problems == ["docker-compose.local.yml: not in git, skipped"])
+        #expect(shop.problems == ["docker-compose.dev2.yml: not in git, skipped", "compose.local.yaml: local stand, skipped"])
     }
 
     @Test func aBuildIsAnotherProjectsCardByItsExplicitAlias() throws {
