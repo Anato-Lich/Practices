@@ -11,9 +11,18 @@ struct ResultView: View {
     let text: String?
     let stdout: String
     var schema: [PracticeResult.Field] = []
+    /// What the empty state says when a table comes back with no rows; nil keeps the bare table.
+    var empty: Empty? = nil
     @State private var tab: Tab = .auto
 
     enum Tab: Hashable { case auto, json, stdout }
+
+    struct Empty {
+        let ms: Int
+        let text: String
+        let code: String
+        let retry: () -> Void
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -27,6 +36,13 @@ struct ResultView: View {
             switch tab {
             case .auto:
                 switch shape {
+                case _ where noRows && empty != nil:
+                    if let empty {
+                        EmptyState(glyph: "∅", tint: Theme.Color.textSecondary, title: "0 строк · \(empty.ms) ms",
+                                   text: empty.text, code: empty.code) {
+                            StateButton("Повторить с другими параметрами", action: empty.retry)
+                        }
+                    }
                 case "table": ResultTable(columns: columns, rows: rows, schema: schema)
                 case "tree": JSONTree(value: tree ?? .null)
                 case "none": quiet("нет результата")
@@ -40,6 +56,16 @@ struct ResultView: View {
             case .stdout:
                 ResultText(text: stdout)
             }
+        }
+    }
+
+    /// An empty list comes back as a tree (`_shape.summary`), a list of rows as a table.
+    private var noRows: Bool {
+        switch (shape, tree) {
+        case ("table", _): rows.isEmpty
+        case ("tree", .array(let a)?): a.isEmpty
+        case ("tree", .object(let o, _)?): o.isEmpty
+        default: false
         }
     }
 

@@ -10,6 +10,8 @@ struct PracticeView: View {
     @Environment(RegistryModel.self) private var registry
     @State private var editorHeight: CGFloat = 318
     @State private var dragStart: CGFloat?
+    @State private var showTraceback = false
+    @FocusState private var focusedParam: String?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -153,6 +155,7 @@ struct PracticeView: View {
                             .padding(.horizontal, 8).frame(width: 240, height: 24)
                             .background(Theme.Color.windowBg, in: RoundedRectangle(cornerRadius: 5))
                             .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Theme.Color.border))
+                            .focused($focusedParam, equals: param.name)
                             .onSubmit { model.run() }
                         }
                     }
@@ -239,13 +242,14 @@ struct PracticeView: View {
                     stepOutput(result.steps[i])
                 } else if result.ok {
                     ResultView(shape: result.shape, columns: result.columns ?? [], rows: result.rows ?? [],
-                               tree: result.tree, text: result.text, stdout: result.stdout, schema: result.schema ?? [])
+                               tree: result.tree, text: result.text, stdout: result.stdout, schema: result.schema ?? [],
+                               empty: emptyResult(result))
                 } else {
                     failure(result)
                 }
             }
         } else if let failure = model.failure {
-            ResultText(text: failure, color: Theme.Color.error)
+            failureState(title: "Не выполнилась", error: failure, conditions: [], full: failure)
         } else if model.running {
             ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -297,16 +301,44 @@ struct PracticeView: View {
     }
 
     private func failure(_ result: PracticeResult) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: result.error ?? "").font(Theme.mono(12)).foregroundStyle(Theme.Color.error)
-                .textSelection(.enabled).padding(.top, 6)
-            // Declared conditions of its services: a bare 401 does not say "log in to System".
-            ForEach(result.conditions ?? []) { condition in
-                Text(verbatim: "⚑ " + condition.name + (condition.hint.map { " — \($0)" } ?? ""))
-                    .font(Theme.ui(12)).foregroundStyle(Theme.Color.warn)
+        let trace = [result.traceback ?? "", result.stderr, result.stdout].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        return failureState(title: "Не выполнилась · \(result.ms) ms", error: result.traceback ?? result.error ?? "",
+                            conditions: result.conditions ?? [], full: trace.isEmpty ? (result.error ?? "") : trace)
+    }
+
+    /// The error state: the traceback's last line, then the declared conditions of its services
+    /// (a bare 401 does not say "log in to System"), the one a check saw fail marked as unmet.
+    private func failureState(title: String, error: String, conditions: [Condition], full: String) -> some View {
+        let lastLine = error.split(whereSeparator: \.isNewline).last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map(String.init) ?? error
+        let unmet = conditions.filter { c in
+            runServices.contains { id in registry.checks[id]?.first { $0.env == env(of: id) && $0.endpoint == "requires:\(c.id)" }?.ok == false }
+        }
+        let lines = conditions.map { c in
+            "⚑ " + c.name + (unmet.contains(c) ? " — условие не выполнено" : c.hint.map { " — " + $0 } ?? "")
+        }
+        let text = unmet.first.map { "Условия сервиса проверяются первыми: не выполнено «\($0.name)»." }
+            ?? "Последняя строка трейсбека — здесь, полный — по кнопке."
+        return VStack(spacing: 8) {
+            EmptyState(glyph: "✕", tint: Theme.Color.error, title: title, text: text,
+                       code: ([lastLine] + lines).joined(separator: "\n"), alert: true) {
+                StateButton("Повторить", prominent: true) { model.run() }
+                StateButton(showTraceback ? "Скрыть трейсбек" : "Полный трейсбек") { showTraceback.toggle() }
             }
-            ResultText(text: [result.traceback ?? "", result.stderr, result.stdout].filter { !$0.isEmpty }.joined(separator: "\n\n"),
-                       color: Theme.Color.textSecondary)
+            if showTraceback { ResultText(text: full, color: Theme.Color.textSecondary) }
+        }
+        .padding(.top, 6)
+    }
+
+    /// The empty result: what was asked — parameters, version, environments — and where to look.
+    private func emptyResult(_ result: PracticeResult) -> ResultView.Empty {
+        let params = (model.signature?.params ?? []).map(\.name)
+        let asked = params.compactMap { name in model.params[name].flatMap { $0.isEmpty ? nil : "\(name)=\($0)" } }.joined(separator: "  ")
+        let version = model.dirty ? "черновик" : model.versions.last.map { "v\($0.number)" }
+        let envs = result.envs.sorted { $0.key < $1.key }.map(\.value).joined(separator: ", ")
+        let code = [asked, version ?? "", envs].filter { !$0.isEmpty }.joined(separator: "  ·  ")
+        let hint = params.isEmpty ? "." : " — у \(model.practice.name) это " + params.joined(separator: ", ") + "."
+        return ResultView.Empty(ms: result.ms, text: "Запрос выполнен, но ничего не вернул. Проверьте параметры" + hint, code: code) {
+            if let first = params.first { focusedParam = first } else { model.run() }
         }
     }
 
