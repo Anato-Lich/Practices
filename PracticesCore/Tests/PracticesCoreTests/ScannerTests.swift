@@ -242,6 +242,63 @@ import Foundation
         #expect(shop.unknown == [.init(callers: ["shop-api"], file: ".env.example", variable: "NEW_HOST", host: "new.example", port: 1)])
     }
 
+    @Test func genericNames() {
+        for name in ["db", "Postgres", "kafka", "broker", "localhost", "127.0.0.1", "::1", "::1:80", "localhost:8000", "db:5432", "host.docker.internal:80"] {
+            #expect(Scanner.generic(name), "\(name)")
+        }
+        for name in ["ble-anchors-pg", "wifi-locator", "locator.imux.ru", "db.corp.example:5432", "10.0.0.5", "dbx"] {
+            #expect(!Scanner.generic(name), "\(name)")
+        }
+    }
+
+    @Test func shortNamesDoNotCrossProjects() throws {
+        let home = try catalogue(["github.com/acme/scada"])
+        // Same project, no repository: found by its generic alias.
+        try card(home, Service(id: "pr-api", name: "API", kind: "http", aliases: ["api"]))
+        // Another project of the space: by a name of its own, never by `localhost:8000`.
+        try home.place(Service(id: "wifi-db", name: "Wifi", kind: "http", aliases: ["wifi-locator", "localhost:8000"],
+                               endpoints: [.init(id: "api", url: "${WIFI_URL}")]), project: "other")
+        try home.store.setAll(["WIFI_URL": "http://localhost:8000"], service: "wifi-db", env: "prod")
+        // Another space: only by a dotted name.
+        try home.place(Service(id: "far-pg", name: "PG", kind: "postgres", aliases: ["db"]), space: "far", project: "fp")
+        try home.place(Service(id: "far-redis", name: "Redis", kind: "redis", aliases: ["cache"]), space: "far", project: "fp")
+        try home.place(Service(id: "locator", name: "Locator", kind: "http", aliases: ["locator.imux.ru"]), space: "far", project: "fp")
+        try home.write("""
+            services:
+              app:
+                build: .
+                environment:
+                  API_URL: http://api:8080
+                  BFF_URL: http://localhost:8000/v1
+                  DB_DSN: postgresql://u@db:5432/x
+                  LOC_URL: https://locator.imux.ru/mac
+                  REDIS_URL: redis://cache:6379
+                  WIFI: http://wifi-locator:8000
+              cache: {image: "redis:7"}
+            """, "code/scada/docker-compose.yml")
+
+        let first = try Scanner.scan(registry: home.registry, store: home.store)
+        let scada = first.repos[0]
+        // `cache` is far-redis's alias in another space: a candidate of its own.
+        #expect(scada.services.map(\.id) == ["scada-app", "scada-cache"])
+        let compose = "derived:docker-compose.yml"
+        #expect(scada.new.map(\.link) == [
+            Link(to: "pr-api", via: "http", origin: compose),
+            Link(to: "locator", via: "http", what: "/mac", origin: compose),
+            Link(to: "scada-cache", via: "db", origin: compose),
+            Link(to: "wifi-db", via: "http", names: ["WIFI": "WIFI_URL"], origin: compose),
+        ])
+        #expect(scada.unknown == [
+            .init(callers: ["scada-app"], file: "docker-compose.yml", variable: "BFF_URL", host: "localhost", port: 8000),
+            .init(callers: ["scada-app"], file: "docker-compose.yml", variable: "DB_DSN", host: "db", port: 5432),
+        ])
+
+        try Scanner.write(first, registry: home.registry)
+        let second = try Scanner.scan(registry: home.registry, store: home.store).repos[0]
+        #expect(second.services.isEmpty && second.new.isEmpty && second.gone.isEmpty)
+        #expect(second.present.map(\.link) == scada.new.map(\.link))
+    }
+
     @Test func curatedLinksAreFoundAgainByCallerTargetAndVia() async throws {
         let home = TempHome()
         let repo = RepoID("github.com/acme/shop")!

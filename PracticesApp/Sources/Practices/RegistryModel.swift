@@ -203,9 +203,13 @@ final class RegistryModel {
         } catch { fail(ignored ? "скрыть репозиторий" : "вернуть репозиторий", error) }
     }
 
-    func remove(project id: String, ignoreRepos: Bool = true) async {
+    /// `trash`: clone folders to move to the Trash once the card is gone (the user's choice in the sheet).
+    func remove(project id: String, ignoreRepos: Bool = true, trash: [String] = []) async {
         let space = project(id)?.space
-        do { _ = try await registry.remove(project: id, ignoreRepos: ignoreRepos) } catch { fail("удалить проект \(id)", error) }
+        do {
+            _ = try await registry.remove(project: id, ignoreRepos: ignoreRepos)
+            for path in trash { try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil) }
+        } catch { fail("удалить проект \(id)", error) }
         if let space { selection = .space(space) }
         reload()
         await refreshPending()

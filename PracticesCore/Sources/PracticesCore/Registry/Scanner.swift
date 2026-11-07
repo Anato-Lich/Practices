@@ -53,6 +53,7 @@ public enum Scanner {
         "db", "database", "postgres", "postgresql", "pg", "mysql", "mongo", "redis", "cache", "app", "api", "backend",
         "frontend", "web", "ui", "server", "client", "worker", "proxy", "traefik", "nginx", "migrate", "migrations",
         "mq", "rabbitmq", "minio", "s3", "clickhouse", "kafka", "zookeeper", "grafana", "prometheus", "loki", "tools",
+        "broker", "queue", "storage", "mongodb", "mariadb", "elasticsearch", "nats",
     ]
     static let databases: Set<String> = ["postgres", "clickhouse", "redis", "mysql", "mongodb"]
     static let brokers: Set<String> = ["kafka", "rabbitmq"]
@@ -242,12 +243,32 @@ public enum Scanner {
     /// is told apart by `what`; a curated link's descriptive `what` and `endpoint` do not count.
     static func key(_ link: Link) -> [String?] { [link.to, link.via, link.via == "topic" ? link.what : nil] }
 
+    /// A name that says nothing outside its project: a generic compose name, a loopback host,
+    /// either of them with a port (`db:5432`, `localhost:8000`).
+    static func generic(_ alias: String) -> Bool {
+        var name = alias.lowercased()
+        if loopback.contains(name) { return true }                      // `::1` has no port
+        if let colon = name.lastIndex(of: ":"), Int(name[name.index(after: colon)...]) != nil { name = String(name[..<colon]) }
+        return genericNames.contains(name) || loopback.contains(name)
+    }
+
+    /// Whether a caller of `repo` in `project` of `space` may mean `service` by `name` — an id
+    /// or alias, or with `address` a host its endpoint renders to. Its own project: any name;
+    /// another project of the space: a name that is not generic, an address only with a dot;
+    /// another space: only a dotted name (an FQDN or an IP).
+    static func reaches(_ service: Service, by name: String, address: Bool = false, repo: RepoID, project: String, space: String) -> Bool {
+        if service.repo == repo || service.project == project { return true }
+        if generic(name) { return false }
+        return service.space == space && !address || name.contains(".")
+    }
+
     // MARK: Scan
 
     /// One clone as its files describe it.
     struct Clone {
         let root: URL
         var report: ScanResult.Repo
+        let space: String
         var compose: [String: ComposeService] = [:]
         var envFiles: [String] = []
         /// Compose service → the catalogue's service, or the candidate standing for it.
@@ -282,6 +303,7 @@ public enum Scanner {
         let assigned = try registry.assigned()
         let catalog = try registry.services()
         let existing = Dictionary(catalog.map { ($0.id, registry.links(of: $0.id)) }, uniquingKeysWith: { first, _ in first })
+        let spaces = Dictionary(registry.projectDirs().map { ($0.id, $0.space) }, uniquingKeysWith: { first, _ in first })
         let local = Repos.clones(roots: registry.searchRoots).mapValues { URL(fileURLWithPath: $0).standardizedFileURL }
         var result = ScanResult()
         var clones: [Clone] = []
@@ -294,7 +316,10 @@ public enum Scanner {
                 if !asked.isEmpty { result.repos.append(report) }
                 continue
             }
-            var clone = Clone(root: root, report: report)
+            var clone = Clone(root: root, report: report, space: spaces[report.project] ?? "")
+            func reaches(_ service: Service, _ name: String) -> Bool {
+                Scanner.reaches(service, by: name, repo: repo, project: report.project, space: clone.space)
+            }
             let listed = files(in: root)
             clone.envFiles = listed.env
             var networks = Set<String>()
@@ -308,9 +333,9 @@ public enum Scanner {
             func order(_ name: String) -> String { (genericNames.contains(name.lowercased()) ? "1" : "0") + name }
             for (name, service) in clone.compose.sorted(by: { order($0.key) < order($1.key) }) {
                 // The repository's own service, or — for an image, not a build — shared
-                // infrastructure known under this name (`hyper-kafka` is `kafka`).
+                // infrastructure known under this name (`hyper-kafka` is `kafka`) where it may be meant.
                 if let same = catalog.first(where: { $0.repo == repo && ($0.id == name || $0.aliases.contains(name)) })
-                    ?? (service.builds ? nil : catalog.first { $0.aliases.contains(name) }) {
+                    ?? (service.builds ? nil : catalog.first { $0.aliases.contains(name) && reaches($0, name) }) {
                     clone.ids[name] = same.id
                     continue
                 }
@@ -320,7 +345,8 @@ public enum Scanner {
                     clone.report.problems.append("\(name): its id \(id) is taken — if it is that service, add \(name) to its aliases")
                     continue
                 }
-                let candidate = Service(id: id, name: name, kind: isFrontend(service) ? "frontend" : kind(ofImage: service.image), repo: repo, aliases: id == name ? [] : [name])
+                var candidate = Service(id: id, name: name, kind: isFrontend(service) ? "frontend" : kind(ofImage: service.image), repo: repo, aliases: id == name ? [] : [name])
+                (candidate.space, candidate.project) = (clone.space, report.project)
                 known.append(candidate)
                 clone.report.services.append(candidate)
                 clone.ids[name] = id
@@ -343,15 +369,21 @@ public enum Scanner {
         func normal(_ host: String) -> String { loopback.contains(host) ? "localhost" : host }
 
         /// A compose service of the repository, then another name of a known service, then an
-        /// endpoint at this address (DECISIONS 8). Two services at one address are nobody's.
+        /// endpoint at this address (DECISIONS 8), each only where the caller may mean it
+        /// (`reaches`). Two services at one address are nobody's.
         func resolve(_ at: Target, _ clone: Clone) -> (to: Service, endpoint: String?, env: String?, key: String?)? {
+            func reaches(_ service: Service, _ name: String, address: Bool = false) -> Bool {
+                Scanner.reaches(service, by: name, address: address, repo: clone.report.repo, project: clone.report.project, space: clone.space)
+            }
+            // A loopback host alone names nothing; with its port it may be an alias.
+            let names = (loopback.contains(at.host) ? [] : [at.host]) + (at.port.map { ["\(at.host):\($0)"] } ?? [])
+            let byName = known.filter { service in names.contains { ($0 == service.id || service.aliases.contains($0)) && reaches(service, $0) } }
+            // The caller's own project first.
             let named = clone.ids[at.host].flatMap { id in known.first { $0.id == id } }
-                ?? (loopback.contains(at.host) ? nil : known.first { service in
-                    service.id == at.host || service.aliases.contains(at.host) || at.port.map { service.aliases.contains("\(at.host):\($0)") } == true
-                })
+                ?? byName.first { $0.repo == clone.report.repo || $0.project == clone.report.project } ?? byName.first
             // By name the endpoint is not known, but with only one its key is.
             if let named { return (named, nil, nil, named.endpoints.count == 1 ? hostKey(named.endpoints[0]) : nil) }
-            let host = rendered.filter { normal($0.at.host) == normal(at.host) }
+            let host = rendered.filter { normal($0.at.host) == normal(at.host) && reaches($0.service, $0.at.host, address: true) }
             let exact = host.filter { $0.at.port == at.port }
             let hits = exact.isEmpty && !loopback.contains(at.host) ? host : exact
             guard let first = hits.first, hits.allSatisfy({ $0.service.id == first.service.id }) else { return nil }

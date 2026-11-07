@@ -261,6 +261,7 @@ private struct RemoveProjectSheet: View {
     @Environment(RegistryModel.self) private var registry
     let project: Project
     @State private var keepRepos = false
+    @State private var trashClones = false
 
     var body: some View {
         let services = registry.services(of: project)
@@ -268,7 +269,8 @@ private struct RemoveProjectSheet: View {
         let practices = services.reduce(0) { $0 + (registry.practices[$1.id]?.count ?? 0) } + (registry.chains[project.id]?.count ?? 0)
         let own = services.reduce(0) { $0 + registry.links(of: $1.id).count }
         let dangling = services.flatMap { s in registry.links(to: s.id).filter { !ids.contains($0.from) }.map { "\($0.from) → \(s.id)" } }
-        let clone = project.repos.lazy.compactMap { registry.clones[$0.repo] }.first.map { ($0 as NSString).abbreviatingWithTildeInPath }
+        let clones = project.repos.compactMap { registry.clones[$0.repo] }
+        let clone = clones.first.map { ($0 as NSString).abbreviatingWithTildeInPath }
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
@@ -278,10 +280,10 @@ private struct RemoveProjectSheet: View {
                     (Text(verbatim: "Удалить проект ") + Text(verbatim: project.id).font(Theme.mono(15, .semibold)) + Text(verbatim: " из каталога?"))
                         .font(Theme.ui(15, .semibold))
                     Group {
-                        if let clone {
+                        if let clone, !trashClones {
                             Text(verbatim: "Папка ") + Text(verbatim: clone).font(Theme.mono(12)) + Text(verbatim: " и репозитории на хостинге не трогаются.")
                         } else {
-                            Text(verbatim: "Клоны и репозитории на хостинге не трогаются.")
+                            Text(verbatim: "Репозитории на хостинге и их история не трогаются.")
                         }
                     }
                     .font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
@@ -307,14 +309,21 @@ private struct RemoveProjectSheet: View {
                 Toggle(isOn: $keepRepos) { Text(verbatim: "Не помечать репозитории ignore — оставить в «Не распределено»") }
                     .toggleStyle(.checkbox).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
             }
+            if !clones.isEmpty {
+                Toggle(isOn: $trashClones) {
+                    Text(verbatim: clones.count == 1 ? "Удалить клон с диска (в Корзину): " : "Удалить клоны с диска (в Корзину): ")
+                        + Text(verbatim: clones.map { ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: ", ")).font(Theme.mono(11))
+                }
+                .toggleStyle(.checkbox).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
+            }
             HStack(spacing: 8) {
-                Text(verbatim: "Это git-коммит в ~/.practices: откатить можно через историю.")
+                Text(verbatim: "Запись в личной истории каталога (~/.practices): откатить можно через неё.")
                     .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).frame(maxWidth: .infinity, alignment: .leading)
                 Button { registry.removalCandidate = nil } label: { Text(verbatim: "Отмена") }
                     .buttonStyle(CompactButtonStyle(height: 28)).keyboardShortcut(.cancelAction)
                 Button {
                     registry.removalCandidate = nil
-                    Task { await registry.remove(project: project.id, ignoreRepos: !keepRepos) }
+                    Task { await registry.remove(project: project.id, ignoreRepos: !keepRepos, trash: trashClones ? clones : []) }
                 } label: { Text(verbatim: "Удалить").font(Theme.ui(13, .semibold)).foregroundStyle(Theme.Color.error) }
                     .buttonStyle(DestructiveButtonStyle())
             }
