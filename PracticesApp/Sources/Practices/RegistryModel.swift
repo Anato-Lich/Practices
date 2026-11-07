@@ -33,7 +33,7 @@ final class RegistryModel {
     private(set) var unassignedProblems: [String] = []
     private(set) var loadingUnassigned = false
     /// What the window shows; views set it to open a project, a service or a practice.
-    var selection: MainWindow.SidebarItem? { didSet { reveal(); remember() } }
+    var selection: MainWindow.SidebarItem? { didSet { if selection != nil { welcomeShown = false }; reveal(); remember() } }
     /// The last three cards opened (sidebar «Недавние»); kept between launches.
     private(set) var recent: [MainWindow.SidebarItem] =
         (UserDefaults.standard.data(forKey: "recent")).flatMap { try? JSONDecoder().decode([MainWindow.SidebarItem].self, from: $0) } ?? []
@@ -69,10 +69,20 @@ final class RegistryModel {
     /// A project waiting for the user to confirm its removal.
     var removalCandidate: String?
 
-    let registry = Registry()
+    /// Opened again on every reload: «Настройка» changes `local.yaml` (roots) under it.
+    private(set) var registry = Registry()
     let store = SecretStore()
+    @ObservationIgnored private(set) lazy var setup: SetupModel = {
+        let model = SetupModel()
+        model.app = self
+        return model
+    }()
+    /// «Начало» in the content: from a launch without spaces until «Открыть каталог», «Настроить
+    /// позже» or a pick in the sidebar — not until the first space, which comes at step 2 of 3.
+    var welcomeShown = false
 
     func reload() {
+        registry = Registry()
         // Ids are unique by rule, not by construction: a card written by hand may repeat one,
         // and the window must still open to show it.
         func first<T>(_ a: T, _: T) -> T { a }

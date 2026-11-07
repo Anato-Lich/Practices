@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 /// `Practices --render-window out.png [--space id | --project id | --service id | --practice ref |
-/// --pending | --unassigned | --map | --search text | --palette text | --doctor] [--expand project,…] [--wait seconds]`:
+/// --pending | --unassigned | --map | --search text | --palette text | --doctor | --welcome | --settings] [--expand project,…] [--wait seconds]`:
 /// renders the main window offscreen and exits. Lets the layout be checked without clicking.
 @MainActor
 enum DevRender {
@@ -66,6 +66,9 @@ enum DevRender {
                 if args.contains("--load") { await registry.loadUnassigned() }
             }
             if args.contains("--map") { registry.selection = .map }
+            // `--welcome`: «Начало» (with an empty `PRACTICES_HOME` it shows anyway); `--settings`: «Настройка».
+            if args.contains("--welcome") { registry.welcomeShown = true; await registry.setup.refresh() }
+            if args.contains("--settings") { registry.selection = .settings; await registry.setup.refresh() }
             if let j = args.firstIndex(of: "--search"), j + 1 < args.count { registry.searchText = args[j + 1] }
             if args.contains("--palette") { registry.paletteShown = true }
             // `--remove`: the removal sheet of the `--project`; `--failed <what>`: the error bar.

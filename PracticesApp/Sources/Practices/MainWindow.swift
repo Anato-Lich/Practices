@@ -20,6 +20,7 @@ struct MainWindow: View {
         case unassigned
         case map
         case doctor
+        case settings
     }
 
     var body: some View {
@@ -60,6 +61,7 @@ struct MainWindow: View {
         .onAppear {
             registry.reload()
             if registry.selection == nil, let first = registry.spaces.first { registry.selection = .space(first.id) }
+            if registry.spaces.isEmpty, registry.selection == nil { registry.welcomeShown = true }
             guard !CommandLine.arguments.contains("--render-window") else { return }
             NSApp.setActivationPolicy(.regular)
             Task { await registry.scanCopies() }
@@ -69,13 +71,24 @@ struct MainWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             registry.reload()
             Task { await registry.refreshPending() }
+            // An agent may have run `setup …` over MCP meanwhile; there is no signal from it otherwise.
+            if registry.setup.status != nil { Task { await registry.setup.refresh() } }
         }
         .task { await registry.refreshPending() }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
     }
 
     @ViewBuilder private var detail: some View {
-        if registry.searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
+        if registry.welcomeShown {
+            WelcomeView()
+        } else if registry.spaces.isEmpty && registry.selection != .settings {
+            EmptyState(glyph: "∅", tint: Theme.Color.link, title: "Пока нет пространств",
+                       text: "Склонируйте пространство или создайте новое — на экране «Начало» или в «Настройке».") {
+                StateButton("Начало", prominent: true) { registry.welcomeShown = true }
+                StateButton("Настройка") { registry.selection = .settings }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 16)
+        } else if registry.searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
             SearchView(query: registry.searchText) { item in
                 registry.searchText = ""
                 registry.selection = item
@@ -98,6 +111,8 @@ struct MainWindow: View {
                 MapView()
             case .doctor:
                 DoctorView()
+            case .settings:
+                SettingsView()
             case nil:
                 placeholder
             }
@@ -149,6 +164,7 @@ struct MainWindow: View {
             case .unassigned: Breadcrumb(title: "Не распределено", monoTitle: false)
             case .map: Breadcrumb(title: "Карта", monoTitle: false)
             case .doctor: Breadcrumb(title: "Doctor", monoTitle: false)
+            case .settings: Breadcrumb(prefix: "~/.practices/", title: "Настройка", monoTitle: false)
             case nil: EmptyView()
             }
         }

@@ -105,14 +105,26 @@ struct Sidebar: View {
     }
 
     private var footer: some View {
-        Text(verbatim: [ru(registry.spaces.count, "пространство", "пространства", "пространств"),
-                        ru(registry.projects.count, "проект", "проекта", "проектов"),
-                        ru(registry.services.count, "сервис", "сервиса", "сервисов")].joined(separator: " · "))
-            .font(Theme.mono(10.5)).foregroundStyle(Theme.Color.textMuted).lineLimit(1)
-            .allowsTightening(true).minimumScaleFactor(0.85)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24, alignment: .leading)
-            .overlay(alignment: .top) { Theme.Color.border.frame(height: 1) }
+        let on = registry.selection == .settings
+        return HStack(spacing: 8) {
+            Text(verbatim: registry.spaces.isEmpty ? "нет пространств" : [ru(registry.spaces.count, "пространство", "пространства", "пространств"),
+                            ru(registry.projects.count, "проект", "проекта", "проектов"),
+                            ru(registry.services.count, "сервис", "сервиса", "сервисов")].joined(separator: " · "))
+                .font(Theme.mono(10.5)).foregroundStyle(Theme.Color.textMuted).lineLimit(1)
+                .allowsTightening(true).minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button { select(.settings) } label: {
+                Image(systemName: "gearshape").font(.system(size: 12))
+                    .foregroundStyle(on ? .white : Theme.Color.textMuted)
+                    .frame(width: 22, height: 20)
+                    .background(on ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 4))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).help(Text(verbatim: "Настройка"))
+        }
+        .padding(.leading, 12).padding(.trailing, 6)
+        .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24)
+        .overlay(alignment: .top) { Theme.Color.border.frame(height: 1) }
     }
 
     // MARK: Rows
@@ -133,6 +145,8 @@ struct Sidebar: View {
         /// A header that folds the rows under it; `open` is its state.
         var collapsible = false
         var open = true
+        var disabled = false
+        var hint = false
     }
 
     /// The sidebar as a flat list, the way the design draws it.
@@ -167,6 +181,16 @@ struct Sidebar: View {
             for chain in chains { rows.append(practiceRow(chain, depth + 1, label: chain.name)) }
         }
 
+        if registry.spaces.isEmpty {
+            // First run (`Sidebar.dc.html`, mode empty): the queues greyed, a hint instead of the tree.
+            header("")
+            for (item, label, count) in [(Item.pending, "Ждут приёмки", "0"), (.unassigned, "Не распределено", ""), (.map, "Карта", "")] {
+                rows.append(Row(id: item.rowID, label: label, count: count, disabled: true))
+            }
+            rows.append(Row(id: "header:spaces", label: "Пространства", header: true))
+            rows.append(Row(id: "hint", label: "Пока нет — добавьте на экране «Начало»", hint: true))
+            return rows
+        }
         if !registry.recent.isEmpty {
             rows.append(Row(id: "header:recent", label: "Недавние", header: true, collapsible: true, open: !recentCollapsed))
             for item in registry.recent where !recentCollapsed {
@@ -276,6 +300,11 @@ struct Sidebar: View {
                 .frame(maxWidth: .infinity, minHeight: 26, maxHeight: 26, alignment: .bottomLeading)
                 .contentShape(Rectangle())
                 .onTapGesture { collapse(row.id) }
+            } else if row.hint {
+                Text(verbatim: row.label).font(Theme.ui(12)).foregroundStyle(Theme.Color.textDisabled)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else if row.header {
                 SectionTitle(row.label)
                     .padding(.horizontal, 8)
@@ -297,7 +326,7 @@ struct Sidebar: View {
                             .foregroundStyle(selected ? Color.white.opacity(0.85) : row.countColor)
                     }
                 }
-                .foregroundStyle(selected ? .white : Theme.Color.text)
+                .foregroundStyle(selected ? .white : row.disabled ? Theme.Color.textDisabled : Theme.Color.text)
                 .padding(.leading, 8 + CGFloat(row.depth) * 16).padding(.trailing, 8)
                 .frame(height: 24)
                 .background(selected ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 5))
@@ -342,6 +371,7 @@ extension MainWindow.SidebarItem {
         case .unassigned: "unassigned"
         case .map: "map"
         case .doctor: "doctor"
+        case .settings: "settings"
         }
     }
 }

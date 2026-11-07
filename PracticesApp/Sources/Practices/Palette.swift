@@ -243,6 +243,12 @@ private struct PaletteDialog: View {
                             copy: s.id, open: { registry.revealService(s.id) }))
             actions = 3
         }
+        if scope == nil, !term.isEmpty, ["настройка", "settings", "setup"].contains(where: { $0.hasPrefix(term) }) {
+            if actions == 0 { rows.append(Row(header: true, id: "Действия")) }
+            rows.append(Row(badge: "act", color: Theme.Color.warn, id: "Настройка", name: "клоны, пространства, агенты, окружение",
+                            copy: "practicesctl setup status", open: go(.settings)))
+            actions += 1
+        }
         var counts = [ru(services.count, "сервис", "сервиса", "сервисов")]
         if !projects.isEmpty { counts.append(ru(projects.count, "проект", "проекта", "проектов")) }
         counts.append(ru(practices.count, "практика", "практики", "практик"))

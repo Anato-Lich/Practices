@@ -262,13 +262,15 @@ struct CompactButtonStyle: ButtonStyle {
     var prominent = false
     var height: CGFloat = 26
     var fontSize: CGFloat = 13
+    @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let prominent = prominent && enabled
+        return configuration.label
             .font(Theme.ui(fontSize))
-            .foregroundStyle(prominent ? .white : Theme.Color.text)
+            .foregroundStyle(!enabled ? Theme.Color.textDisabled : prominent ? .white : Theme.Color.text)
             .padding(.horizontal, prominent ? 12 : 10).frame(height: height)
             .background(prominent ? Theme.Color.accent : Theme.Color.buttonBg, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(prominent ? Theme.Color.accent : Theme.Color.borderButton))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(!enabled ? Theme.Color.border : prominent ? Theme.Color.accent : Theme.Color.borderButton))
             .opacity(configuration.isPressed ? 0.75 : 1)
             .contentShape(Rectangle())
             .fixedSize()
