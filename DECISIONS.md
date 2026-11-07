@@ -143,6 +143,16 @@
     ведения репозиториев — `conventions.md` и `templates/` пространства (MCP `get_conventions`);
     правила разметки связей — в самом сканере и в блоке одной строкой. Серверы — условия с
     `reachable` плюс `hosts:` у проекта.
+38. **Домены разработки и деплой** (пользователь, 8 ноября). Dev: домены OrbStack —
+    `*.imux.local` у Сферы (метка `dev.orbstack.domains`), `*.orb.local` у инфраструктуры Кипера
+    без SSO; хостовые HTTP-порты снимаются, Vite с `allowedHosts: ['.imux.local']`. Приложения
+    Кипера за SSO — `<проект>.local.x-keeper.net` через общий `local-infra` (Traefik не ниже
+    v3.7, wildcard mkcert, resolver → dnsmasq), свой Traefik в проекте не нужен. Деплой Сферы —
+    только кнопкой: Portainer CE (docker-хосты, позже k3s как environments; стеки из git с вебхуком,
+    автообновление выключено), CI на push строит образы в GHCR (`sha`, `latest`), `deploy.yml` с
+    `workflow_dispatch` и `environment: prod` с ревьюерами зовёт вебхук стека. CE, а не BE: у BE 3 узла
+    бесплатно, а кластер может быть 5. Кипер: деплой не наша зона, CI только до реестра, общий
+    `workflows_templates` не заменяем.
 34. **Монитор удалён** (пользователь, 7 ноября): контейнеры и порты не показали пользы, код убран;
     при нужде вернётся из git (тег v1-sandbox).
 
