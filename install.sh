@@ -49,7 +49,10 @@ open /Applications/Practices.app || true
 for _ in {1..30}; do pgrep -xq Practices && break; sleep 0.1; done
 pgrep -xq Practices || open /Applications/Practices.app
 # Refresh Launch Services so the icon is registered.
+touch /Applications/Practices.app 2>/dev/null || true
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Practices.app >/dev/null 2>&1 || true
+# The Dock caches icons; restart it only while Practices is shown there.
+pgrep -xq Practices && { killall Dock 2>/dev/null || true; }
 # Desktop alias, replacing an existing one.
 osascript -e 'tell application "Finder"
   if exists alias file "Practices" of desktop then delete alias file "Practices" of desktop
