@@ -106,7 +106,12 @@ struct TempHome {
         let text = try Registry.yaml(service)
         #expect(text.contains("- XK_PG_HOST") && text.contains("Базы X-Keeper"))
         #expect(!text.contains("space:") && !text.contains("project:"))
+        #expect(!text.contains("role:"))                       // written only when set
         #expect(try roundTrip(service))
+        var placed = service
+        placed.role = "infra"
+        #expect(try Registry.yaml(placed).contains("kind: postgres\nrole: infra\n"))
+        #expect(try roundTrip(placed))
     }
 
     @Test func minimalServiceDecodes() throws {

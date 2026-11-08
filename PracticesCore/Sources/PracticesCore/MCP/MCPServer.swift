@@ -296,6 +296,9 @@ public final class MCPServer: @unchecked Sendable {
             ["id": $0.id, "label": $0.label ?? "", "address": ($0.address ?? $0.url) ?? "", "requires": $0.requires] as [String: Any]
         }
         card["conditions"] = conditions(of: service)
+        let role = ServiceMap.role(of: service, in: try registry.catalogue())
+        card["role"] = role.rawValue
+        card["role_inferred"] = service.role != role.rawValue
         card["links_out"] = try encodable(registry.links(of: id))
         card["links_in"] = try registry.links(to: id).map { from, link -> Any in
             var entry = try encodable(link) as? [String: Any] ?? [:]
@@ -459,7 +462,7 @@ public final class MCPServer: @unchecked Sendable {
              ["id": ["type": "string"]], required: ["id"]),
         tool("list_services", "Services (compose services and external systems): kind, project, repository, other names, environments, guards, names of their keys and whether each has a value. Never values.",
              ["project": ["type": "string", "description": "only this project's services"]]),
-        tool("get_service", "One service: endpoints, conditions to know before the first request (e.g. a VPN), links in both directions (whom it calls, who calls it), keys, guards, notes (pitfalls), documents, dictionary of fields, practices.",
+        tool("get_service", "One service: its role in the data flow (role_inferred: not set in the card, inferred from kind and links), endpoints, conditions to know before the first request (e.g. a VPN), links in both directions (whom it calls, who calls it), keys, guards, notes (pitfalls), documents, dictionary of fields, practices.",
              ["id": ["type": "string"]], required: ["id"]),
         tool("get_conventions", "Личные соглашения пространства: как устроены репозитории (модули, compose, env, порты, задачи IDE, локальные домены) и файлы-шаблоны. Читать перед созданием проекта/сервиса или правкой окружения.",
              ["space": ["type": "string", "description": "id пространства"]], required: ["space"]),

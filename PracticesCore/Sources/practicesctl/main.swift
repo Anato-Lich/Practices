@@ -30,6 +30,9 @@ let usage = """
       service <id>                  one service: endpoints, conditions, links, keys, notes, docs
       service add <id> --project <p> [--name N] [--kind k] [--description D] [--repo r]
                                     [--alias a …] [--env e …] [--key K …]
+      service role <id> [role]      its role on the map (front bff backend processing worker infra
+                                    ingest relay device ops external); without one — the role
+                                    and whether it is set or inferred; written, not committed
       links [service]               who calls whom (of one service: both directions)
       link add <from> <to> [--endpoint e] [--env e] [--via http|topic|db|network|build]
                                     [--what w] [--access read|write] [--why w] [--practice ref]
@@ -465,6 +468,19 @@ case "service":
                               keys: (options["--key"] ?? []).map { Service.Key(name: $0) })
         do { try await registry.add(service, to: project) } catch { fail("practices: \(error)") }
         print("service \(rest[2]) in \(project): \(home(registry.dir(of: rest[2])?.path))")
+        break
+    }
+    if (3...4).contains(rest.count), rest[1] == "role" {
+        guard var service = try? registry.service(rest[2]) else { fail("no service \(rest[2])") }
+        guard rest.count == 4 else {
+            let role = ServiceMap.role(of: service, in: try registry.catalogue())
+            print(role.rawValue + (service.role == role.rawValue ? "" : "  (inferred)"))
+            break
+        }
+        guard Service.Role(rawValue: rest[3]) != nil else { fail("roles: " + Service.Role.allCases.map(\.rawValue).joined(separator: ", "), 2) }
+        service.role = rest[3]
+        do { try registry.save(service) } catch { fail("practices: \(error)") }
+        print("\(service.id): \(rest[3])  (not committed — `practicesctl pending`, then `accept`)")
         break
     }
     guard rest.count == 2 else { print(usage); exit(2) }

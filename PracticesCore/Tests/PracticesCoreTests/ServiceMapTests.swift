@@ -35,26 +35,50 @@ import Testing
         #expect(ServiceMap.column(of: Self.svc("webhook", "http", "p")) == .api)
         #expect(ServiceMap.column(of: Self.svc("job", "script", "p")) == .api)
         #expect(ServiceMap.column(of: Self.svc("kafka", "kafka", "p")) == .data)
-        #expect(ServiceMap.kindClass(of: Self.svc("kafka", "kafka", "p")) == .bus)
-        #expect(ServiceMap.kindClass(of: Self.svc("xkdb", "socket", "p")) == .hw)
-        #expect(ServiceMap.kindClass(of: Self.svc("job", "script", "p")) == .worker)
-        #expect(ServiceMap.kindClass(of: Self.svc("gh", "http", "p", tags: ["external"])) == .ext)
     }
 
     @Test func projectView() {
         let m = ServiceMap.project("app", in: Self.catalogue)
-        #expect(m.hubs.map(\.service.id) == ["sso", "wifi"])          // 5 callers, shared tag; sysapi's 4 is not enough
-        #expect(m.hubs.map(\.callers) == [5, 1])
-        #expect(m.own[.front]?.map(\.id) == ["web"])
-        #expect(m.own[.api]?.map(\.id) == ["api", "job", "worker"])
-        #expect(m.own[.data]?.map(\.id) == ["db"])
-        #expect(m.chips["api"] == ["sso", "wifi"])
-        #expect(m.chips["db"] == ["sso"] && m.chips["job"] == ["sso"] && m.chips.count == 5)
-        #expect(m.externals.map(\.project.id) == ["plat", "plat2", "far"])   // 5, 4, 1 links
-        #expect(m.externals[0].services.map(\.id) == ["sysapi"])
-        #expect(m.edges.count == 12)                                   // no edge to a hub or to an unknown service
-        #expect(!m.edges.contains { ["sso", "wifi"].contains($0.link.to) })
-        #expect(m.edges.contains { $0.from == "api" && $0.link.to == "db" && $0.link.access == "write" })
+        #expect(m.own.map(\.id) == ["api", "db", "job", "web", "worker"])
+        #expect(m.callers.isEmpty)
+        #expect(m.callees.map(\.id) == ["ext1", "sso", "sysapi", "wifi", "kafka"])   // by project (far, plat, plat2), then id
+        #expect(m.pairs.count == 17)                                                   // api→sysapi http+db is one pair
+        #expect(m.pairs.first { $0.from == "api" && $0.to == "sysapi" }?.links.count == 2)
+        #expect(!m.pairs.contains { $0.to == "ghost" })
+        let plat = ServiceMap.project("plat", in: Self.catalogue)
+        #expect(plat.callers.map(\.id) == ["api", "db", "web", "job", "worker"])      // they only call in
+    }
+
+    @Test func roles() {
+        let r = ServiceMap.roles(in: Self.catalogue)
+        #expect(r["web"] == .front && r["db"] == .infra && r["kafka"] == .infra && r["job"] == .ops)
+        #expect(r["api"] == .backend)            // called by a worker, not only by fronts
+        #expect(r["worker"] == .processing)      // reads a topic
+        var c = Self.catalogue
+        c.links.removeAll { $0.from == "worker" && $0.link.to == "api" }
+        c.links.append(("web", Link(to: "api", via: "http")))
+        #expect(ServiceMap.roles(in: c)["api"] == .bff)   // now called only by web
+        c.services[1].role = "worker"                       // `role:` wins over the inference
+        #expect(ServiceMap.roles(in: c)["api"] == .worker)
+        c.services[1].role = "nonsense"
+        #expect(ServiceMap.roles(in: c)["api"] == .bff)
+        let relay = Self.svc("x-relay", "worker", "p"), target = Self.svc("t", "http", "q", tags: ["external"])
+        #expect(ServiceMap.inferredRole(relay, callers: [], calls: [(target, Link(to: "t", access: "write"))]) == .relay)
+        #expect(ServiceMap.inferredRole(Self.svc("rx", "socket", "p"), callers: [], calls: []) == .ingest)
+        #expect(ServiceMap.inferredRole(Self.svc("fw", "firmware", "p"), callers: [], calls: []) == .device)
+        #expect(ServiceMap.inferredRole(target, callers: [], calls: []) == .external)
+    }
+
+    @Test func thread() {
+        let t = ServiceMap.thread("api", in: Self.catalogue)
+        #expect(t.up.map { $0.map(\.id) } == [["worker"]])
+        #expect(t.down.map { $0.map(\.id) } == [["db", "ext1", "sso", "sysapi", "wifi", "kafka"]])
+        #expect(!t.pairs.contains { $0.from == "db" })                      // db→sso runs within one column
+        #expect(t.pairs.contains { $0.from == "worker" && $0.to == "kafka" }) // left to right, skipping the centre
+        let one = ServiceMap.thread("sso", in: Self.catalogue, hops: 1)
+        #expect(one.up.count == 1 && one.up[0].count == 5 && one.down.isEmpty)
+        let two = ServiceMap.thread("sso", in: Self.catalogue, hops: 2)
+        #expect(two.up.count == 1)                 // every caller of sso is already in the first column
     }
 
     @Test func spaceView() {

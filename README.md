@@ -234,6 +234,9 @@ catalogue (~/.practices/spaces/<space>, one git repository per space):
   service <id>                  one service: endpoints, conditions, links, keys, notes, docs
   service add <id> --project <p> [--name N] [--kind k] [--description D] [--repo r]
                                 [--alias a …] [--env e …] [--key K …]
+  service role <id> [role]      its role on the map (front bff backend processing worker infra
+                                ingest relay device ops external); without one — the role
+                                and whether it is set or inferred; written, not committed
   links [service]               who calls whom (of one service: both directions)
   link add <from> <to> [--endpoint e] [--env e] [--via http|topic|db|network|build]
                                 [--what w] [--access read|write] [--why w] [--practice ref]

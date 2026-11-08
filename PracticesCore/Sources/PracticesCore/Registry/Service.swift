@@ -11,6 +11,9 @@ public struct Service: Codable, Identifiable, Hashable, Sendable {
     public var project = ""
     public var name: String
     public var kind: String                 // postgres, clickhouse, kafka, http, socket…
+    /// What it does in the data flow, a `Role` value; nil — the map infers it (`ServiceMap.role`).
+    /// Kept as text so a value this version does not know survives a save.
+    public var role: String?
     public var description: String?
     public var tags: [String]
     /// The repository the service is built from; nil for an external service.
@@ -103,7 +106,7 @@ public struct Service: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, description, tags, repo, aliases, envs, keys, endpoints, requires, guards
+        case id, name, kind, role, description, tags, repo, aliases, envs, keys, endpoints, requires, guards
     }
 
     public init(from decoder: Decoder) throws {
@@ -111,6 +114,7 @@ public struct Service: Codable, Identifiable, Hashable, Sendable {
         id = try c.decode(String.self, forKey: .id)
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? id
         kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "other"
+        role = try c.decodeIfPresent(String.self, forKey: .role)
         description = try c.decodeIfPresent(String.self, forKey: .description)
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         repo = try c.decodeIfPresent(RepoID.self, forKey: .repo)
@@ -120,6 +124,12 @@ public struct Service: Codable, Identifiable, Hashable, Sendable {
         endpoints = try c.decodeIfPresent([Endpoint].self, forKey: .endpoints) ?? []
         requires = try c.decodeIfPresent([String].self, forKey: .requires) ?? []
         guards = try c.decodeIfPresent([String].self, forKey: .guards) ?? []
+    }
+
+    /// The layers of STRUCTURE.md §2: the main chain front → bff → backend → processing/worker →
+    /// infra, and the side groups: sources (ingest, device), sinks (relay, external), ops.
+    public enum Role: String, CaseIterable, Codable, Sendable {
+        case front, bff, backend, processing, worker, infra, ingest, relay, device, ops, external
     }
 
     public var defaultEnv: String { envs.first ?? "prod" }
