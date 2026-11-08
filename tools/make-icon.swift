@@ -4,7 +4,7 @@
 //     swift tools/make-icon.swift PracticesApp/Sources/Practices/Assets.xcassets/AppIcon.appiconset
 //
 // The mark: the family's dark rounded plate (Tandem, Selects) and on it three book spines in
-// the family's amber — the catalogue, the same figure as the menu-bar glyph `books.vertical`:
+// the family's amber — the catalogue (the menu-bar glyph MenuBarIcon is the same figure):
 // two upright, the third leaning on them. Everything is drawn here; no third-party artwork.
 
 import Foundation
@@ -91,6 +91,47 @@ func write(_ image: CGImage, to url: URL) {
     CGImageDestinationAddImage(dest, image, nil)
     CGImageDestinationFinalize(dest)
 }
+
+/// Menu-bar template glyph: the same three spines and shelf, solid black on transparent
+/// (macOS tints a template image). Drawn on a whole-pixel grid so strokes stay crisp.
+func drawGlyph(scale k: Int) -> CGImage {
+    let size = 18 * k
+    let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.setShouldAntialias(true)
+    ctx.setFillColor(rgb(0, 0, 0))
+    let u = Double(k)                       // one point in pixels
+    let shelfY = 3.0 * u, bookW = 3.0 * u, gap = 1.5 * u
+    let x0 = 1.0 * u
+    // Shelf line, 1 pt thick, full width minus 1 pt padding.
+    ctx.fill(CGRect(x: 1 * u, y: 2 * u, width: 16 * u, height: 1 * u))
+    func spine(_ x: Double, _ h: Double, tilt: Double) {
+        ctx.saveGState()
+        ctx.translateBy(x: x + bookW / 2, y: shelfY); ctx.rotate(by: tilt); ctx.translateBy(x: -(x + bookW / 2), y: -shelfY)
+        ctx.addPath(CGPath(roundedRect: CGRect(x: x, y: shelfY, width: bookW, height: h), cornerWidth: 0.5 * u, cornerHeight: 0.5 * u, transform: nil))
+        ctx.fillPath()
+        ctx.restoreGState()
+    }
+    spine(x0, 13 * u, tilt: 0)
+    spine(x0 + bookW + gap, 11.5 * u, tilt: 0)
+    spine(x0 + (bookW + gap) * 2 + 0.5 * u, 12.5 * u, tilt: -0.26)
+    return ctx.makeImage()!
+}
+
+let glyphDir = outDir.deletingLastPathComponent().appendingPathComponent("MenuBarIcon.imageset", isDirectory: true)
+try? FileManager.default.createDirectory(at: glyphDir, withIntermediateDirectories: true)
+write(drawGlyph(scale: 1), to: glyphDir.appendingPathComponent("menubar.png"))
+write(drawGlyph(scale: 2), to: glyphDir.appendingPathComponent("menubar@2x.png"))
+let glyphContents: [String: Any] = [
+    "images": [
+        ["idiom": "universal", "scale": "1x", "filename": "menubar.png"],
+        ["idiom": "universal", "scale": "2x", "filename": "menubar@2x.png"],
+    ],
+    "info": ["author": "xcode", "version": 1],
+    "properties": ["template-rendering-intent": "template", "preserves-vector-representation": false],
+]
+try! JSONSerialization.data(withJSONObject: glyphContents, options: [.prettyPrinted, .sortedKeys])
+    .write(to: glyphDir.appendingPathComponent("Contents.json"))
 
 let sizes: [(String, Int)] = [
     ("icon_16x16", 16), ("icon_16x16@2x", 32), ("icon_32x32", 32), ("icon_32x32@2x", 64),
