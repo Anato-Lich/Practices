@@ -188,6 +188,9 @@ func spaceLine(_ s: SpaceState) -> String {
         + (s.uncommitted.map { "\($0) uncommitted" } ?? "")
 }
 
+// `<command> --help` prints the usage instead of running the command; after `--` it belongs to the wrapped command.
+if args.prefix(while: { $0 != "--" }).contains(where: { $0 == "--help" || $0 == "-h" }) { print(usage); exit(0) }
+
 switch positional.first {
 case "spaces":
     let states: [SpaceState]
