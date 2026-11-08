@@ -45,7 +45,7 @@ Practices — одно место, где описаны все проекты �
    **System Settings ▸ Privacy & Security**, найдите *«Practices» заблокировано…* и нажмите
    **Open Anyway** (один раз на установку). Или в терминале:
    ```sh
-   xattr -d com.apple.quarantine /Applications/Practices.app
+   xattr -dr com.apple.quarantine /Applications/Practices.app
    ```
 CLI `practicesctl` (он же MCP-сервер) и `uv`, которым запускаются практики на Python, лежат внутри
 приложения, в `Contents/Helpers`; отдельно их ставить не нужно. Сам Python uv скачивает при первом
