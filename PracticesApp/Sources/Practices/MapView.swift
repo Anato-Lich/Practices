@@ -336,6 +336,7 @@ private struct SpaceFramesView: View {
         ZoomPan(state: state, key: "frames:\(space)", size: layout.size) {
             ZStack(alignment: .topLeading) {
                 ForEach(layout.frames.indices, id: \.self) { i in frame(layout.frames[i]) }
+                ForEach(layout.frames.flatMap(\.subs), id: \.project) { sub($0) }
                 FramesLines(state: state, layout: layout)
                 ForEach(layout.frames.indices, id: \.self) { i in
                     ForEach(layout.frames[i].services, id: \.id) { s in
@@ -348,6 +349,20 @@ private struct SpaceFramesView: View {
         } overlay: {
             MapLegend(note: "< 80 % — пучки между проектами с числом связей, ≥ 80 % — каждая связь сервис → сервис; клик — закрепить")
         }
+    }
+
+    /// A sub-project inside its parent's frame: radius 9, a lighter fill, the title in its colour.
+    private func sub(_ f: SpaceFrames.Sub) -> some View {
+        RoundedRectangle(cornerRadius: 9).fill(Color(hex: 0x28282C))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color(hex: 0x3A3A3E)))
+            .overlay(alignment: .topLeading) {
+                Button { state.open(project: f.project) } label: {
+                    Text(verbatim: f.project).font(Theme.ui(13, .semibold)).foregroundStyle(state.color(ofProject: f.project)).lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, SpaceFrames.pad).padding(.top, 7)
+            }
+            .placed(f.rect)
     }
 
     /// Frame: radius 12, a colour bar under the title (it opens the project), counts on the right.
@@ -365,7 +380,7 @@ private struct SpaceFramesView: View {
                 .padding(.leading, SpaceFrames.pad).padding(.top, 10)
             }
             .overlay(alignment: .topTrailing) {
-                Text(verbatim: f.cols > 1 || f.title.count < 12 ? "\(f.services.count) серв · \(f.inner) внутр." : "\(f.services.count)").font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
+                Text(verbatim: f.rect.width > 300 || f.title.count < 12 ? "\(f.services.count) серв · \(f.inner) внутр." : "\(f.services.count)").font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
                     .monospacedDigit().padding(.trailing, SpaceFrames.pad).padding(.top, 15)
             }
             .placed(f.rect)

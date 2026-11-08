@@ -224,13 +224,17 @@ struct ProjectGrid {
 
 // MARK: - Space: variant B, frames
 
-/// Projects as frames with their services as rows (1 column, 2 above 7), on a grid placed so
-/// heavy pairs sit close; lines run in 120-pt corridors between frames: zoomed out one bundle per
-/// pair of projects with its count, zoomed in every service → service link.
+/// Projects as frames with their services as rows (1 column, 2 above 7), sub-projects as frames
+/// inside their parent's; frames on a grid placed so heavy pairs sit close; lines run in 120-pt
+/// corridors between frames: zoomed out one bundle per pair of top projects with its count,
+/// zoomed in every service → service link.
 struct SpaceFrames {
     static let chipW: CGFloat = 228, chipH: CGFloat = 22, rowGap: CGFloat = 6, colGap: CGFloat = 14, pad: CGFloat = 14, head: CGFloat = 46, gap: CGFloat = 120
+    static let subHead: CGFloat = 30
 
-    struct Frame { var project: String; var title: String; var rect: CGRect; var services: [Service]; var inner: Int; var c = 0; var r = 0; var cols = 1 }
+    /// A sub-project's frame inside a top frame.
+    struct Sub { var project: String; var rect: CGRect }
+    struct Frame { var project: String; var title: String; var rect: CGRect; var services: [Service]; var inner: Int; var subs: [Sub] = []; var c = 0; var r = 0; var cols = 1 }
     struct Line { var pair: ServiceMap.Pair; var points: [CGPoint] }
     struct Bundle { var a: String; var b: String; var count: Int; var ends: Set<String>; var points: [CGPoint]; var badge: CGPoint }
 
@@ -247,7 +251,13 @@ struct SpaceFrames {
         // Services of other spaces this one links with join as frames of their own projects.
         let shown = mine.union(pairs.flatMap { [$0.from, $0.to] })
         let byProject = Dictionary(grouping: shown.compactMap { byID[$0] }, by: \.project)
-        let projectOf = { (id: String) in byID[id]!.project }
+        let parentOf = Dictionary(c.projects.map { ($0.id, $0.parent) }, uniquingKeysWith: { a, _ in a })
+        let children = Dictionary(grouping: c.projects.filter { $0.parent != nil }, by: { $0.parent! }).mapValues { $0.map(\.id).sorted() }
+        func root(_ p: String) -> String { var p = p, seen: Set<String> = [p]; while let q = parentOf[p] ?? nil, seen.insert(q).inserted { p = q }; return p }
+        func hasShown(_ p: String) -> Bool { byProject[p] != nil || (children[p] ?? []).contains(where: hasShown) }
+        // Frames are the top projects; a link inside one (parent ↔ child) is inner.
+        let projectOf = { (id: String) in root(byID[id]!.project) }
+        let services = { (p: String) in (byProject[p] ?? []).sorted { (kindOrder($0), $0.id) < (kindOrder($1), $1.id) } }
         var weight: [String: [String: Int]] = [:]
         for p in pairs where projectOf(p.from) != projectOf(p.to) {
             weight[projectOf(p.from), default: [:]][projectOf(p.to), default: 0] += p.links.count
@@ -255,17 +265,45 @@ struct SpaceFrames {
         }
         let pw = { (a: String, b: String) in weight[a]?[b] ?? 0 }
         let total = { (a: String) in weight[a]?.values.reduce(0, +) ?? 0 }
-        let foreign = { (p: String) in byProject[p]?.first.map { $0.space != space } ?? false }
-        let ids = byProject.keys.sorted { (foreign($0) ? 1 : 0, -byProject[$0]!.count, $0) < (foreign($1) ? 1 : 0, -byProject[$1]!.count, $1) }
+        let roots = Set(byProject.keys.map(root))
+        func count(_ p: String) -> Int { (byProject[p]?.count ?? 0) + (children[p] ?? []).reduce(0) { $0 + count($1) } }
+        func spaceOf(_ p: String) -> String? { byProject[p]?.first?.space ?? (children[p] ?? []).lazy.compactMap(spaceOf).first }
+        let foreign = { (p: String) in spaceOf(p).map { $0 != space } ?? false }
+        let ids = roots.sorted { (foreign($0) ? 1 : 0, -count($0), $0) < (foreign($1) ? 1 : 0, -count($1), $1) }
 
-        frames = ids.map { p in
-            let ss = byProject[p]!.sorted { (kindOrder($0), $0.id) < (kindOrder($1), $1.id) }
-            let cols = ss.count > 7 ? 2 : 1, rows = (ss.count + cols - 1) / cols
-            let w = Self.pad * 2 + CGFloat(cols) * Self.chipW + CGFloat(cols - 1) * Self.colGap
-            let h = Self.head + CGFloat(rows) * (Self.chipH + Self.rowGap) - Self.rowGap + Self.pad
+        // Width a project needs at a nesting depth: its rows or its widest sub-project, plus padding.
+        func need(_ p: String, _ d: Int) -> CGFloat {
+            let cols: CGFloat = (byProject[p]?.count ?? 0) > 7 ? 2 : 1
+            return (children[p] ?? []).filter(hasShown).reduce(Self.pad * 2 * CGFloat(d + 1) + cols * Self.chipW + (cols - 1) * Self.colGap) { max($0, need($1, d + 1)) }
+        }
+        var rel: [String: CGRect] = [:], chipCol: [String: Int] = [:], subs: [Sub] = []
+        // Rows of `p` from `y` at `x`, then its sub-projects framed below; returns the bottom.
+        func lay(_ p: String, x: CGFloat, y: CGFloat, w: CGFloat) -> CGFloat {
+            let ss = services(p), cols = ss.count > 7 ? 2 : 1, rows = (ss.count + cols - 1) / cols
+            for (k, s) in ss.enumerated() {
+                let (ic, ir) = (k / rows, k % rows)
+                rel[s.id] = CGRect(x: x + Self.pad + CGFloat(ic) * (Self.chipW + Self.colGap), y: y + CGFloat(ir) * (Self.chipH + Self.rowGap), width: Self.chipW, height: Self.chipH)
+                chipCol[s.id] = cols == 2 ? ic : -1
+            }
+            var bottom = rows > 0 ? y + CGFloat(rows) * (Self.chipH + Self.rowGap) - Self.rowGap : y - Self.rowGap * 2
+            for ch in (children[p] ?? []) where hasShown(ch) {
+                let top = bottom + Self.rowGap * 2, x0 = x + Self.pad
+                let end = lay(ch, x: x0, y: top + Self.subHead, w: w - Self.pad * 2)
+                subs.append(Sub(project: ch, rect: CGRect(x: x0, y: top, width: w - Self.pad * 2, height: end + Self.pad * 0.75 - top)))
+                bottom = end + Self.pad * 0.75
+            }
+            return bottom
+        }
+        var relOf: [Int: ([String: CGRect], [Sub])] = [:]
+        frames = ids.enumerated().map { i, p in
+            rel = [:]; subs = []
+            let w = need(p, 0), h = lay(p, x: 0, y: Self.head, w: w) + Self.pad
+            relOf[i] = (rel, subs)
+            let ss = rel.keys.compactMap { byID[$0] }.sorted { ($0.project, kindOrder($0), $0.id) < ($1.project, kindOrder($1), $1.id) }
             let inner = pairs.filter { projectOf($0.from) == p && projectOf($0.to) == p }.reduce(0) { $0 + $1.links.count }
-            let title = foreign(p) ? "\(ss[0].space) / \(p)" : p
-            return Frame(project: p, title: title, rect: CGRect(x: 0, y: 0, width: w, height: h), services: ss, inner: inner, cols: cols)
+            let title = foreign(p) ? "\(spaceOf(p) ?? "") / \(p)" : p
+            return Frame(project: p, title: title, rect: CGRect(x: 0, y: 0, width: w, height: h), services: ss, inner: inner,
+                         cols: (byProject[p]?.count ?? 0) > 7 ? 2 : 1)
         }
 
         // Heaviest first; each next into the free slot nearest, by weight, to those placed.
@@ -290,23 +328,20 @@ struct SpaceFrames {
         for w in colW { colX.append(colX.last! + w + Self.gap) }
         for h in rowH { rowY.append(rowY.last! + h + Self.gap) }
         let vx = { (v: Int) in colX[v] - Self.gap / 2 }, hy = { (h: Int) in rowY[h] - Self.gap / 2 }
-        var frameOf: [String: Int] = [:], chipCol: [String: Int] = [:]
+        var frameOf: [String: Int] = [:]
         for i in frames.indices {
-            frames[i].rect.origin = CGPoint(x: colX[frames[i].c], y: rowY[frames[i].r])
-            let f = frames[i], rows = (f.services.count + f.cols - 1) / f.cols
-            for (k, s) in f.services.enumerated() {
-                let (ic, ir) = (k / rows, k % rows)
-                chips[s.id] = CGRect(x: f.rect.minX + Self.pad + CGFloat(ic) * (Self.chipW + Self.colGap),
-                                     y: f.rect.minY + Self.head + CGFloat(ir) * (Self.chipH + Self.rowGap), width: Self.chipW, height: Self.chipH)
-                frameOf[s.id] = i; chipCol[s.id] = ic
-            }
+            let o = CGPoint(x: colX[frames[i].c], y: rowY[frames[i].r])
+            frames[i].rect.origin = o
+            let (r, ss) = relOf[i]!
+            for (id, rect) in r { chips[id] = rect.offsetBy(dx: o.x, dy: o.y); frameOf[id] = i }
+            frames[i].subs = ss.map { Sub(project: $0.project, rect: $0.rect.offsetBy(dx: o.x, dy: o.y)) }
         }
 
         // An end: its x and y, the vertical corridor it enters (v) and its row of frames.
         struct End { var x: CGFloat; var y: CGFloat; var v: Int; var r: Int }
         func end(_ id: String, toward other: String) -> End {
             let f = frames[frameOf[id]!], chip = chips[id]!
-            let right = f.cols == 2 ? chipCol[id] == 1 : frames[frameOf[other]!].c >= f.c
+            let right = chipCol[id]! >= 0 ? chipCol[id] == 1 : frames[frameOf[other]!].c >= f.c
             return End(x: right ? chip.maxX : chip.minX, y: chip.midY, v: f.c + (right ? 1 : 0), r: f.r)
         }
         var sideCount: [String: Int] = [:]
