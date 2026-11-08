@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// The agent tools Practices registers itself in.
 public enum AgentTool: String, CaseIterable, Codable, Sendable {
@@ -211,13 +212,37 @@ public struct SetupStatus: Codable, Sendable {
     public let spaces: [SpaceState]
     public let command: String
     public let commandInstalled: Bool
+    /// The installed copy against the app's `Contents/Helpers/practicesctl`.
+    public let commandState: CommandState
     public let tools: [Tool]
     public let projectBlocks: [ProjectBlock]
     /// Inferred from the blocks there are: global ones → `global`, project ones → `projects`, both → `both`, none → nil.
     public let scope: InstructionScope?
 }
 
+/// The installed `practicesctl` against the app's copy: an app update brings a new one.
+public enum CommandState: String, Codable, Sendable {
+    case missing, current, outdated
+}
+
 public enum Setup {
+
+    /// The CLI the app carries: this app's own when running in one, else the installed app's.
+    public static var appHelper: URL {
+        let main = Bundle.main.bundleURL
+        return main.pathExtension == "app" ? main.appendingPathComponent("Contents/Helpers/practicesctl")
+            : URL(fileURLWithPath: "/Applications/Practices.app/Contents/Helpers/practicesctl")
+    }
+
+    /// SHA-256 of both files (about 12 ms for the two, 2–5 MB each). Without a helper to compare
+    /// with (CLI from source, no app), an installed copy counts as current.
+    public static func commandState(helper: URL = appHelper, home: URL = PracticesHome.url) -> CommandState {
+        let installed = home.appendingPathComponent("bin/practicesctl")
+        guard FileManager.default.isExecutableFile(atPath: installed.path) else { return .missing }
+        func hash(_ url: URL) -> SHA256.Digest? { (try? Data(contentsOf: url, options: .mappedIfSafe)).map { SHA256.hash(data: $0) } }
+        guard let new = hash(helper) else { return .current }
+        return hash(installed) == new ? .current : .outdated
+    }
 
     public static func status(registry: Registry = Registry(), home: AgentHome = AgentHome()) async throws -> SetupStatus {
         let fm = FileManager.default
@@ -237,6 +262,7 @@ public enum Setup {
         }
         return SetupStatus(roots: roots, defaultRoots: registry.local.roots.isEmpty, spaces: try await registry.spaceStates(),
                            command: home.command, commandInstalled: fm.isExecutableFile(atPath: home.command),
+                           commandState: commandState(home: home.practices),
                            tools: tools, projectBlocks: blocks,
                            scope: scope(global: tools.contains { ($0.instructions ?? "absent") != "absent" }, projects: !blocks.isEmpty))
     }

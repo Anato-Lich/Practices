@@ -108,7 +108,7 @@ import Foundation
 
         let status = try await Setup.status(registry: home.registry, home: agents)
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(status)) as! [String: Any]
-        #expect(Set(json.keys) == ["roots", "defaultRoots", "spaces", "command", "commandInstalled", "tools", "projectBlocks"])     // scope nil: no block anywhere
+        #expect(Set(json.keys) == ["roots", "defaultRoots", "spaces", "command", "commandInstalled", "commandState", "tools", "projectBlocks"])     // scope nil: no block anywhere
         #expect(json["defaultRoots"] as? Bool == false)
         let root = (json["roots"] as! [[String: Any]])[0]
         #expect(root["clones"] as? Int == 0 && root["exists"] as? Bool == true)
@@ -218,5 +218,19 @@ import Foundation
 
         try fm.removeItem(at: bundle)
         await #expect(throws: Registry.Failure.self) { try await Setup.installCommand(from: helper, home: home, links: links) }
+    }
+}
+
+@Suite struct CommandStateTests {
+    @Test func comparesInstalledCopyWithHelper() throws {
+        let home = TempHome(), fm = FileManager.default
+        let helper = home.url.appendingPathComponent("Helpers/practicesctl")
+        try home.write("#!/bin/sh\necho v2\n", "Helpers/practicesctl")
+        #expect(Setup.commandState(helper: helper, home: home.url) == .missing)
+        try home.write("#!/bin/sh\necho v1\n", "bin/practicesctl")
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: home.url.appendingPathComponent("bin/practicesctl").path)
+        #expect(Setup.commandState(helper: helper, home: home.url) == .outdated)
+        try home.write("#!/bin/sh\necho v2\n", "bin/practicesctl")
+        #expect(Setup.commandState(helper: helper, home: home.url) == .current)
     }
 }

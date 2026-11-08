@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Observation
 import PracticesCore
 
@@ -83,9 +84,26 @@ final class SetupModel {
     /// Copies the CLI the app carries in `Contents/Helpers` into `~/.practices/bin`.
     func installCommand() async {
         // Not url(forAuxiliaryExecutable:): that looks in Contents/MacOS; a missing file fails in core.
-        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/practicesctl")
+        let helper = Setup.appHelper
         await run("установить practicesctl", "command") { try await Setup.installCommand(from: helper) }
         await refresh()
+    }
+
+    /// The app carries a CLI to (re)install from: «Переустановить» shows only then.
+    var hasHelper: Bool { FileManager.default.isExecutableFile(atPath: Setup.appHelper.path) }
+
+    /// At launch: an installed CLI older than the app's copy is replaced without asking; a missing
+    /// one is left to «Начало» / «Настройка».
+    nonisolated static func refreshCommandIfOutdated() async {
+        let log = Logger(subsystem: "dev.practices.app", category: "setup")
+        let helper = Setup.appHelper
+        guard Setup.commandState(helper: helper) == .outdated else { return }
+        do {
+            try await Setup.installCommand(from: helper)
+            log.notice("practicesctl was outdated: reinstalled from \(helper.path, privacy: .public)")
+        } catch {
+            log.error("practicesctl is outdated, reinstall failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func writeProject(_ id: String) async {

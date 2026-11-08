@@ -243,7 +243,7 @@ struct SettingsView: View {
         let setup = registry.setup
         let runtime = SetupModel.runtime
         let home = registry.registry.home
-        let ready = runtime.version != nil && status?.commandInstalled == true
+        let ready = runtime.version != nil && status?.commandState == .current
         return card("Окружение") {
             Text(verbatim: ready ? "всё на месте" : "не всё на месте").font(Theme.mono(10.5)).foregroundStyle(ready ? Theme.Color.ok : Theme.Color.warn)
         } content: {
@@ -260,16 +260,21 @@ struct SettingsView: View {
                 }
                 GridRow {
                     label("cli")
-                    Text(verbatim: tilde(status?.command ?? "") + (status?.commandInstalled == true ? " · есть ✓" : " · не установлен"))
-                        .foregroundStyle(status?.commandInstalled == false ? Theme.Color.warn : Theme.Color.text)
-                    if status?.commandInstalled == false {
-                        Button { Task { await setup.installCommand() } } label: { Text(verbatim: "Установить practicesctl") }
-                            .disabled(setup.busy.contains("command"))
-                    } else {
-                        Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(status?.command ?? "", forType: .string)
-                        } label: { Text(verbatim: "Скопировать путь") }
+                    let state = status?.commandState
+                    Text(verbatim: tilde(status?.command ?? "") + (state == .current ? " · есть ✓ · актуален"
+                         : state == .outdated ? " · устарел — обновляется при запуске" : state == nil ? "" : " · не установлен"))
+                        .foregroundStyle(state == .current || state == nil ? Theme.Color.text : Theme.Color.warn)
+                    HStack(spacing: 6) {
+                        if setup.hasHelper {
+                            Button { Task { await setup.installCommand() } } label: { Text(verbatim: state == .missing ? "Установить practicesctl" : "Переустановить") }
+                                .disabled(setup.busy.contains("command"))
+                        }
+                        if state != .missing {
+                            Button {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(status?.command ?? "", forType: .string)
+                            } label: { Text(verbatim: "Скопировать путь") }
+                        }
                     }
                 }
                 GridRow {
