@@ -307,6 +307,9 @@ guards:
   и в «Настройке» → «Окружение». `tools/release.sh` собирает только DMG; `setup status` подсказывает,
   откуда поставить CLI.
 - [x] README: установка из DMG, сборка, первые шаги, скриншоты (docs/images).
+- [x] Решение 40: uv в `Contents/Helpers` (`tools/fetch-uv.sh`), `install.sh` без brew-установки uv
+  и копирует CLI, ресурсы и uv из собранного приложения; `setup install`; корня по умолчанию нет;
+  `<команда> --help` — только её строки.
 - [x] Корни клонов: `roots` / `roots add` / `roots remove` (`local.yaml → roots`; `/` и домашняя
   папка отвергаются); экран «Настройка» и первый запуск «Начало» (`WelcomeView`, `SettingsView`,
   `SetupModel`), боковая панель в пустом режиме, шестерёнка в подвале, действие в палитре.

@@ -7,6 +7,8 @@ Practices — одно место, где описаны все проекты �
 (окно и значок в строке меню), CLI `practicesctl` и MCP-сервер. Первый читатель — агент, который
 работает в проекте: он спрашивает каталог, прежде чем писать новый клиент к чужому сервису.
 
+Только macOS (Apple Silicon). Версия под Windows когда-нибудь возможна, но сомнительна.
+
 **Каталог.** *Пространство* (организация) содержит *проекты*, они вкладываются друг в друга; у
 проекта — *репозитории* (по адресу remote) и *сервисы*: сервис compose из репозитория или внешняя
 система (база, API, Kafka). У сервиса — адреса, имена ключей, именованные *условия* («нужна
@@ -45,16 +47,15 @@ Practices — одно место, где описаны все проекты �
    ```sh
    xattr -d com.apple.quarantine /Applications/Practices.app
    ```
-3. Практики на Python запускаются через `uv`: `brew install uv`.
-
-CLI `practicesctl` (он же MCP-сервер) лежит внутри приложения, в `Contents/Helpers`; отдельно его
-скачивать не нужно. При первом запуске открывается экран «Начало» — три шага (то же
+CLI `practicesctl` (он же MCP-сервер) и `uv`, которым запускаются практики на Python, лежат внутри
+приложения, в `Contents/Helpers`; отдельно их ставить не нужно. Сам Python uv скачивает при первом
+запуске практики — для этого один раз нужна сеть. При первом запуске открывается экран «Начало» — три шага (то же
 можно сделать из терминала командами `practicesctl setup …` или попросить агента в диалоге):
 
 1. **Где лежат клоны** — папки с проектами (не весь диск); каталог ищет в них git-клоны и
-   записывает их в `~/.practices/local.yaml → roots`. Пока папок нет, берётся `~/Projects`.
+   записывает их в `~/.practices/local.yaml → roots`. Пока папок нет, каталог клонов не ищет.
 2. **Своё пространство** — каталог личный: проекты, сервисы и практики, которые ведёте вы.
-3. **Агенты** — сначала **«Установить practicesctl»**: приложение копирует CLI из себя в
+3. **Агенты** — сначала **«Установить practicesctl»**: приложение копирует CLI и uv из себя в
    `~/.practices/bin` (по этому пути агенты запускают MCP-сервер) и ставит ссылку
    `~/.local/bin/practicesctl`. Затем **«Настроить агентов»**: MCP-сервер в найденных инструментах
    (Claude Code, Codex, Cursor) и блок инструкций — глобально или в каждый проект, решаете вы.
@@ -63,24 +64,25 @@ CLI `practicesctl` (он же MCP-сервер) лежит внутри прил
 
 *Первый запуск: папки с клонами, своё пространство, агенты — по шагу на каждое.*
 
-Копия в `~/.practices/bin` при обновлении приложения сама не обновляется, а кнопку «Настройка» →
-«Окружение» показывает, только пока CLI не установлен: после новой версии удалите
-`~/.practices/bin/practicesctl` и нажмите «Установить practicesctl» снова.
+Копию в `~/.practices/bin` приложение обновляет само: при запуске сравнивает её со своей и, если
+она устарела, ставит заново. Вручную — «Настройка» → «Окружение» → «Переустановить».
 
 ## Сборка из исходников
 
-Нужны Xcode (`sudo xcode-select -s /Applications/Xcode.app`), `xcodegen` и `uv` — `install.sh`
-ставит недостающие через Homebrew.
+Нужны Xcode (`sudo xcode-select -s /Applications/Xcode.app`) и `xcodegen` — `install.sh` ставит
+его через Homebrew, если нет. Homebrew нужен только для сборки: uv приходит с приложением (сборка
+скачивает закреплённую версию в `build/uv`, `tools/fetch-uv.sh`).
 
 ```sh
 git clone https://github.com/Anato-Lich/Practices && cd Practices
 ./install.sh
 ```
 
-`install.sh` **заменяет установленное** и сначала печатает, что именно: собирает `practicesctl` в
-Release и кладёт его в `$PRACTICES_HOME/bin` (по умолчанию `~/.practices/bin`, поверх прежнего,
-ссылка — в `~/.local/bin`), собирает приложение, закрывает запущенную копию, удаляет
-`/Applications/Practices.app`, ставит новую и открывает её. Данные в `~/.practices` (пространства,
+`install.sh` **заменяет установленное** и сначала печатает, что именно: собирает приложение в
+Release, кладёт `practicesctl`, его ресурсы и `uv` из `Contents/Helpers` собранного приложения в
+`$PRACTICES_HOME/bin` (по умолчанию `~/.practices/bin`, поверх прежнего, ссылка — в
+`~/.local/bin`), закрывает запущенную копию, удаляет `/Applications/Practices.app`, ставит новую и
+открывает её. Данные в `~/.practices` (пространства,
 `local.yaml`, секреты) не трогает.
 
 `tools/release.sh` собирает Release и упаковывает его в `dist/Practices-<версия>.dmg` — это
@@ -96,10 +98,17 @@ Release и кладёт его в `$PRACTICES_HOME/bin` (по умолчанию
 | `tools/build-dev.sh` | Debug-сборка одними Command Line Tools, когда `xcodebuild` недоступен |
 | `cd PracticesCore && swift run practicesctl spaces` | CLI из исходников |
 
+Один CLI без приложения: `cd PracticesCore && swift build -c release && .build/release/practicesctl
+setup install` (или кнопка «Установить practicesctl» в приложении). `setup install` копирует
+запущенный бинарник с его ресурсами в `~/.practices/bin`, а `uv` — лежащий рядом или из
+установленного приложения; без приложения uv ищется в обычных путях (`/opt/homebrew/bin` и др.).
+
 Только для разработки. Debug-сборка понимает флаги рендера: окно рисуется вне экрана в PNG, и
 приложение выходит; Release их отвергает («render flags are available in Debug builds only»).
 
 ```sh
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+(cd PracticesApp && xcodegen generate)
 xcodebuild -project PracticesApp/Practices.xcodeproj -scheme Practices -configuration Debug \
   -derivedDataPath build build
 build/Build/Products/Debug/Practices.app/Contents/MacOS/Practices --render-window out.png \
@@ -128,15 +137,28 @@ swift test -Xswiftc -F -Xswiftc $F -Xlinker -F -Xlinker $F -Xlinker -rpath -Xlin
 
 ## Первые шаги
 
+Пример: в `~/Projects/shop` лежит клон с `origin` на GitHub, в нём
+
+```
+docker-compose.yml   # services: api (build: .), db (image: postgres:16)
+.env.example         # DATABASE_URL=postgres://db:5432/shop, BILLING_URL=https://billing.example
+```
+
 ```sh
 practicesctl setup status                          # что уже настроено
 practicesctl roots add ~/Projects/…                # где лежат клоны (= setup roots)
 practicesctl space add <id> [--name N] [--hosting host/owner]   # своё пространство
+            # --hosting необязательно; `repos` тогда спрашивает у gh/glab все репозитории владельца
 practicesctl project add <space>/<id> [--parent p] # проект
 practicesctl repos                                 # репозитории без проекта
 practicesctl assign <repo> <project> [--role r]    # репозиторий — в проект
 practicesctl scan <project> --write                # сервисы и связи из compose и example env
 ```
+
+`scan` читает в клонах compose-файлы (сервисы: `api` станет `shop-api`, `db` — `shop-db`) и
+связи из адресов и DSN — в `environment:` сервисов compose и в example env-файлах
+(`.env.example`, `.env.sample`…); настоящий `.env` не открывается. `depends_on` связью не считается:
+это порядок запуска, а не вызов. В примере: `shop-api → shop-db` и неизвестный `billing.example`.
 
 `scan --write` и агенты через MCP не коммитят: правки ждут приёмки — `practicesctl pending`,
 `practicesctl accept [space [path…]]`, или экран приёмки в окне (принять всё, отклонить файл).
@@ -166,10 +188,17 @@ practicesctl setup agents --projects   # CLAUDE.md и AGENTS.md каждого �
 переформатируется (отступы, ключи по алфавиту).
 
 **Python.** Практики работают в своём окружении `~/.practices/runtime`: его файлы приходят с
-приложением и CLI, а `uv sync` собирает там `.venv` при первом запуске практики (`practicesctl
-try`, MCP `run_practice`, кнопка запуска) или по «Настройка» → «Окружение» → «Обновить»; при смене
-`pyproject.toml` в новой версии синхронизируется заново. До этого «Настройка» пишет «python: не
-установлено».
+приложением и CLI, а `uv sync` (uv из приложения) скачивает Python и собирает там `.venv` при первом
+запуске практики (`practicesctl try`, MCP `run_practice`, кнопка запуска) или по «Настройка» →
+«Окружение» → «Обновить»; при смене `pyproject.toml` в новой версии синхронизируется заново. До
+этого «Настройка» пишет «python: будет установлен при первом запуске практики»; оранжевое «не
+установлено» — только если uv не найден нигде.
+
+**Doctor.** `practicesctl doctor` (и экран «Doctor» в окне) проверяет файлы под корнями клонов
+против каталога: открытые значения сохранённых секретов в тексте (сообщает имена и пути, не
+значения); `.env` с ключами каталога, но другими значениями; `.env`, целиком повторяющие каталог (их
+заменяет `run`); одно секретное значение в нескольких `.env`, которого каталог не знает; висящие
+связи — на сервисы, которых в каталоге нет.
 
 Новое пространство получает `conventions.md` и `templates/` по умолчанию — правила ведения
 репозиториев, которые агенты читают через MCP `get_conventions` (`practicesctl conventions <space>
@@ -258,6 +287,8 @@ this machine (~/.practices/local.yaml, agents' settings; never in git):
   setup status [--json]         roots, spaces, agents: MCP registered,
                                 instruction block absent / current / outdated, project clones with it
   setup roots <path>…           = roots add, for the first run
+  setup install                 copy this practicesctl (with its bundle, and uv from beside it or
+                                the app) into ~/.practices/bin, linked from ~/.local/bin
   setup agents --global | --projects [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
                                 register the MCP server for the tools found (~/.claude, ~/.codex,
                                 ~/.cursor) and write the instruction block: --global into
