@@ -97,7 +97,7 @@
 - [ ] Проекты Кипера на `local-infra` (rma: убрать свой Traefik), README/спеки ble-panels и imu-sphere — новые домены.
 
 Сверх плана:
-- Карта по вариантам A/B/E и поле `role:` — новый пласт `work/2026-11-09-map/`.
+- Карта по вариантам A/B/E и поле `role:` — новый пласт `work/2026-11-08-map/`.
 - Portainer CE для Сферы; `local-infra` для Кипера (см. выше).
 - Смена пароля `client` у Kafka.
 - `ble-prod` в ssh-конфиге.
