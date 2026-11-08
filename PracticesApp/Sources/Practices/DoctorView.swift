@@ -48,7 +48,7 @@ struct DoctorView: View {
         registry.registry.searchRoots.map { ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: ", ")
     }
 
-    private static let kinds: [DoctorFinding.Kind] = [.leak, .drift, .shared, .duplicate]
+    private static let kinds: [DoctorFinding.Kind] = [.leak, .drift, .dangling, .shared, .duplicate]
 
     private func report(_ findings: [DoctorFinding]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -137,6 +137,7 @@ struct DoctorView: View {
         case .duplicate:
             let env = registry.service(f.related[0]).map { "@" + $0.defaultEnv } ?? ""
             return "practicesctl run \(f.related[0])\(env) -- …"
+        case .dangling: return "\(f.related[0]) → \(f.keys.joined()): цели нет"
         }
     }
 
@@ -146,6 +147,7 @@ struct DoctorView: View {
         case .drift: "Расходится с реестром"
         case .shared: "Один секрет в нескольких проектах"
         case .duplicate: "Копии реестра"
+        case .dangling: "Связи без цели"
         }
     }
 
@@ -155,6 +157,7 @@ struct DoctorView: View {
         case .drift: "ключ есть в реестре с другим значением — одно из них устарело"
         case .shared: "одно значение под разными именами — сервис, которого в реестре ещё нет"
         case .duplicate: "все ключи совпадают с реестром — файл можно заменить на practicesctl run"
+        case .dangling: "связь ведёт к сервису, которого нет в каталоге — убрать её из links.yaml или вернуть карточку"
         }
     }
 
@@ -164,6 +167,7 @@ struct DoctorView: View {
         case .drift: "расходится с реестром"
         case .shared: "один секрет в нескольких проектах"
         case .duplicate: "копия реестра — можно заменить на practicesctl run"
+        case .dangling: "связь без цели"
         }
     }
 
@@ -177,6 +181,7 @@ private extension DoctorFinding.Kind {
         case .drift: Theme.Color.warn
         case .shared: ServiceClass.api.color
         case .duplicate: Theme.Color.textSecondary
+        case .dangling: Theme.Color.warn
         }
     }
     var glyph: String {
@@ -185,6 +190,7 @@ private extension DoctorFinding.Kind {
         case .drift: "≠"
         case .shared: "⧉"
         case .duplicate: "="
+        case .dangling: "→"
         }
     }
 }

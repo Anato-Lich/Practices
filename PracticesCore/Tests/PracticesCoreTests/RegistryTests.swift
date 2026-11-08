@@ -634,6 +634,19 @@ struct TempHome {
         #expect(!findings.contains { $0.path.hasSuffix(".env.example") })
     }
 
+    @Test func linkToAMissingServiceIsFlagged() async throws {
+        let home = TempHome()
+        try home.place(Service(id: "api", name: "api", kind: "http"))
+        try home.place(Service(id: "pg", name: "pg", kind: "postgres"))
+        _ = try home.registry.saveLinks([Link(to: "pg"), Link(to: "gone", via: "db"), Link(to: "gone", via: "http")], of: "api")
+        let root = home.url.appendingPathComponent("projects")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let findings = try await Doctor.run(root: root.path, registry: home.registry, store: home.store, scanText: false)
+        #expect(findings.map(\.kind) == [.dangling])
+        #expect(findings.first?.related == ["api"] && findings.first?.keys == ["gone"])
+        #expect(findings.first?.path.hasSuffix("services/api/links.yaml") == true)
+    }
+
     @Test func valuesAreMatchedToServicesAcrossEnvFiles() throws {
         let home = TempHome()
         try home.place(Service(id: "pg", name: "pg", kind: "postgres", keys: [.init(name: "XK_PG_PASSWORD")]))

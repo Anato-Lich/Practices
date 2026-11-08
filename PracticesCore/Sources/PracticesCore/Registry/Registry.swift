@@ -282,6 +282,7 @@ public struct Registry: Sendable {
     /// Puts a repository into a project. A repository is in one project (DECISIONS 2), so one
     /// that is already somewhere else is refused rather than moved.
     public func assign(_ repo: RepoID, to id: String, role: String? = nil) async throws {
+        guard dir(ofProject: id) != nil else { throw Failure("no project \(id) — `practicesctl project add <space>/\(id)` first") }
         var project = try project(id)
         if let other = try assigned()[repo], other != id {
             throw Failure("\(repo) is in project \(other) — `unassign` it there first")

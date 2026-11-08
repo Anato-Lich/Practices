@@ -10,11 +10,13 @@ public struct DoctorFinding: Hashable, Sendable, Codable {
         case drift          // an .env key the registry knows, with a different value
         case duplicate      // an .env file whose registry keys all match: replaceable by `run`
         case shared         // one secret value in several .env files, unknown to the registry
+        case dangling       // a link to a service the catalogue does not have
     }
     public let kind: Kind
     public let path: String
     public let keys: [String]
-    /// For drift and duplicate: the service the keys belong to; for shared: the other files.
+    /// For drift and duplicate: the service the keys belong to; for shared: the other files;
+    /// for dangling: the caller, with the missing target in `keys` and its `links.yaml` as `path`.
     public let related: [String]
 }
 
@@ -133,7 +135,15 @@ public enum Doctor {
             }
         }
 
-        let order: [DoctorFinding.Kind] = [.leak, .drift, .shared, .duplicate]
+        let known = Set(registry.serviceIDs())
+        for from in registry.serviceIDs() {
+            for to in Set(registry.links(of: from).map(\.to)).subtracting(known).sorted() {
+                let file = registry.dir(of: from)!.appendingPathComponent("links.yaml").path
+                findings.append(.init(kind: .dangling, path: file, keys: [to], related: [from]))
+            }
+        }
+
+        let order: [DoctorFinding.Kind] = [.leak, .drift, .dangling, .shared, .duplicate]
         return findings.sorted { (order.firstIndex(of: $0.kind)!, $0.path) < (order.firstIndex(of: $1.kind)!, $1.path) }
     }
 

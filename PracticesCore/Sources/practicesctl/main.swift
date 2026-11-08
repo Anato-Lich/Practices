@@ -597,11 +597,14 @@ case "scan":
     if !written.isEmpty { print("\nwritten, not committed: \(written.count) files — `practicesctl pending`, then `accept`") }
 
 case "pending":
-    let pending = await Registry().pending()
+    let registry = Registry()
+    let pending = await registry.pending()
     if json { printJSON(pending); break }
     if pending.isEmpty { print("nothing pending"); break }
     for p in pending { print(pad(p.state, 10) + pad(p.space, 14) + p.path) }
-    print("\n`practicesctl accept [space [path…]]` commits them; `git -C <space> diff` shows them")
+    for id in Set(pending.map(\.space)).sorted() { print("\(id): \(home(registry.dir(ofSpace: id).path))") }
+    print("\n`practicesctl pending` lists them; the app shows the diff; new files are whole."
+          + "\n`practicesctl accept [space [path…]]` commits them, `discard <space> <path…>` drops them")
 
 case "accept":
     let (rest, options) = parse(args)
@@ -620,6 +623,12 @@ case "discard":
     for p in chosen {
         do { try await registry.discard(p) } catch { fail("practices: \(error)") }
         print("discarded " + pad(p.space, 14) + p.path)
+    }
+    // A service card dropped leaves the links other services have to it.
+    for p in chosen where p.path.hasSuffix("/service.yaml") {
+        let id = (p.path as NSString).deletingLastPathComponent.components(separatedBy: "/").last!
+        guard registry.dir(of: id) == nil else { continue }
+        registry.links(to: id).forEach { print("dangling: \($0.from) → \(id)") }
     }
 
 case "check":
@@ -794,6 +803,8 @@ case "doctor":
                   + ([f.path] + f.related).map(home).joined(separator: "\n          "))
         case .duplicate:
             print("DUPLICATE \(home(f.path))\n          all \(f.keys.count) keys match \(f.related[0]) — replaceable by `practicesctl run`")
+        case .dangling:
+            print("DANGLING  \(f.related[0]) → \(f.keys[0]): цели нет\n          \(home(f.path))")
         }
     }
 
