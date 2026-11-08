@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 /// `Practices --render-window out.png [--space id | --project id | --service id | --practice ref |
-/// --pending | --unassigned | --map | --search text | --palette text | --doctor | --welcome | --settings] [--expand project,…] [--wait seconds]`:
+/// --pending | --unassigned | --map [--flow] [--zoom k] [--pin id] [--hops n] | --search text | --palette text | --doctor | --welcome | --settings] [--expand project,…] [--wait seconds]`:
 /// renders the main window offscreen and exits. Lets the layout be checked without clicking.
 @MainActor
 enum DevRender {
@@ -71,6 +71,11 @@ enum DevRender {
                 else if let j = args.firstIndex(of: "--project"), j + 1 < args.count { registry.map.open(project: args[j + 1]) }
                 else if let j = args.firstIndex(of: "--space"), j + 1 < args.count { registry.map.space = args[j + 1] }
                 registry.selection = .map
+                // `--flow`: «Поток» of the space; `--zoom k`: k × the fitted scale; `--pin id`: the panel open.
+                if args.contains("--flow") { registry.map.spaceMode = .flow }
+                if let j = args.firstIndex(of: "--zoom"), j + 1 < args.count { registry.map.renderZoom = Double(args[j + 1]).map { CGFloat($0) } }
+                if let j = args.firstIndex(of: "--pin"), j + 1 < args.count { registry.map.pinned = args[j + 1] }
+                if let j = args.firstIndex(of: "--hops"), j + 1 < args.count { registry.map.hops = Int(args[j + 1]) ?? 3 }
             }
             // `--welcome`: «Начало» (with an empty `PRACTICES_HOME` it shows anyway); `--settings`: «Настройка».
             if args.contains("--welcome") {
