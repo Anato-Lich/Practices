@@ -17,6 +17,9 @@ final class SetupModel {
     /// Clones of the catalogue's projects: what «В проектах» writes into.
     private(set) var projectClones = 0
     private(set) var runtimeBusy = false
+    /// «Правила работы с кодом» (on by default) and, for a hand-written section of theirs, replace or append.
+    var withRules = true
+    var ownRules: OwnSection = .skip
 
     @ObservationIgnored weak var app: RegistryModel?
 
@@ -74,9 +77,10 @@ final class SetupModel {
     // MARK: Agents
 
     func setupAgents(_ tools: [AgentTool], scope: InstructionScope = .global, mcp: Bool = true, instructions: Bool = true) async {
-        let home = AgentHome()
+        let home = AgentHome(), rules = withRules, own = ownRules
         agentWrites = await run("настроить агентов", "agents") {
-            try Setup.agents(home: home, registry: Registry(), tools: tools, mcp: mcp, instructions: instructions, scope: scope)
+            try Setup.agents(home: home, registry: Registry(), tools: tools, mcp: mcp, instructions: instructions,
+                             rules: rules, ownRules: own, scope: scope)
         }
         await refresh()
     }
@@ -107,7 +111,8 @@ final class SetupModel {
     }
 
     func writeProject(_ id: String) async {
-        await run("записать блок в \(id)", "project") { try Setup.project(id, registry: Registry()) }
+        let rules = withRules, own = ownRules
+        await run("записать блок в \(id)", "project") { try Setup.project(id, registry: Registry(), rules: rules, ownRules: own) }
         await refresh()
     }
 

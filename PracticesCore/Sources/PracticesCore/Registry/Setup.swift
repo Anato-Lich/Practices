@@ -50,55 +50,102 @@ public struct AgentHome: Sendable {
     }
 }
 
-/// The instruction block written into agents' CLAUDE.md / AGENTS.md between markers.
-public enum AgentInstructions {
-    /// Bump when the text of `Resources/AgentInstructions.md` changes: older blocks show as outdated.
-    public static let version = 8
+/// What to do with a hand-written section of the block's heading outside the markers: leave it and
+/// write nothing (`skip`), put the block in its place (`replace`), or keep it and add the block at the end (`append`).
+public enum OwnSection: String, CaseIterable, Codable, Sendable {
+    case skip, replace, append
+}
+
+/// A block written into agents' CLAUDE.md / AGENTS.md between `<!-- <marker>:begin vN -->` and
+/// `<!-- <marker>:end -->`: the Practices block, and the optional «Как работаем с кодом».
+public struct AgentInstructions: Sendable {
+    public let marker: String
+    /// Bump when the text of the resource changes: older blocks show as outdated.
+    public let version: Int
+    let resource: String
+    /// A hand-written section with this heading outside the markers is not duplicated (`state` is `own section`).
+    let heading: String?
+    /// Prefix of `SetupWrite.state`: the two blocks of one file read apart.
+    let label: String
+
+    public static let practices = AgentInstructions(marker: "practices", version: 8, resource: "AgentInstructions", heading: nil, label: "")
+    public static let rules = AgentInstructions(marker: "practices-rules", version: 1, resource: "CodingRules",
+                                                heading: "# Как работаем с кодом", label: "rules ")
     public static let projectFiles = ["CLAUDE.md", "AGENTS.md"]
 
-    public static var text: String {
-        Bundle.module.url(forResource: "AgentInstructions", withExtension: "md")
+    public var text: String {
+        Bundle.module.url(forResource: resource, withExtension: "md")
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
 
     /// `{{spaces}}` names the spaces at the time of writing: «пространства demo», «пространств X-Keeper и SphereTele».
-    public static func block(spaces: [String]) -> String {
+    public func block(spaces: [String]) -> String {
         let names = spaces.isEmpty ? "ваших пространств" : spaces.count == 1 ? "пространства " + spaces[0]
             : "пространств " + spaces.dropLast().joined(separator: ", ") + " и " + spaces.last!
-        return "<!-- practices:begin v\(version) -->\n" + text.trimmingCharacters(in: .newlines).replacingOccurrences(of: "{{spaces}}", with: names)
-            + "\n<!-- practices:end -->\n"
+        return "<!-- \(marker):begin v\(version) -->\n" + text.trimmingCharacters(in: .newlines).replacingOccurrences(of: "{{spaces}}", with: names)
+            + "\n<!-- \(marker):end -->\n"
     }
 
-    static let pattern = try! NSRegularExpression(pattern: #"<!-- practices:begin v(\d+) -->[\s\S]*?<!-- practices:end -->\n?"#)
+    var pattern: NSRegularExpression {
+        try! NSRegularExpression(pattern: "<!-- \(NSRegularExpression.escapedPattern(for: marker)):begin v(\\d+) -->[\\s\\S]*?<!-- \(NSRegularExpression.escapedPattern(for: marker)):end -->\n?")
+    }
 
-    /// `absent`, `current` or `outdated(vM)`.
-    public static func state(of file: URL) -> String {
-        guard let text = try? String(contentsOf: file, encoding: .utf8),
-              let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range(at: 1), in: text), let found = Int(text[range])
-        else { return "absent" }
+    func match(in text: String) -> NSTextCheckingResult? { pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) }
+
+    /// The hand-written section: from `heading` outside our block to the next `# ` heading or block marker.
+    func ownSection(in text: String) -> Range<String.Index>? {
+        guard let heading else { return nil }
+        let ours = match(in: text).flatMap { Range($0.range, in: text) }
+        var from = text.startIndex
+        while let start = text.range(of: "(?m)^" + NSRegularExpression.escapedPattern(for: heading) + "[ \\t]*$", options: .regularExpression, range: from..<text.endIndex) {
+            from = start.upperBound
+            if let ours, ours.contains(start.lowerBound) { continue }
+            let next = text.range(of: "(?m)^(# |<!-- practices)", options: .regularExpression, range: start.upperBound..<text.endIndex)
+            return start.lowerBound..<(next?.lowerBound ?? text.endIndex)
+        }
+        return nil
+    }
+
+    /// `absent`, `current`, `outdated(vM)`, or `own section` (a hand-written one and no block).
+    public func state(of file: URL) -> String {
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return "absent" }
+        guard let match = match(in: text), let range = Range(match.range(at: 1), in: text), let found = Int(text[range])
+        else { return ownSection(in: text) == nil ? "absent" : "own section" }
         return found == version ? "current" : "outdated(v\(found))"
     }
 
     /// Replaces the block of any version, or appends it after a blank line; creates the file if needed.
-    public static func write(to file: URL, spaces: [String] = []) throws {
+    /// A hand-written section of the same heading: see `OwnSection`; states `own section` (nothing
+    /// written), `replaced`, `appended`. Else `written` or `updated` — a block once there is updated in place.
+    @discardableResult
+    public func write(to file: URL, spaces: [String] = [], own: OwnSection = .skip) throws -> String {
         let ours = block(spaces: spaces)
         var text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
-        if let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), let range = Range(match.range, in: text) {
+        let state: String
+        if own == .replace, ownSection(in: text) != nil {
+            if let match = match(in: text), let range = Range(match.range, in: text) { text.removeSubrange(range) }
+            let own = ownSection(in: text)!
+            text.replaceSubrange(own, with: ours + (own.upperBound == text.endIndex ? "" : "\n"))
+            state = "replaced"
+        } else if let match = match(in: text), let range = Range(match.range, in: text) {
             text.replaceSubrange(range, with: ours)
+            state = "updated"
         } else {
+            let found = ownSection(in: text) != nil
+            if found && own == .skip { return "own section" }
             if !text.isEmpty { text += text.hasSuffix("\n") ? "\n" : "\n\n" }
             text += ours
+            state = found ? "appended" : "written"
         }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try text.write(to: file, atomically: true, encoding: .utf8)
+        return state
     }
 
     /// Takes the block out; a file left with nothing else is deleted. False when there was no block.
-    public static func remove(from file: URL) throws -> Bool {
+    public func remove(from file: URL) throws -> Bool {
         guard var text = try? String(contentsOf: file, encoding: .utf8),
-              let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range, in: text) else { return false }
+              let match = match(in: text), let range = Range(match.range, in: text) else { return false }
         text.removeSubrange(range)
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             try FileManager.default.removeItem(at: file)
@@ -179,11 +226,13 @@ public enum InstructionScope: String, CaseIterable, Codable, Sendable {
 
 /// A thing `setup agents` did: `target` is a tool or a project id; `state` is `registered` (MCP),
 /// `written` (the file had no block), `updated` (a block was replaced), `removed` (the other scope's
-/// block was taken out) or `not found` (tool skipped).
+/// block was taken out) or `not found` (tool skipped). The rules block's states start with `rules `:
+/// `rules replaced` / `rules appended` (beside a hand-written section), `rules own section` (not written, `note` says why).
 public struct SetupWrite: Codable, Sendable {
     public let target: String
     public let file: String
     public let state: String
+    public var note: String? = nil
 }
 
 /// What `setup status` shows: is this machine set up (DECISIONS 36).
@@ -199,12 +248,15 @@ public struct SetupStatus: Codable, Sendable {
         public let mcp: Bool
         /// nil — the tool has no instructions file of ours.
         public let instructions: String?
+        /// The «Как работаем с кодом» block: absent / current / outdated(vN) / own section.
+        public let rules: String?
     }
     public struct ProjectBlock: Codable, Sendable {
         public let project: String
         public let clone: String
         public let file: String
         public let state: String
+        public let rules: String
     }
     /// Roots from `local.yaml`.
     public let roots: [Root]
@@ -257,13 +309,15 @@ public enum Setup {
         }
         let tools = AgentTool.allCases.map { tool in
             SetupStatus.Tool(tool: tool, found: home.found(tool), mcp: MCPRegistration.isRegistered(tool, home: home),
-                             instructions: home.instructions(tool).map(AgentInstructions.state))
+                             instructions: home.instructions(tool).map(AgentInstructions.practices.state),
+                             rules: home.instructions(tool).map(AgentInstructions.rules.state))
         }
         var blocks: [SetupStatus.ProjectBlock] = []
         for (project, clone) in try projectClones(registry: registry) {
             for name in AgentInstructions.projectFiles {
-                let state = AgentInstructions.state(of: URL(fileURLWithPath: clone).appendingPathComponent(name))
-                if state != "absent" { blocks.append(.init(project: project, clone: clone, file: name, state: state)) }
+                let file = URL(fileURLWithPath: clone).appendingPathComponent(name)
+                let state = AgentInstructions.practices.state(of: file), rules = AgentInstructions.rules.state(of: file)
+                if state != "absent" || rules != "absent" { blocks.append(.init(project: project, clone: clone, file: name, state: state, rules: rules)) }
             }
         }
         return SetupStatus(roots: roots, spaces: try await registry.spaceStates(),
@@ -281,8 +335,11 @@ public enum Setup {
     /// writes the instruction block: into the tools' global files, or with `.projects` into every
     /// clone of every project (whatever `tools` says — the files are CLAUDE.md and AGENTS.md).
     /// The block of the other scope is removed: global files of every tool, or every project clone.
+    /// `rules` adds the «Как работаем с кодом» block next to it (and moves it with the scope the same
+    /// way); `ownRules` says what to do where a hand-written section of that heading is found.
     public static func agents(home: AgentHome = AgentHome(), registry: Registry = Registry(), tools: [AgentTool]? = nil,
-                              mcp: Bool = true, instructions: Bool = true, scope: InstructionScope = .global) throws -> [SetupWrite] {
+                              mcp: Bool = true, instructions: Bool = true, rules: Bool = false, ownRules: OwnSection = .skip,
+                              scope: InstructionScope = .global) throws -> [SetupWrite] {
         guard scope != .both else { throw Registry.Failure("scope is global or projects") }
         let all = instructions ? try projectClones(registry: registry) : []
         let clones = scope == .projects ? all : []
@@ -298,42 +355,45 @@ public enum Setup {
                 done.append(.init(target: tool.rawValue, file: home.mcpConfig(tool).path, state: "registered"))
             }
             if instructions, scope == .global, let file = home.instructions(tool) {
-                done.append(try write(file, target: tool.rawValue, spaces: spaces))
+                done += try write(file, target: tool.rawValue, spaces: spaces, rules: rules, ownRules: ownRules)
             }
         }
-        done += try write(clones, spaces: spaces)
+        done += try write(clones, spaces: spaces, rules: rules, ownRules: ownRules)
         guard instructions else { return done }
         let other: [(target: String, file: URL)] = scope == .global
             ? all.flatMap { p in AgentInstructions.projectFiles.map { (p.project, URL(fileURLWithPath: p.clone).appendingPathComponent($0)) } }
             : AgentTool.allCases.compactMap { tool in home.instructions(tool).map { (tool.rawValue, $0) } }
-        for (target, file) in other where try AgentInstructions.remove(from: file) {
-            done.append(.init(target: target, file: file.path, state: "removed"))
+        for block in rules ? [AgentInstructions.practices, .rules] : [.practices] {
+            for (target, file) in other where try block.remove(from: file) {
+                done.append(.init(target: target, file: file.path, state: block.label + "removed"))
+            }
         }
         return done
     }
 
     /// The block into CLAUDE.md and AGENTS.md of every local clone of the project's repositories.
-    public static func project(_ id: String, registry: Registry = Registry()) throws -> [SetupWrite] {
+    public static func project(_ id: String, registry: Registry = Registry(), rules: Bool = false, ownRules: OwnSection = .skip) throws -> [SetupWrite] {
         let clones = try projectClones(registry: registry).filter { $0.project == id }
         guard try registry.project(id).repos.count > 0 else { throw Registry.Failure("project \(id) has no repositories") }
         guard !clones.isEmpty else { throw Registry.Failure("no local clone of \(id)'s repositories under the roots") }
-        return try write(clones, spaces: try registry.spaces().map(\.name))
+        return try write(clones, spaces: try registry.spaces().map(\.name), rules: rules, ownRules: ownRules)
     }
 
-    static func write(_ clones: [(project: String, clone: String)], spaces: [String]) throws -> [SetupWrite] {
-        var done: [SetupWrite] = []
-        for (project, clone) in clones {
-            for name in AgentInstructions.projectFiles {
-                done.append(try write(URL(fileURLWithPath: clone).appendingPathComponent(name), target: project, spaces: spaces))
+    static func write(_ clones: [(project: String, clone: String)], spaces: [String], rules: Bool, ownRules: OwnSection) throws -> [SetupWrite] {
+        try clones.flatMap { project, clone in
+            try AgentInstructions.projectFiles.flatMap { name in
+                try write(URL(fileURLWithPath: clone).appendingPathComponent(name), target: project, spaces: spaces, rules: rules, ownRules: ownRules)
             }
         }
-        return done
     }
 
-    static func write(_ file: URL, target: String, spaces: [String]) throws -> SetupWrite {
-        let before = AgentInstructions.state(of: file)
-        try AgentInstructions.write(to: file, spaces: spaces)
-        return SetupWrite(target: target, file: file.path, state: before == "absent" ? "written" : "updated")
+    static let ownRulesNote = "найден свой раздел «Как работаем с кодом» вне маркеров — блок не записан, замените раздел блоком: `setup agents --with-rules --replace-rules`, или добавьте блок рядом: `--append-rules`"
+
+    static func write(_ file: URL, target: String, spaces: [String], rules: Bool, ownRules: OwnSection) throws -> [SetupWrite] {
+        try (rules ? [AgentInstructions.practices, .rules] : [.practices]).map { block in
+            let state = try block.write(to: file, spaces: spaces, own: ownRules)
+            return SetupWrite(target: target, file: file.path, state: block.label + state, note: state == "own section" ? ownRulesNote : nil)
+        }
     }
 
     /// Copies the CLI the app carries (`Contents/Helpers/practicesctl`, the resource bundle and `uv`

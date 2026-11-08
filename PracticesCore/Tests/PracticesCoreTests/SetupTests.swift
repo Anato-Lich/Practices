@@ -22,41 +22,41 @@ import Foundation
 @Suite struct AgentSetupTests {
     @Test func blockCreateReplaceOutdated() throws {
         let file = TempHome().url.appendingPathComponent("a/CLAUDE.md")
-        #expect(AgentInstructions.state(of: file) == "absent")
-        try AgentInstructions.write(to: file)
-        #expect(AgentInstructions.state(of: file) == "current")
+        #expect(AgentInstructions.practices.state(of: file) == "absent")
+        try AgentInstructions.practices.write(to: file)
+        #expect(AgentInstructions.practices.state(of: file) == "current")
         #expect(try String(contentsOf: file, encoding: .utf8).contains("Проекты ваших пространств описаны"))
         #expect(try String(contentsOf: file, encoding: .utf8).contains("`get_conventions`"))
-        let v8 = AgentInstructions.block(spaces: [])
+        let v8 = AgentInstructions.practices.block(spaces: [])
         #expect(v8.hasPrefix("<!-- practices:begin v8 -->\n"))
         #expect(v8.contains("`get_service` показывает роль сервиса (`role`)"))
         #expect(v8.contains("только после\n  подтверждения пользователя."))
         #expect(v8.split(separator: "\n").allSatisfy { $0.count <= 100 })
 
         try "# Mine\nkeep me\n\n<!-- practices:begin v0 -->\nold\n<!-- practices:end -->\nafter\n".write(to: file, atomically: true, encoding: .utf8)
-        #expect(AgentInstructions.state(of: file) == "outdated(v0)")
-        try AgentInstructions.write(to: file)
+        #expect(AgentInstructions.practices.state(of: file) == "outdated(v0)")
+        try AgentInstructions.practices.write(to: file)
         let text = try String(contentsOf: file, encoding: .utf8)
-        #expect(AgentInstructions.state(of: file) == "current")
-        #expect(text.hasPrefix("# Mine\nkeep me\n\n<!-- practices:begin v\(AgentInstructions.version) -->"))
+        #expect(AgentInstructions.practices.state(of: file) == "current")
+        #expect(text.hasPrefix("# Mine\nkeep me\n\n<!-- practices:begin v\(AgentInstructions.practices.version) -->"))
         #expect(text.hasSuffix("<!-- practices:end -->\nafter\n"))
         #expect(!text.contains("old"))
         #expect(text.components(separatedBy: "practices:begin").count == 2)
 
         try "no newline".write(to: file, atomically: true, encoding: .utf8)
-        try AgentInstructions.write(to: file)
+        try AgentInstructions.practices.write(to: file)
         #expect(try String(contentsOf: file, encoding: .utf8).hasPrefix("no newline\n\n<!-- practices:begin"))
     }
 
     @Test func spacesAreNamedInTheBlock() throws {
-        #expect(AgentInstructions.block(spaces: ["X-Keeper", "SphereTele"]).contains("Проекты пространств X-Keeper и SphereTele описаны"))
-        #expect(AgentInstructions.block(spaces: ["A", "B", "C"]).contains("пространств A, B и C описаны"))
-        #expect(AgentInstructions.block(spaces: ["demo"]).contains("Проекты пространства demo описаны"))
-        #expect(AgentInstructions.block(spaces: []).contains("Проекты ваших пространств описаны"))
-        #expect(!AgentInstructions.block(spaces: []).contains("{{"))
+        #expect(AgentInstructions.practices.block(spaces: ["X-Keeper", "SphereTele"]).contains("Проекты пространств X-Keeper и SphereTele описаны"))
+        #expect(AgentInstructions.practices.block(spaces: ["A", "B", "C"]).contains("пространств A, B и C описаны"))
+        #expect(AgentInstructions.practices.block(spaces: ["demo"]).contains("Проекты пространства demo описаны"))
+        #expect(AgentInstructions.practices.block(spaces: []).contains("Проекты ваших пространств описаны"))
+        #expect(!AgentInstructions.practices.block(spaces: []).contains("{{"))
         let file = TempHome().url.appendingPathComponent("CLAUDE.md")
         try "<!-- practices:begin v4 -->\nold\n<!-- practices:end -->\n".write(to: file, atomically: true, encoding: .utf8)
-        #expect(AgentInstructions.state(of: file) == "outdated(v4)")
+        #expect(AgentInstructions.practices.state(of: file) == "outdated(v4)")
     }
 
     @Test func mcpRegistrationKeepsOtherServers() throws {
@@ -84,7 +84,7 @@ import Foundation
         #expect(!codex.contains("/old"))
         #expect(codex.contains("[mcp_servers.other]\ncommand = \"x\""))
         #expect(codex.components(separatedBy: "[mcp_servers.practices]").count == 2)
-        #expect(AgentInstructions.state(of: home.instructions(.codex)!) == "current")
+        #expect(AgentInstructions.practices.state(of: home.instructions(.codex)!) == "current")
     }
 
     @Test func agentHomeFollowsEnvironment() {
@@ -121,6 +121,7 @@ import Foundation
         let tools = json["tools"] as! [[String: Any]]
         #expect(tools.map { $0["tool"] as? String } == ["claude", "codex", "cursor"])
         #expect(tools[0]["found"] as? Bool == true && tools[0]["mcp"] as? Bool == false && tools[0]["instructions"] as? String == "absent")
+        #expect(tools[0]["rules"] as? String == "absent")
         #expect(tools[1]["found"] as? Bool == false)
     }
 
@@ -147,9 +148,9 @@ import Foundation
         let done = try Setup.agents(home: agents, registry: home.registry, scope: .projects)
         #expect(done.filter { $0.state == "written" }.count == 4 && done.filter { $0.state == "written" }.allSatisfy { $0.target == "pr" })
         for clone in clones {
-            for name in AgentInstructions.projectFiles { #expect(AgentInstructions.state(of: clone.appendingPathComponent(name)) == "current") }
+            for name in AgentInstructions.projectFiles { #expect(AgentInstructions.practices.state(of: clone.appendingPathComponent(name)) == "current") }
         }
-        #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "absent")
+        #expect(AgentInstructions.practices.state(of: agents.instructions(.claude)!) == "absent")
         #expect(MCPRegistration.isRegistered(.claude, home: agents))
         let status = try await Setup.status(registry: home.registry, home: agents)
         #expect(status.scope == .projects && status.projectBlocks.count == 4)
@@ -163,7 +164,7 @@ import Foundation
         for clone in clones {
             for name in AgentInstructions.projectFiles { #expect(!FileManager.default.fileExists(atPath: clone.appendingPathComponent(name).path)) }
         }
-        #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "current")
+        #expect(AgentInstructions.practices.state(of: agents.instructions(.claude)!) == "current")
         #expect(try await Setup.status(registry: home.registry, home: agents).scope == .global)
     }
 
@@ -172,7 +173,7 @@ import Foundation
         let mine = clones[0].appendingPathComponent("CLAUDE.md")
         _ = try Setup.agents(home: agents, registry: home.registry, scope: .projects)
         try ("# Mine\n\n" + String(contentsOf: mine, encoding: .utf8)).write(to: mine, atomically: true, encoding: .utf8)
-        try AgentInstructions.write(to: agents.instructions(.claude)!)
+        try AgentInstructions.practices.write(to: agents.instructions(.claude)!)
         #expect(try await Setup.status(registry: home.registry, home: agents).scope == .both)
 
         let global = try Setup.agents(home: agents, registry: home.registry, scope: .global)
@@ -183,8 +184,88 @@ import Foundation
 
         let projects = try Setup.agents(home: agents, registry: home.registry, scope: .projects)
         #expect(projects.filter { $0.state == "removed" }.map(\.target) == ["claude"])
-        #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "absent")
+        #expect(AgentInstructions.practices.state(of: agents.instructions(.claude)!) == "absent")
         #expect(try await Setup.status(registry: home.registry, home: agents).scope == .projects)
+    }
+
+    @Test func rulesBlockWriteUpdateOutdated() throws {
+        let rules = AgentInstructions.rules
+        let file = TempHome().url.appendingPathComponent("CLAUDE.md")
+        let block = rules.block(spaces: [])
+        #expect(block.hasPrefix("<!-- practices-rules:begin v\(rules.version) -->\n# Как работаем с кодом\n"))
+        #expect(block.hasSuffix("<!-- practices-rules:end -->\n") && block.contains("`shortcut: <предел>, <когда переделать>`"))
+        #expect(!block.contains("/Users/") && block.split(separator: "\n").allSatisfy { $0.count <= 101 })
+
+        try AgentInstructions.practices.write(to: file)
+        #expect(try rules.write(to: file) == "written")
+        #expect(rules.state(of: file) == "current" && AgentInstructions.practices.state(of: file) == "current")
+        #expect(try rules.write(to: file) == "updated")
+        var text = try String(contentsOf: file, encoding: .utf8)
+        #expect(text.components(separatedBy: "practices-rules:begin").count == 2)
+        try text.replacingOccurrences(of: "practices-rules:begin v\(rules.version)", with: "practices-rules:begin v0").write(to: file, atomically: true, encoding: .utf8)
+        #expect(rules.state(of: file) == "outdated(v0)" && AgentInstructions.practices.state(of: file) == "current")
+        #expect(try rules.remove(from: file))
+        text = try String(contentsOf: file, encoding: .utf8)
+        #expect(!text.contains("practices-rules") && text.contains("<!-- practices:begin"))
+    }
+
+    @Test func handWrittenRulesAreReplacedOnlyWhenAsked() async throws {
+        let (home, agents, _) = try catalogue()
+        let file = agents.instructions(.claude)!
+        let mine = "# Мои\nкак есть\n\n# Как работаем с кодом\n\n- своё правило\n\n<!-- practices:begin v6 -->\nold\n<!-- practices:end -->\n\n# После\nхвост\n"
+        try mine.write(to: file, atomically: true, encoding: .utf8)
+        #expect(AgentInstructions.rules.state(of: file) == "own section")
+
+        let skipped = try Setup.agents(home: agents, registry: home.registry, rules: true)
+        let note = skipped.first { $0.state == "rules own section" }
+        #expect(note?.note?.contains("--replace-rules") == true)
+        var text = try String(contentsOf: file, encoding: .utf8)
+        #expect(text.contains("- своё правило") && !text.contains("practices-rules"))
+        #expect(try await Setup.status(registry: home.registry, home: agents).tools[0].rules == "own section")
+
+        let replaced = try Setup.agents(home: agents, registry: home.registry, rules: true, ownRules: .replace)
+        #expect(replaced.contains { $0.state == "rules replaced" })
+        text = try String(contentsOf: file, encoding: .utf8)
+        #expect(!text.contains("- своё правило"))
+        #expect(text.hasPrefix("# Мои\nкак есть\n\n<!-- practices-rules:begin v\(AgentInstructions.rules.version) -->\n# Как работаем с кодом\n"))
+        #expect(text.contains("<!-- practices-rules:end -->\n\n<!-- practices:begin v\(AgentInstructions.practices.version) -->"))
+        #expect(text.hasSuffix("<!-- practices:end -->\n\n# После\nхвост\n"))
+        #expect(text.components(separatedBy: "# Как работаем с кодом").count == 2)
+        #expect(AgentInstructions.rules.state(of: file) == "current")
+        #expect(try Setup.agents(home: agents, registry: home.registry, rules: true).contains { $0.state == "rules updated" })
+    }
+
+    @Test func handWrittenRulesStayWhenAppended() throws {
+        let (home, agents, _) = try catalogue()
+        let file = agents.instructions(.claude)!
+        let mine = "# Как работаем с кодом\n\n- своё правило\n\n# Ещё\nхвост\n"
+        try mine.write(to: file, atomically: true, encoding: .utf8)
+        let done = try Setup.agents(home: agents, registry: home.registry, rules: true, ownRules: .append)
+        #expect(done.contains { $0.state == "rules appended" })
+        var text = try String(contentsOf: file, encoding: .utf8)
+        #expect(text.hasPrefix(mine + "\n<!-- practices:begin"))
+        #expect(text.hasSuffix("<!-- practices-rules:end -->\n"))
+        #expect(AgentInstructions.rules.state(of: file) == "current")
+        for own in [OwnSection.append, .skip] {
+            #expect(try Setup.agents(home: agents, registry: home.registry, rules: true, ownRules: own).contains { $0.state == "rules updated" })
+        }
+        text = try String(contentsOf: file, encoding: .utf8)
+        #expect(text.hasPrefix(mine) && text.components(separatedBy: "practices-rules:begin").count == 2)
+    }
+
+    @Test func rulesMoveWithScopeAndShowInStatus() async throws {
+        let (home, agents, clones) = try catalogue()
+        _ = try Setup.agents(home: agents, registry: home.registry, rules: true, scope: .projects)
+        let status = try await Setup.status(registry: home.registry, home: agents)
+        #expect(status.projectBlocks.count == 4 && status.projectBlocks.allSatisfy { $0.state == "current" && $0.rules == "current" })
+        #expect(status.tools[0].rules == "absent")
+        let global = try Setup.agents(home: agents, registry: home.registry, rules: true, scope: .global)
+        #expect(global.filter { $0.state == "rules removed" }.count == 4)
+        #expect(!FileManager.default.fileExists(atPath: clones[0].appendingPathComponent("CLAUDE.md").path))
+        #expect(AgentInstructions.rules.state(of: agents.instructions(.claude)!) == "current")
+        // Without rules the block stays where it is.
+        _ = try Setup.agents(home: agents, registry: home.registry, scope: .global)
+        #expect(AgentInstructions.rules.state(of: agents.instructions(.claude)!) == "current")
     }
 
     @Test func scopeProjectsWithoutClonesFails() throws {

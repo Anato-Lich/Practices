@@ -15,7 +15,7 @@ let package = Package(
         .target(
             name: "PracticesCore",
             dependencies: ["Yams"],
-            resources: [.copy("Runtime/python"), .copy("Resources/AgentInstructions.md"), .copy("Resources/Conventions.md"), .copy("Resources/templates")],
+            resources: [.copy("Runtime/python"), .copy("Resources/AgentInstructions.md"), .copy("Resources/CodingRules.md"), .copy("Resources/Conventions.md"), .copy("Resources/templates")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(

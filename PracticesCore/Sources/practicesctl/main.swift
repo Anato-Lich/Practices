@@ -84,17 +84,24 @@ let usage = """
       roots                         folders where clones are looked for, with the clones found
       roots add <path>… | roots remove <path>
       setup status [--json]         roots, spaces, agents: MCP registered,
-                                    instruction block absent / current / outdated, project clones with it
+                                    instruction block absent / current / outdated, the rules block,
+                                    project clones with either
       setup roots <path>…           = roots add, for the first run
       setup install                 copy this practicesctl (with its bundle, and uv from beside it or
                                     the app) into ~/.practices/bin, linked from ~/.local/bin
       setup agents --global | --projects [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
+                   [--with-rules [--replace-rules | --append-rules]]
                                     register the MCP server for the tools found (~/.claude, ~/.codex,
                                     ~/.cursor) and write the instruction block: --global into
                                     ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md, --projects into CLAUDE.md
                                     and AGENTS.md of every clone of the catalogue's projects;
-                                    with neither, asks (in a terminal)
-      setup agents --project <id>   the block into CLAUDE.md and AGENTS.md of the project's clones
+                                    with neither, asks (in a terminal); --with-rules adds the optional
+                                    block «Как работаем с кодом» (asked in a terminal too);
+                                    a hand-written section of that heading stops it (reported):
+                                    --replace-rules puts the block in its place, --append-rules keeps
+                                    it and adds the block at the end
+      setup agents --project <id> [--with-rules [--replace-rules | --append-rules]]
+                                    the block into CLAUDE.md and AGENTS.md of the project's clones
 
     agent:
       mcp                           MCP server on stdin/stdout
@@ -154,7 +161,7 @@ func parse(_ args: [String]) -> (rest: [String], options: [String: [String]]) {
     var i = 0
     while i < args.count {
         let a = args[i]
-        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-commit", "--no-mcp", "--no-instructions", "--global", "--projects"].contains(a) { i += 1; continue }
+        if ["--json", "--all", "--force", "--unassigned", "--write", "--no-commit", "--no-mcp", "--no-instructions", "--global", "--projects", "--with-rules", "--replace-rules", "--append-rules"].contains(a) { i += 1; continue }
         if a.hasPrefix("--"), i + 1 < args.count { options[a, default: []].append(args[i + 1]); i += 2; continue }
         rest.append(a); i += 1
     }
@@ -268,11 +275,11 @@ case "setup":
             print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — \(Setup.installHint))"))
             for t in status.tools {
                 print("  " + pad(t.tool.rawValue, 8) + (t.found ? pad("MCP " + (t.mcp ? "зарегистрирован" : "не зарегистрирован"), 22)
-                      + (t.instructions.map { "инструкции " + $0 } ?? "") : "не найден"))
+                      + pad(t.instructions.map { "инструкции " + $0 } ?? "", 32) + (t.rules.map { "правила " + $0 } ?? "") : "не найден"))
             }
             if !status.projectBlocks.isEmpty { print("\nклоны проектов с блоком") }
             let fileWidth = status.projectBlocks.map { home($0.clone).count + 1 + $0.file.count }.max() ?? 0
-            for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, fileWidth) + "  " + b.state) }
+            for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, fileWidth) + "  " + pad(b.state, 14) + "правила " + b.rules) }
             if let scope = status.scope { print("\nscope: \(scope.rawValue)" + (scope == .both ? " — `setup agents --global` или `--projects` оставит один" : "")) }
         case "install":
             guard let me = Bundle.main.executableURL?.resolvingSymlinksInPath() else { fail("practices: where is this binary?") }
@@ -283,8 +290,11 @@ case "setup":
                 FileHandle.standardError.write(Data("practices: MCP указывает на несуществующую команду \(home(AgentHome().command)) — \(Setup.installHint)\n".utf8))
                 exit(1)
             }
+            if args.contains("--replace-rules") && args.contains("--append-rules") { fail("practices: --replace-rules or --append-rules, not both", 2) }
+            let ownRules: OwnSection = args.contains("--replace-rules") ? .replace : args.contains("--append-rules") ? .append : .skip
+            func show(_ w: SetupWrite) { print(pad(w.target, 10) + pad(w.state, 18) + home(w.file) + (w.note.map { "\n" + pad("", 10) + $0 } ?? "")) }
             if let project = options["--project"]?.last {
-                try Setup.project(project).forEach { print(pad($0.target, 10) + pad($0.state, 12) + home($0.file)) }
+                try Setup.project(project, rules: args.contains("--with-rules") || ownRules != .skip, ownRules: ownRules).forEach(show)
                 break
             }
             let tools = try options["--tools"]?.last.map { list in
@@ -314,8 +324,13 @@ case "setup":
             } else {
                 fail("practices: укажите --global или --projects", 2)
             }
-            try Setup.agents(tools: tools, mcp: !args.contains("--no-mcp"), instructions: !args.contains("--no-instructions"), scope: scope)
-                .forEach { print(pad($0.target, 10) + pad($0.state, 12) + home($0.file)) }
+            var rules = args.contains("--with-rules") || ownRules != .skip
+            if !rules, !args.contains("--no-instructions"), isatty(0) != 0 {
+                print("Добавить блок «Как работаем с кодом»? [Y/n] ", terminator: "")
+                rules = !["n", "no", "н", "нет"].contains(readLine()?.trimmingCharacters(in: .whitespaces).lowercased() ?? "")
+            }
+            try Setup.agents(tools: tools, mcp: !args.contains("--no-mcp"), instructions: !args.contains("--no-instructions"),
+                             rules: rules, ownRules: ownRules, scope: scope).forEach(show)
         case "roots" where rest.count > 2:
             for path in rest.dropFirst(2) { print("root \(try Registry().addRoot(path)) added") }
         default: print(usage); exit(2)

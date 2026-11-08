@@ -192,6 +192,7 @@ struct SettingsView: View {
             let chosen = scope ?? setup.scope ?? .global
             let found = (status?.tools ?? []).filter(\.found).map(\.tool)
             ScopeSegments(scope: Binding(get: { chosen }, set: { scope = $0 }), clones: setup.projectClones)
+            RulesOption()
             Button { Task { await setup.setupAgents(found, scope: chosen) } } label: { Text(verbatim: "Настроить агентов") }
                 .buttonStyle(CompactButtonStyle(prominent: true, height: 24, fontSize: 12))
                 .disabled(found.isEmpty || setup.busy.contains("agents") || chosen == .projects && setup.projectClones == 0)

@@ -62,6 +62,7 @@ struct WelcomeView: View {
                     .disabled(!installed || tools.isEmpty || setup.busy.contains("agents") || scope == .projects && setup.projectClones == 0)
             } content: {
                 ScopeSegments(scope: Binding(get: { scope ?? setup.scope ?? .global }, set: { scope = $0 }), clones: setup.projectClones)
+                RulesOption()
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(status?.tools ?? [], id: \.tool) { tool in agentRow(tool) }
                 }
@@ -227,24 +228,67 @@ struct ScopeSegments: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 0) {
-                ForEach(InstructionScope.allCases, id: \.self) { s in
-                    Button { scope = s } label: {
-                        Text(verbatim: s == .global ? "Глобально" : "В проектах · " + ru(clones, "клон", "клона", "клонов"))
-                            .font(Theme.ui(12)).foregroundStyle(scope == s ? .white : Theme.Color.text)
-                            .padding(.horizontal, 12).padding(.vertical, 2)
-                            .background(scope == s ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 4))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(2)
-            .background(Theme.Color.buttonBg, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.Color.borderButton))
-            .fixedSize()
+            Segments(options: InstructionScope.allCases.map { ($0, $0 == .global ? "Глобально" : "В проектах · " + ru(clones, "клон", "клона", "клонов")) },
+                     selected: scope) { scope = $0 }
             Text(verbatim: scope == .global ? "~/.claude/CLAUDE.md, ~/.codex/AGENTS.md" : "CLAUDE.md и AGENTS.md в каждом клоне проектов каталога")
                 .font(Theme.mono(11)).foregroundStyle(Theme.Color.textMuted).lineLimit(1).truncationMode(.middle)
+        }
+    }
+}
+
+/// A segmented control in the style of the design; `selected` nil — none picked yet.
+struct Segments<T: Hashable>: View {
+    let options: [(T, String)]
+    let selected: T?
+    let pick: (T) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.0) { value, title in
+                Button { pick(value) } label: {
+                    Text(verbatim: title)
+                        .font(Theme.ui(12)).foregroundStyle(selected == value ? .white : Theme.Color.text)
+                        .padding(.horizontal, 12).padding(.vertical, 2)
+                        .background(selected == value ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 4))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(Theme.Color.buttonBg, in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.Color.borderButton))
+        .fixedSize()
+    }
+}
+
+/// «Правила работы с кодом»: the optional second block, and — where a hand-written section of that
+/// heading is found — whether the block replaces it or goes beside it (neither picked: not written).
+struct RulesOption: View {
+    @Environment(RegistryModel.self) private var registry
+
+    var body: some View {
+        @Bindable var setup = registry.setup
+        let status = setup.status
+        let own = (status?.tools ?? []).contains { $0.found && $0.rules == "own section" }
+            || (status?.projectBlocks ?? []).contains { $0.rules == "own section" }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Toggle(isOn: $setup.withRules) { Text(verbatim: "Правила работы с кодом") }
+                    .toggleStyle(.checkbox).font(Theme.ui(12.5)).foregroundStyle(Theme.Color.text).fixedSize()
+                Text(verbatim: "второй блок рядом с инструкциями: проверь, что есть; без дублей; минимальная полная правка; коммиты; лог работ")
+                    .font(Theme.ui(11.5)).foregroundStyle(Theme.Color.textMuted).lineLimit(1).truncationMode(.tail)
+                    .help(Text(verbatim: "Необязательный блок «Как работаем с кодом» между маркерами practices-rules; повторный запуск обновляет только его"))
+            }
+            if setup.withRules && own {
+                HStack(spacing: 10) {
+                    Segments(options: [(OwnSection.replace, "Заменить мой раздел"), (.append, "Добавить рядом")],
+                             selected: setup.ownRules == .skip ? nil : setup.ownRules) { setup.ownRules = $0 }
+                    Text(verbatim: "найден свой раздел «Как работаем с кодом»" + (setup.ownRules == .skip ? " — выберите, иначе блок не запишется" : ""))
+                        .font(Theme.ui(11.5)).foregroundStyle(setup.ownRules == .skip ? Theme.Color.warn : Theme.Color.textMuted).lineLimit(1)
+                        .help(Text(verbatim: "Заменить — блок встаёт на место вашего раздела; добавить рядом — раздел остаётся, блок дописывается в конец файла"))
+                }
+            }
         }
     }
 }

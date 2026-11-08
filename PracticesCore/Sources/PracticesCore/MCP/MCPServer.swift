@@ -196,7 +196,8 @@ public final class MCPServer: @unchecked Sendable {
             return try encodable(await Setup.status(registry: registry))
         case "setup_agents":
             if let project = args["project"] as? String, !project.isEmpty {
-                return try encodable(Setup.project(project, registry: registry))
+                return try encodable(Setup.project(project, registry: registry, rules: args["rules"] as? Bool ?? false,
+                                                   ownRules: try ownRules(args)))
             }
             let tools = try (args["tools"] as? [String])?.map { name in
                 guard let tool = AgentTool(rawValue: name) else { throw ToolError(description: "tools are claude, codex, cursor") }
@@ -206,10 +207,17 @@ public final class MCPServer: @unchecked Sendable {
                 throw ToolError(description: "scope is global or projects: ask the user which")
             }
             return try encodable(Setup.agents(registry: registry, tools: tools, mcp: args["mcp"] as? Bool ?? true,
-                                              instructions: args["instructions"] as? Bool ?? true, scope: scope))
+                                              instructions: args["instructions"] as? Bool ?? true, rules: args["rules"] as? Bool ?? false,
+                                              ownRules: try ownRules(args), scope: scope))
         default:
             throw ToolError(description: "unknown tool \(name)")
         }
+    }
+
+    func ownRules(_ args: [String: Any]) throws -> OwnSection {
+        guard let name = args["own_section"] as? String else { return .skip }
+        guard let mode = OwnSection(rawValue: name) else { throw ToolError(description: "own_section is skip, replace or append") }
+        return mode
     }
 
     func encodable<T: Encodable>(_ value: T) throws -> Any {
@@ -518,12 +526,14 @@ public final class MCPServer: @unchecked Sendable {
              required: ["service", "path", "meaning"]),
         tool("add_note", "Add a pitfall or a finding to a service's notes.",
              ["service": ["type": "string"], "text": ["type": "string"]], required: ["service", "text"]),
-        tool("setup_status", "Настроена ли эта машина: корни клонов (local.yaml) с числом найденных клонов, пространства с путём, веткой и незакоммиченными, для Claude Code, Codex и Cursor — найден ли, зарегистрирован ли MCP, блок инструкций absent/current/outdated(vN); клоны проектов, где блок есть. Ничего не меняет. Если commandInstalled=false: \(Setup.installHint)."),
-        tool("setup_agents", "Настроить агентов на этой машине: зарегистрировать MCP-сервер practices и записать блок инструкций: scope global — в глобальные ~/.claude/CLAUDE.md / ~/.codex/AGENTS.md найденных инструментов, scope projects — в CLAUDE.md и AGENTS.md каждого клона проектов каталога (MCP регистрируется глобально в обоих случаях); с project — только блок в клоны этого проекта. Куда писать инструкции — глобально или в каждый проект — спросите пользователя, прежде чем вызывать. Возвращает, что записано: target, file, state.",
+        tool("setup_status", "Настроена ли эта машина: корни клонов (local.yaml) с числом найденных клонов, пространства с путём, веткой и незакоммиченными, для Claude Code, Codex и Cursor — найден ли, зарегистрирован ли MCP, блок инструкций absent/current/outdated(vN) и блок «Как работаем с кодом» (rules; own section — свой раздел вне маркеров); клоны проектов, где есть хоть один. Ничего не меняет. Если commandInstalled=false: \(Setup.installHint)."),
+        tool("setup_agents", "Настроить агентов на этой машине: зарегистрировать MCP-сервер practices и записать блок инструкций: scope global — в глобальные ~/.claude/CLAUDE.md / ~/.codex/AGENTS.md найденных инструментов, scope projects — в CLAUDE.md и AGENTS.md каждого клона проектов каталога (MCP регистрируется глобально в обоих случаях); с project — только блок в клоны этого проекта. Куда писать инструкции — глобально или в каждый проект — спросите пользователя, прежде чем вызывать; добавлять ли блок «Как работаем с кодом» (rules) — тоже. Возвращает, что записано: target, file, state, note.",
              ["scope": ["type": "string", "enum": InstructionScope.allCases.map(\.rawValue), "description": "global или projects — выбор пользователя"],
               "tools": ["type": "array", "items": ["type": "string", "enum": AgentTool.allCases.map(\.rawValue)], "description": "по умолчанию все найденные"],
               "mcp": ["type": "boolean", "description": "регистрировать MCP, по умолчанию да"],
               "instructions": ["type": "boolean", "description": "писать блок инструкций, по умолчанию да"],
+              "rules": ["type": "boolean", "description": "добавить необязательный блок «Как работаем с кодом» (правила работы с кодом), по умолчанию нет"],
+              "own_section": ["type": "string", "enum": OwnSection.allCases.map(\.rawValue), "description": "если найден свой раздел «# Как работаем с кодом» вне маркеров (state rules own section): skip — не писать (по умолчанию), replace — заменить раздел блоком, append — оставить раздел и добавить блок в конец; выбор пользователя"],
               "project": ["type": "string", "description": "id проекта: блок в его клоны (scope тогда не важен)"]],
              required: ["scope"]),
     ] }

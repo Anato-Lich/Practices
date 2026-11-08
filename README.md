@@ -181,6 +181,16 @@ practicesctl setup agents --projects   # CLAUDE.md и AGENTS.md каждого �
 куда писать, прежде чем вызывать `setup_agents`. То же — в окне, в «Настройке» (шестерёнка внизу
 боковой панели).
 
+Необязательный второй блок — «Как работаем с кодом»: правила работы агента с кодом (сначала
+проверить, что уже есть; один источник истины; минимальная полная правка; коммиты в Conventional
+Commits; лог работ в `work/<дата>-<название>/`; сначала на малой части). Он пишется рядом с первым,
+между своими маркерами `<!-- practices-rules:begin vN -->` … `<!-- practices-rules:end -->`, в те
+же файлы и обновляется так же: `setup agents --global --with-rules` (в терминале команда спросит
+сама), `rules: true` у `setup_agents`, галочка «Правила работы с кодом» в «Начале» и «Настройке»;
+`setup status` показывает его состояние отдельно. Если в файле уже есть свой раздел
+`# Как работаем с кодом` вне маркеров, блок не пишется: `--replace-rules` ставит блок на место
+раздела, `--append-rules` оставляет раздел и добавляет блок в конец.
+
 ![Настройка](docs/images/settings.png)
 
 *Настройка: пространства, папки с клонами, агенты и окружение (Python, CLI).*
@@ -289,17 +299,24 @@ this machine (~/.practices/local.yaml, agents' settings; never in git):
   roots                         folders where clones are looked for, with the clones found
   roots add <path>… | roots remove <path>
   setup status [--json]         roots, spaces, agents: MCP registered,
-                                instruction block absent / current / outdated, project clones with it
+                                instruction block absent / current / outdated, the rules block,
+                                project clones with either
   setup roots <path>…           = roots add, for the first run
   setup install                 copy this practicesctl (with its bundle, and uv from beside it or
                                 the app) into ~/.practices/bin, linked from ~/.local/bin
   setup agents --global | --projects [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
+               [--with-rules [--replace-rules | --append-rules]]
                                 register the MCP server for the tools found (~/.claude, ~/.codex,
                                 ~/.cursor) and write the instruction block: --global into
                                 ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md, --projects into CLAUDE.md
                                 and AGENTS.md of every clone of the catalogue's projects;
-                                with neither, asks (in a terminal)
-  setup agents --project <id>   the block into CLAUDE.md and AGENTS.md of the project's clones
+                                with neither, asks (in a terminal); --with-rules adds the optional
+                                block «Как работаем с кодом» (asked in a terminal too);
+                                a hand-written section of that heading stops it (reported):
+                                --replace-rules puts the block in its place, --append-rules keeps
+                                it and adds the block at the end
+  setup agents --project <id> [--with-rules [--replace-rules | --append-rules]]
+                                the block into CLAUDE.md and AGENTS.md of the project's clones
 
 agent:
   mcp                           MCP server on stdin/stdout
