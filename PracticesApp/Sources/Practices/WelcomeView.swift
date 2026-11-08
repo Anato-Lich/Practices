@@ -50,16 +50,24 @@ struct WelcomeView: View {
                      state: states[2], current: current == 2) {
                 let tools = (status?.tools ?? []).filter { $0.found && !unchecked.contains($0.tool) }.map(\.tool)
                 let scope = scope ?? setup.scope ?? .global
+                let installed = status?.commandInstalled == true
+                if status != nil && !installed {
+                    // Agents run ~/.practices/bin/practicesctl: it is copied out of the app first.
+                    Button { Task { await setup.installCommand() } } label: { Text(verbatim: "Установить practicesctl") }
+                        .buttonStyle(ToolbarButtonStyle(prominent: true))
+                        .disabled(setup.busy.contains("command"))
+                }
                 Button { Task { await setup.setupAgents(tools, scope: scope) } } label: { Text(verbatim: "Настроить агентов") }
-                    .buttonStyle(ToolbarButtonStyle(prominent: true))
-                    .disabled(tools.isEmpty || setup.busy.contains("agents") || scope == .projects && setup.projectClones == 0)
+                    .buttonStyle(ToolbarButtonStyle(prominent: installed))
+                    .disabled(!installed || tools.isEmpty || setup.busy.contains("agents") || scope == .projects && setup.projectClones == 0)
             } content: {
                 ScopeSegments(scope: Binding(get: { scope ?? setup.scope ?? .global }, set: { scope = $0 }), clones: setup.projectClones)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(status?.tools ?? [], id: \.tool) { tool in agentRow(tool) }
                 }
                 let found = (status?.tools ?? []).filter(\.found).map(\.tool.title)
-                Text(verbatim: (found.isEmpty ? "Ни одного инструмента не найдено." : "Найденные инструменты: " + found.joined(separator: ", ") + ".")
+                Text(verbatim: (status?.commandInstalled == false ? "Сначала — practicesctl: команда, которую агенты запускают как MCP-сервер, копируется из приложения в " + tilde(status?.command ?? "") + ". " : "")
+                     + (found.isEmpty ? "Ни одного инструмента не найдено." : "Найденные инструменты: " + found.joined(separator: ", ") + ".")
                      + " Блок помечен маркерами, повторный запуск обновляет только его. Секреты не попадают — только имена переменных.")
                     .font(Theme.ui(11.5)).foregroundStyle(Theme.Color.textMuted)
             }

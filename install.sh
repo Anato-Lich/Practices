@@ -1,6 +1,8 @@
 #!/bin/zsh
 # Build the Release app and install it into /Applications (a stable path for the login item),
 # and the CLI into $PRACTICES_HOME/bin (default ~/.practices/bin). Both replace what is installed.
+# This is the from-source path: the app also carries the CLI in Contents/Helpers and installs it
+# itself («Начало» / «Настройка»), which is how a DMG user gets it.
 set -e
 cd "$(dirname "$0")"
 HOME_DIR=${PRACTICES_HOME:-$HOME/.practices}

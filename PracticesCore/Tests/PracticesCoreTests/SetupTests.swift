@@ -192,3 +192,31 @@ import Foundation
         #expect(!MCPRegistration.isRegistered(.claude, home: agents))      // nothing done before the refusal
     }
 }
+
+@Suite struct InstallCommandTests {
+    @Test func copiesHelperAndBundleAndLinks() async throws {
+        let temp = TempHome().url, fm = FileManager.default
+        let helpers = temp.appendingPathComponent("Practices.app/Contents/Helpers")
+        let bundle = helpers.appendingPathComponent("PracticesCore_PracticesCore.bundle")
+        try fm.createDirectory(at: bundle, withIntermediateDirectories: true)
+        try "v1".write(to: bundle.appendingPathComponent("AgentInstructions.md"), atomically: true, encoding: .utf8)
+        let helper = helpers.appendingPathComponent("practicesctl")
+        try "#!/bin/sh\necho new\n".write(to: helper, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
+        let home = temp.appendingPathComponent(".practices"), links = temp.appendingPathComponent("local-bin")
+
+        try await Setup.installCommand(from: helper, home: home, links: links)
+        try "#!/bin/sh\necho newer\n".write(to: helper, atomically: true, encoding: .utf8)
+        let written = try await Setup.installCommand(from: helper, home: home, links: links)       // over an installed copy
+
+        let command = home.appendingPathComponent("bin/practicesctl")
+        #expect(written.map(\.lastPathComponent) == ["practicesctl", "PracticesCore_PracticesCore.bundle", "practicesctl"])
+        #expect(try String(contentsOf: command, encoding: .utf8).contains("newer"))
+        #expect(fm.isExecutableFile(atPath: command.path))
+        #expect(fm.fileExists(atPath: home.appendingPathComponent("bin/PracticesCore_PracticesCore.bundle/AgentInstructions.md").path))
+        #expect(try fm.destinationOfSymbolicLink(atPath: links.appendingPathComponent("practicesctl").path) == command.path)
+
+        try fm.removeItem(at: bundle)
+        await #expect(throws: Registry.Failure.self) { try await Setup.installCommand(from: helper, home: home, links: links) }
+    }
+}

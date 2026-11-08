@@ -304,6 +304,34 @@ public enum Setup {
         return SetupWrite(target: target, file: file.path, state: before == "absent" ? "written" : "updated")
     }
 
+    /// Copies the CLI the app carries (`Contents/Helpers/practicesctl` and the resource bundle next
+    /// to it) into `<home>/bin` and links it from `links/practicesctl`; returns the paths written.
+    /// `links` is `~/.local/bin` unless a test passes a temp dir.
+    @discardableResult
+    public static func installCommand(from helper: URL, home: URL = PracticesHome.url,
+                                      links: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".local/bin")) async throws -> [URL] {
+        let fm = FileManager.default
+        let bundle = helper.deletingLastPathComponent().appendingPathComponent("PracticesCore_PracticesCore.bundle")
+        guard fm.isExecutableFile(atPath: helper.path) else { throw Registry.Failure("\(helper.path) is not an executable") }
+        guard fm.fileExists(atPath: bundle.path) else { throw Registry.Failure("\(bundle.path) is missing") }
+        let bin = home.appendingPathComponent("bin")
+        let command = bin.appendingPathComponent("practicesctl"), resources = bin.appendingPathComponent(bundle.lastPathComponent)
+        let link = links.appendingPathComponent("practicesctl")
+        try fm.createDirectory(at: bin, withIntermediateDirectories: true)
+        try fm.createDirectory(at: links, withIntermediateDirectories: true)
+        // Remove, then copy: overwriting a signed binary in place keeps the kernel's cached signature
+        // of the old file, and macOS kills the new one at launch (exit 137).
+        for (source, target) in [(helper, command), (bundle, resources)] {
+            if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
+            try fm.copyItem(at: source, to: target)
+        }
+        if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil || fm.fileExists(atPath: link.path) { try fm.removeItem(at: link) }
+        try fm.createSymbolicLink(at: link, withDestinationURL: command)
+        // A downloaded app's files carry the quarantine flag, which copies keep; exit 1 is «no such xattr».
+        _ = try await Shell.run("xattr", ["-dr", "com.apple.quarantine", command.path, resources.path], allowedStatuses: [0, 1])
+        return [command, resources, link]
+    }
+
     public static func projectClones(registry: Registry) throws -> [(project: String, clone: String)] {
         let clones = Repos.clones(roots: registry.searchRoots)
         return try registry.projects().flatMap { p in p.repos.compactMap { r in clones[r.repo].map { (p.id, $0) } } }

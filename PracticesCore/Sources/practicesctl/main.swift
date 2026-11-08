@@ -239,7 +239,7 @@ case "setup":
             for r in status.roots { print("  " + pad(home(r.path), rootWidth) + "  " + (r.exists ? "\(r.clones) clones" : "missing")) }
             print("\nspaces" + (status.spaces.isEmpty ? " — none; `practicesctl space add <id>`" : ""))
             for s in status.spaces { print("  " + spaceLine(s)) }
-            print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — not installed: ./install.sh)"))
+            print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — not installed: install it from the app («Начало» / «Настройка») or ./install.sh)"))
             for t in status.tools {
                 print("  " + pad(t.tool.rawValue, 8) + (t.found ? pad("MCP " + (t.mcp ? "registered" : "not registered"), 22)
                       + (t.instructions.map { "instructions " + $0 } ?? "") : "not found"))

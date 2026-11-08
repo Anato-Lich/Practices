@@ -262,10 +262,15 @@ struct SettingsView: View {
                     label("cli")
                     Text(verbatim: tilde(status?.command ?? "") + (status?.commandInstalled == true ? " · есть ✓" : " · не установлен"))
                         .foregroundStyle(status?.commandInstalled == false ? Theme.Color.warn : Theme.Color.text)
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(status?.command ?? "", forType: .string)
-                    } label: { Text(verbatim: "Скопировать путь") }
+                    if status?.commandInstalled == false {
+                        Button { Task { await setup.installCommand() } } label: { Text(verbatim: "Установить practicesctl") }
+                            .disabled(setup.busy.contains("command"))
+                    } else {
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(status?.command ?? "", forType: .string)
+                        } label: { Text(verbatim: "Скопировать путь") }
+                    }
                 }
                 GridRow {
                     label("папка")

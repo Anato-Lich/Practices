@@ -17,6 +17,22 @@ targets:
     dependencies:
       - package: PracticesCore
         product: PracticesCore
+      # Built, not linked: the script below puts it in Contents/Helpers, and «Начало» copies it into ~/.practices/bin.
+      - package: PracticesCore
+        product: practicesctl
+        link: false
+    postBuildScripts:
+      - name: Embed practicesctl
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          HELPERS="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          mkdir -p "$HELPERS"
+          rm -rf "$HELPERS/practicesctl" "$HELPERS/PracticesCore_PracticesCore.bundle"
+          cp "${BUILT_PRODUCTS_DIR}/practicesctl" "$HELPERS/"
+          # Next to the binary: the CLI finds its resources there, here and once copied to ~/.practices/bin.
+          cp -R "${BUILT_PRODUCTS_DIR}/PracticesCore_PracticesCore.bundle" "$HELPERS/"
+          codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$HELPERS/PracticesCore_PracticesCore.bundle" "$HELPERS/practicesctl"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.practices.app
@@ -29,6 +45,8 @@ targets:
         # Not sandboxed: it runs git, gh, glab and uv, and practices reach internal services.
         ENABLE_APP_SANDBOX: "NO"
         ENABLE_HARDENED_RUNTIME: "NO"
+        # «Embed practicesctl» reads the build products and writes into the app bundle.
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         # Both, like Tandem: the generated keys below are merged into this file, which exists
         # only to carry NSAppTransportSecurity. Health checks and practices talk plain HTTP to
         # internal services (ClickHouse on :8123), which ATS would refuse (-1022).

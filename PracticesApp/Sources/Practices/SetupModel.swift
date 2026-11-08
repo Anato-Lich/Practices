@@ -80,6 +80,14 @@ final class SetupModel {
         await refresh()
     }
 
+    /// Copies the CLI the app carries in `Contents/Helpers` into `~/.practices/bin`.
+    func installCommand() async {
+        // Not url(forAuxiliaryExecutable:): that looks in Contents/MacOS; a missing file fails in core.
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/practicesctl")
+        await run("установить practicesctl", "command") { try await Setup.installCommand(from: helper) }
+        await refresh()
+    }
+
     func writeProject(_ id: String) async {
         await run("записать блок в \(id)", "project") { try Setup.project(id, registry: Registry()) }
         await refresh()
