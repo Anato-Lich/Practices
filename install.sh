@@ -55,5 +55,5 @@ osascript -e 'tell application "Finder"
   if exists alias file "Practices" of desktop then delete alias file "Practices" of desktop
   make new alias file at desktop to (POSIX file "/Applications/Practices.app")
   set name of result to "Practices"
-end tell' >/dev/null
+end tell' >/dev/null 2>&1 || echo "Desktop alias skipped (Finder automation not allowed) — drag /Applications/Practices.app to the Desktop with ⌥⌘ if you want one"
 echo "Installed: /Applications/Practices.app (+ Desktop alias), $BIN/practicesctl, $BIN/uv"
