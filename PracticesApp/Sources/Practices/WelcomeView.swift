@@ -30,7 +30,7 @@ struct WelcomeView: View {
                         Text(verbatim: "в " + ru(status.roots.count, "папке", "папках", "папках") + " " + ru(n, "клон", "клона", "клонов"))
                             .font(Theme.mono(11.5)).foregroundStyle(n > 0 ? Theme.Color.ok : Theme.Color.textMuted)
                         (Text(verbatim: "Не весь диск: только папки, где лежат проекты · ")
-                         + Text(verbatim: "~/.practices/local.yaml → roots").font(Theme.mono(11.5)))
+                         + Text(verbatim: "\(tilde(PracticesHome.url.path))/local.yaml → roots").font(Theme.mono(11.5)))
                             .font(Theme.ui(11.5)).foregroundStyle(Theme.Color.textMuted)
                     }
                 }
@@ -93,7 +93,7 @@ struct WelcomeView: View {
         .toolbarLeading {
             HStack(spacing: 12) {
                 Text(verbatim: "Начало").font(Theme.ui(15, .semibold)).foregroundStyle(Theme.Color.text)
-                Text(verbatim: "первый запуск · всё личное хранится в ~/.practices и не попадает в git (решение 36)")
+                Text(verbatim: "первый запуск · всё личное хранится в \(tilde(PracticesHome.url.path)) и не попадает в git (решение 36)")
                     .font(Theme.mono(12)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
             }
         }

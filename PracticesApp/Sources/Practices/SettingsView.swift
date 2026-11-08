@@ -25,7 +25,7 @@ struct SettingsView: View {
         .task { await setup.refresh() }
         .toolbarLeading {
             HStack(spacing: 12) {
-                Breadcrumb(prefix: "~/.practices/", title: "Настройка", monoTitle: false)
+                Breadcrumb(prefix: tilde(PracticesHome.url.path) + "/", title: "Настройка", monoTitle: false)
                 Text(verbatim: "всё личное: не в git и не в сборке").font(Theme.mono(12)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
             }
         }
@@ -282,7 +282,7 @@ struct SettingsView: View {
                 GridRow {
                     label("папка")
                     Text(verbatim: tilde(home.path) + " · local.yaml, secrets.json, runtime")
-                    Button { NSWorkspace.shared.open(home) } label: { Text(verbatim: "Открыть ~/.practices в Finder") }
+                    Button { NSWorkspace.shared.open(home) } label: { Text(verbatim: "Открыть \(tilde(PracticesHome.url.path)) в Finder") }
                 }
             }
             .font(Theme.mono(12)).lineLimit(1).truncationMode(.middle)

@@ -179,7 +179,8 @@ func linkLine(_ other: String, _ l: Link, incoming: Bool = false) -> String {
 }
 
 /// `1 clone`, `3 clones`.
-func clones(_ n: Int) -> String { "\(n) clone" + (n == 1 ? "" : "s") }
+func clones(_ n: Int) -> String { plural(n, "clone", "clones") }
+func plural(_ n: Int, _ one: String, _ many: String) -> String { "\(n) " + (n == 1 ? one : many) }
 
 func home(_ path: String?) -> String {
     guard let path else { return "" }
@@ -255,28 +256,28 @@ case "setup":
         case "status":
             let status = try await Setup.status()
             if json { printJSON(status); break }
-            print("roots" + (status.roots.isEmpty ? ": none — practicesctl roots add <dir>" : ""))
+            print("roots" + (status.roots.isEmpty ? ": нет — practicesctl roots add <dir>" : ""))
             let rootWidth = status.roots.map { home($0.path).count }.max() ?? 0
-            for r in status.roots { print("  " + pad(home(r.path), rootWidth) + "  " + (r.exists ? clones(r.clones) : "missing")) }
-            print("\nspaces" + (status.spaces.isEmpty ? " — none; `practicesctl space add <id>`" : ""))
+            for r in status.roots { print("  " + pad(home(r.path), rootWidth) + "  " + (r.exists ? clones(r.clones) : "нет папки")) }
+            print("\nspaces" + (status.spaces.isEmpty ? " — нет; `practicesctl space add <id>`" : ""))
             for s in status.spaces { print("  " + spaceLine(s)) }
-            print("\ncommand: \(status.commandState.rawValue)" + (status.commandState == .outdated ? " — the app carries a newer one; it reinstalls at launch, or «Переустановить» in «Настройка»" : ""))
-            print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — not installed: install it from the app («Начало» / «Настройка») or ./install.sh)"))
+            print("\ncommand: \(status.commandState.rawValue)" + (status.commandState == .outdated ? " — отличается от /Applications/Practices.app (приложение обновляет её при запуске)" : ""))
+            print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — \(Setup.installHint))"))
             for t in status.tools {
-                print("  " + pad(t.tool.rawValue, 8) + (t.found ? pad("MCP " + (t.mcp ? "registered" : "not registered"), 22)
-                      + (t.instructions.map { "instructions " + $0 } ?? "") : "not found"))
+                print("  " + pad(t.tool.rawValue, 8) + (t.found ? pad("MCP " + (t.mcp ? "зарегистрирован" : "не зарегистрирован"), 22)
+                      + (t.instructions.map { "инструкции " + $0 } ?? "") : "не найден"))
             }
-            if !status.projectBlocks.isEmpty { print("\nproject clones with the block") }
+            if !status.projectBlocks.isEmpty { print("\nклоны проектов с блоком") }
             let fileWidth = status.projectBlocks.map { home($0.clone).count + 1 + $0.file.count }.max() ?? 0
             for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, fileWidth) + "  " + b.state) }
-            if let scope = status.scope { print("\nscope: \(scope.rawValue)" + (scope == .both ? " — `setup agents --global` or `--projects` keeps one" : "")) }
+            if let scope = status.scope { print("\nscope: \(scope.rawValue)" + (scope == .both ? " — `setup agents --global` или `--projects` оставит один" : "")) }
         case "install":
             guard let me = Bundle.main.executableURL?.resolvingSymlinksInPath() else { fail("practices: where is this binary?") }
             try await Setup.installCommand(from: me).forEach { print("installed " + home($0.path)) }
         case "agents":
             // MCP would point at a command that is not there; nothing is written.
             guard FileManager.default.isExecutableFile(atPath: AgentHome().command) else {
-                FileHandle.standardError.write(Data("practices: MCP указывает на несуществующую команду \(home(AgentHome().command)): сначала `practicesctl setup install`\n".utf8))
+                FileHandle.standardError.write(Data("practices: MCP указывает на несуществующую команду \(home(AgentHome().command)) — \(Setup.installHint)\n".utf8))
                 exit(1)
             }
             if let project = options["--project"]?.last {
@@ -629,7 +630,7 @@ case "scan":
     }
     if !result.networks.isEmpty { print("shared networks") }
     for (name, repos) in result.networks.sorted(by: { $0.key < $1.key }) { print("  " + pad(name, 20) + "  " + repos.joined(separator: ", ")) }
-    if !written.isEmpty { print("\nwritten, not committed: \(written.count) files — `practicesctl pending`, then `accept`") }
+    if !written.isEmpty { print("\nwritten, not committed: \(written.count) \(written.count == 1 ? "file" : "files") — `practicesctl pending`, then `accept`") }
 
 case "pending":
     let registry = Registry()
@@ -744,6 +745,7 @@ case "secrets":
         print("\(id)@\(env) \(key): unset")
         break
     }
+    if !args.contains("--env") { FileHandle.standardError.write(Data("env: \(env) (по умолчанию; --env <env> для другого)\n".utf8)) }
     // From stdin, so the value stays out of shell history and `ps`.
     var value: String?
     if isatty(0) != 0 {
@@ -825,6 +827,7 @@ case "connect":
 
 case "doctor":
     let findings = try await Doctor.run()
+    defer { if findings.contains(where: { $0.kind == .leak }) { exit(1) } }
     if json { printJSON(findings); break }
     if findings.isEmpty { print("nothing to report"); break }
     for f in findings {

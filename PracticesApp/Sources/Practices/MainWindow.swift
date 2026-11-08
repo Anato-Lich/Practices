@@ -168,7 +168,7 @@ struct MainWindow: View {
             case .unassigned: Breadcrumb(title: "Не распределено", monoTitle: false)
             case .map: Breadcrumb(title: "Карта", monoTitle: false)
             case .doctor: Breadcrumb(title: "Doctor", monoTitle: false)
-            case .settings: Breadcrumb(prefix: "~/.practices/", title: "Настройка", monoTitle: false)
+            case .settings: Breadcrumb(prefix: tilde(PracticesHome.url.path) + "/", title: "Настройка", monoTitle: false)
             case nil: EmptyView()
             }
         }
@@ -321,7 +321,7 @@ private struct RemoveProjectSheet: View {
                 .toggleStyle(.checkbox).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
             }
             HStack(spacing: 8) {
-                Text(verbatim: "Запись в личной истории каталога (~/.practices): откатить можно через неё.")
+                Text(verbatim: "Запись в личной истории каталога (\(tilde(PracticesHome.url.path))): откатить можно через неё.")
                     .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).frame(maxWidth: .infinity, alignment: .leading)
                 Button { registry.removalCandidate = nil } label: { Text(verbatim: "Отмена") }
                     .buttonStyle(CompactButtonStyle(height: 28)).keyboardShortcut(.cancelAction)

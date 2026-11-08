@@ -226,6 +226,9 @@ public enum CommandState: String, Codable, Sendable {
 
 public enum Setup {
 
+    /// The one hint wherever the installed command is missing (CLI, MCP).
+    public static let installHint = "не установлен: `practicesctl setup install`, или кнопка «Установить practicesctl» в приложении («Начало» / «Настройка»)"
+
     /// The CLI the app carries: this app's own when running in one, else the installed app's.
     public static var appHelper: URL {
         let main = Bundle.main.bundleURL
