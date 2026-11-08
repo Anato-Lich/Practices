@@ -52,7 +52,7 @@ public struct AgentHome: Sendable {
 /// The instruction block written into agents' CLAUDE.md / AGENTS.md between markers.
 public enum AgentInstructions {
     /// Bump when the text of `Resources/AgentInstructions.md` changes: older blocks show as outdated.
-    public static let version = 5
+    public static let version = 6
     public static let projectFiles = ["CLAUDE.md", "AGENTS.md"]
 
     public static var text: String {
