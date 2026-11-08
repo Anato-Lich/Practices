@@ -325,6 +325,20 @@ struct TempHome {
         #expect(throws: Registry.Failure.self) { try registry.addLink(Link(to: "missing"), from: "api") }
         #expect(throws: Registry.Failure.self) { try registry.addLink(Link(to: "pg"), from: "missing") }
     }
+
+    @Test func anIndexedRegistryReadsTheSameAndKeepsItsListing() throws {
+        let home = TempHome()
+        try home.place(Service(id: "api", name: "api", kind: "http"))
+        try home.place(Service(id: "pg", name: "pg", kind: "postgres"), project: "infra")
+        _ = try home.registry.addLink(Link(to: "pg", via: "db"), from: "api")
+        let indexed = home.registry.indexed()
+        #expect(indexed.serviceIDs() == home.registry.serviceIDs())
+        #expect(indexed.dir(of: "pg") == home.registry.dir(of: "pg"))
+        #expect(indexed.links(to: "pg").map(\.from) == ["api"])
+        try home.place(Service(id: "redis", name: "redis", kind: "redis"), project: "infra")
+        #expect(indexed.dir(of: "redis") == nil)                                       // listed before the card was written
+        #expect(home.registry.dir(of: "redis") != nil)
+    }
 }
 
 @Suite struct HostsAndConventionsTests {

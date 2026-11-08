@@ -70,6 +70,7 @@ public enum Doctor {
     /// Without `root`: the registry's search roots (`local.yaml`).
     public static func run(root: String? = nil, registry: Registry = Registry(),
                            store: SecretStore = SecretStore(), scanText: Bool = true) async throws -> [DoctorFinding] {
+        let registry = registry.indexed()
         let services = try registry.services()
         var keyOwner: [String: [Service]] = [:]
         for service in services { for key in service.keys { keyOwner[key.name, default: []].append(service) } }

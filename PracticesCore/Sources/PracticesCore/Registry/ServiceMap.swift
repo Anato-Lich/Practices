@@ -13,8 +13,9 @@ public struct Catalogue: Sendable {
 
 extension Registry {
     public func catalogue() throws -> Catalogue {
-        Catalogue(projects: try projects(), services: try services(),
-                  links: serviceIDs().flatMap { from in links(of: from).map { (from, $0) } })
+        let registry = indexed()
+        return Catalogue(projects: try registry.projects(), services: try registry.services(),
+                         links: registry.serviceIDs().flatMap { from in registry.links(of: from).map { (from, $0) } })
     }
 }
 

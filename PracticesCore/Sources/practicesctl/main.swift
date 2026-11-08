@@ -509,7 +509,7 @@ case "service":
     if !practices.isEmpty { print("\npractices\n  " + practices.map(\.name).joined(separator: "  ")) }
 
 case "links":
-    let registry = Registry()
+    let registry = Registry().indexed()
     if positional.count > 1 {
         guard registry.dir(of: positional[1]) != nil else { fail("no service \(positional[1])") }
         let out = registry.links(of: positional[1]), incoming = registry.links(to: positional[1])

@@ -51,6 +51,7 @@ public enum Search {
                            store: PracticeStore? = nil, runs: RunsStore? = try? RunsStore()) -> SearchResults {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard q.count >= 2 else { return SearchResults() }
+        let registry = registry.indexed()
         let store = store ?? PracticeStore(registry: registry)
         var out = SearchResults()
 

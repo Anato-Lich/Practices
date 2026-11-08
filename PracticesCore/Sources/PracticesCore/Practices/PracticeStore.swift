@@ -57,7 +57,8 @@ public struct PracticeStore: Sendable {
     }
 
     public func all() -> [Practice] {
-        registry.serviceIDs().flatMap { list(service: $0) } + chains()
+        let store = PracticeStore(registry: registry.indexed())
+        return store.registry.serviceIDs().flatMap { store.list(service: $0) } + store.chains()
     }
 
     public func list(service id: String) -> [Practice] {

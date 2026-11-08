@@ -68,6 +68,14 @@ public struct Pending: Codable, Hashable, Sendable {
 public struct Registry: Sendable {
     public let root: URL
     public let local: LocalConfig
+    /// The card folders as `indexed()` found them; nil — every lookup lists the spaces again.
+    private var index: Index?
+
+    private struct Index: Sendable {
+        let spaces: [String]
+        let projects: [(space: String, id: String, url: URL)]
+        let services: [(space: String, project: String, id: String, url: URL)]
+    }
 
     public init(home: URL = PracticesHome.url) {
         root = home.appendingPathComponent("spaces")
@@ -77,6 +85,15 @@ public struct Registry: Sendable {
     public struct Failure: Error, CustomStringConvertible, Sendable {
         public let description: String
         public init(_ description: String) { self.description = description }
+    }
+
+    /// The same registry with its folders listed once: a lookup by id (`dir(of:)`, `links(of:)`, …)
+    /// is then a search in memory, not a walk of every space. For reading: a card written or removed
+    /// after this is not seen by the copy.
+    public func indexed() -> Registry {
+        var copy = self
+        copy.index = Index(spaces: spaceIDs(), projects: projectDirs(), services: serviceDirs())
+        return copy
     }
 
     /// Ids become directory names and parts of practice references.
@@ -94,6 +111,7 @@ public struct Registry: Sendable {
     }
 
     public func spaceIDs() -> [String] {
+        if let index { return index.spaces }
         let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
         return Set(names + local.spaces.keys).filter { exists(dir(ofSpace: $0).appendingPathComponent("space.yaml")) }.sorted()
     }
@@ -110,7 +128,8 @@ public struct Registry: Sendable {
     // MARK: Projects
 
     func projectDirs() -> [(space: String, id: String, url: URL)] {
-        spaceIDs().flatMap { space in
+        if let index { return index.projects }
+        return spaceIDs().flatMap { space in
             let projects = dir(ofSpace: space).appendingPathComponent("projects")
             return subdirectories(of: projects, holding: "project.yaml").map { (space, $0, projects.appendingPathComponent($0)) }
         }
@@ -174,7 +193,8 @@ public struct Registry: Sendable {
     // MARK: Services
 
     func serviceDirs() -> [(space: String, project: String, id: String, url: URL)] {
-        projectDirs().flatMap { project in
+        if let index { return index.services }
+        return projectDirs().flatMap { project in
             let services = project.url.appendingPathComponent("services")
             return subdirectories(of: services, holding: "service.yaml").map { (project.space, project.id, $0, services.appendingPathComponent($0)) }
         }
@@ -219,7 +239,8 @@ public struct Registry: Sendable {
 
     /// Incoming links, computed from the callers' files.
     public func links(to id: String) -> [(from: String, link: Link)] {
-        serviceIDs().flatMap { from in links(of: from).filter { $0.to == id }.map { (from, $0) } }
+        let registry = indexed()
+        return registry.serviceIDs().flatMap { from in registry.links(of: from).filter { $0.to == id }.map { (from, $0) } }
     }
 
     // MARK: Conditions
