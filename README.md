@@ -113,6 +113,7 @@ xcodebuild -project PracticesApp/Practices.xcodeproj -scheme Practices -configur
   -derivedDataPath build build
 build/Build/Products/Debug/Practices.app/Contents/MacOS/Practices --render-window out.png \
   [--welcome | --settings | --pending | --doctor | --space <id> | --project <id> | --map …] [--wait 2]
+  # карта: --map --project <id> | --space <id> [--flow] | --service <id> [--hops n]; --zoom k, --pin <id>
 ```
 
 Для изолированного запуска `PRACTICES_HOME` подменяет `~/.practices`, а `PRACTICES_AGENT_HOME` —
