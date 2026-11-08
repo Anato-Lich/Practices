@@ -56,44 +56,42 @@ public enum Shell {
     ) async throws -> String {
         guard let path = locate(tool) else { throw NotFound(tool: tool) }
         return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: path)
-            process.arguments = arguments
-            process.environment = environment
-            let out = Pipe(), err = Pipe()
-            process.standardOutput = out
-            process.standardError = err
-            let stdin = input.map { _ in Pipe() }
-            process.standardInput = stdin ?? FileHandle.nullDevice
-
-            // Drain both pipes while the process runs; a full pipe buffer would block it.
-            let collector = OutputCollector()
-            out.fileHandleForReading.readabilityHandler = { collector.append(out: $0.availableData) }
-            err.fileHandleForReading.readabilityHandler = { collector.append(err: $0.availableData) }
-
-            process.terminationHandler = { p in
-                out.fileHandleForReading.readabilityHandler = nil
-                err.fileHandleForReading.readabilityHandler = nil
-                collector.append(out: out.fileHandleForReading.readDataToEndOfFile())
-                collector.append(err: err.fileHandleForReading.readDataToEndOfFile())
-                let (stdout, stderr) = collector.strings
-                if allowedStatuses.contains(p.terminationStatus) {
-                    continuation.resume(returning: stdout)
-                } else {
-                    continuation.resume(throwing: Failure(
-                        tool: tool, status: p.terminationStatus, stderr: stderr))
-                }
-            }
-            do {
-                try process.run()
+            // Blocking reads on a GCD thread, not the cooperative pool.
+            DispatchQueue.global().async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: path)
+                process.arguments = arguments
+                process.environment = environment
+                let out = Pipe(), err = Pipe()
+                process.standardOutput = out
+                process.standardError = err
+                let stdin = input.map { _ in Pipe() }
+                process.standardInput = stdin ?? FileHandle.nullDevice
+                do { try process.run() } catch { continuation.resume(throwing: error); return }
                 if let stdin, let input {
-                    // Written off the caller's thread: a large input would block on a full pipe.
+                    // Written off this thread: a large input would block on a full pipe.
                     DispatchQueue.global().async {
                         stdin.fileHandleForWriting.write(input)
                         try? stdin.fileHandleForWriting.close()
                     }
                 }
-            } catch { continuation.resume(throwing: error) }
+                // Both pipes are read to EOF before the exit is looked at: a full pipe would block
+                // the tool, and a readabilityHandler chunk still in flight at termination was lost.
+                let collector = OutputCollector()
+                let stderrDone = DispatchGroup()
+                DispatchQueue.global().async(group: stderrDone) {
+                    collector.append(err: err.fileHandleForReading.readDataToEndOfFile())
+                }
+                collector.append(out: out.fileHandleForReading.readDataToEndOfFile())
+                stderrDone.wait()
+                process.waitUntilExit()
+                let (stdout, stderr) = collector.strings
+                if allowedStatuses.contains(process.terminationStatus) {
+                    continuation.resume(returning: stdout)
+                } else {
+                    continuation.resume(throwing: Failure(tool: tool, status: process.terminationStatus, stderr: stderr))
+                }
+            }
         }
     }
 }

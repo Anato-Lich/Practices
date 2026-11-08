@@ -13,12 +13,12 @@ public struct AgentHome: Sendable {
     /// The `~/.practices` whose `bin/practicesctl` the agents are told to run.
     public let practices: URL
 
-    public static var defaultBase: URL {
-        ProcessInfo.processInfo.environment["PRACTICES_AGENT_HOME"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+    public static func defaultBase(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        environment["PRACTICES_AGENT_HOME"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
             ?? URL(fileURLWithPath: NSHomeDirectory())
     }
 
-    public init(base: URL = AgentHome.defaultBase, practices: URL = PracticesHome.url) {
+    public init(base: URL = AgentHome.defaultBase(), practices: URL = PracticesHome.url) {
         self.base = base
         self.practices = practices
     }

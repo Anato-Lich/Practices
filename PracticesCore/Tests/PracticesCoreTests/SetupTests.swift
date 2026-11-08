@@ -89,10 +89,10 @@ import Foundation
 
     @Test func agentHomeFollowsEnvironment() {
         let base = TempHome().url
-        setenv("PRACTICES_AGENT_HOME", base.path, 1)
-        defer { unsetenv("PRACTICES_AGENT_HOME") }
-        #expect(AgentHome().base.path == base.path)
-        #expect(AgentHome().mcpConfig(.claude).path == base.appendingPathComponent(".claude.json").path)
+        let home = AgentHome(base: AgentHome.defaultBase(["PRACTICES_AGENT_HOME": base.path]))
+        #expect(home.base.path == base.path)
+        #expect(home.mcpConfig(.claude).path == base.appendingPathComponent(".claude.json").path)
+        #expect(AgentHome.defaultBase(["PRACTICES_AGENT_HOME": ""]).path == NSHomeDirectory())
     }
 
     @Test func toolNotFoundIsSkipped() throws {
