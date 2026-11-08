@@ -33,7 +33,7 @@ Practices — одно место, где описаны все проекты �
 
 *Карта: проекты и связи между ними; линия — пара проектов с тремя и более связями.*
 
-План и этапы — [`PLAN.md`](PLAN.md), решения и их альтернативы — [`DECISIONS.md`](DECISIONS.md).
+План и этапы — [`PLAN.md`](work/2026-11-06-catalog-rebuild/PLAN.md), решения и их альтернативы — [`DECISIONS.md`](work/2026-11-06-catalog-rebuild/DECISIONS.md).
 
 ## Установка из DMG
 
