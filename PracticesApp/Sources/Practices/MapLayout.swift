@@ -452,10 +452,11 @@ struct SpaceFlow {
 
 // MARK: - Service: the thread
 
-/// The service in the middle, its callers chain to the left (nearest first) and the services it
-/// calls to the right, a column per step.
+/// The service in the middle, where its data comes from to the left (nearest first) and where it
+/// goes to the right, a column per step; a broker crossed gets a column of its own between two
+/// steps. Cards are keyed by `ServiceMap.Thread.Node.key`.
 struct ThreadLayout {
-    static let chipW: CGFloat = 228, chipH: CGFloat = 22, row: CGFloat = 30, gap: CGFloat = 120
+    static let chipW: CGFloat = 228, chipH: CGFloat = 22, row: CGFloat = 30, gap: CGFloat = 120, brokerGap: CGFloat = 150
     static let centre = CGSize(width: 260, height: 48)
 
     var chips: [String: CGRect] = [:]
@@ -463,24 +464,33 @@ struct ThreadLayout {
     var size = CGSize.zero
 
     init(_ thread: ServiceMap.Thread, centre: Service) {
-        var cols = thread.up.reversed() + [[centre]] + thread.down
-        barycentre(&cols, adj: adjacency(thread.pairs), sweeps: 8, centred: true)
+        let centreNode = ServiceMap.Thread.Node(key: centre.id, service: centre, broker: false)
+        let steps = thread.columns.map(\.step).filter { $0 < 0 } + [0] + thread.columns.map(\.step).filter { $0 > 0 }
+        var cols = thread.columns.filter { $0.step < 0 }.map(\.nodes) + [[centreNode]] + thread.columns.filter { $0.step > 0 }.map(\.nodes)
+        // barycentre works on services; a broker's key stands in for its id.
+        var keyed = cols.map { $0.map { n -> Service in var s = n.service; s.id = n.key; return s } }
+        barycentre(&keyed, adj: adjacency(thread.pairs), sweeps: 8, centred: true)
+        let byKey = Dictionary(cols.flatMap { $0 }.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        cols = keyed.map { $0.map { byKey[$0.id]! } }
         let tallest = CGFloat(cols.map(\.count).max() ?? 1)
         let height = tallest * Self.row
         var x: CGFloat = 0
         for (k, list) in cols.enumerated() {
-            let d = k - thread.up.count
+            let d = steps[k], nextBroker = k + 1 < steps.count && (steps[k + 1] % 2 != 0 || d % 2 != 0)
+            let gap = nextBroker ? Self.brokerGap : Self.gap
             if d == 0 {
                 let r = CGRect(x: x, y: 44 + (height - Self.centre.height) / 2, width: Self.centre.width, height: Self.centre.height)
                 chips[centre.id] = r
                 columns.append(("", x, r.minY))
-                x += Self.centre.width + Self.gap
+                x += Self.centre.width + gap
                 continue
             }
             let top = 44 + (tallest - CGFloat(list.count)) / 2 * Self.row
-            for (i, s) in list.enumerated() { chips[s.id] = CGRect(x: x, y: top + CGFloat(i) * Self.row, width: Self.chipW, height: Self.chipH) }
-            columns.append((d == -1 ? "Вызывают" : d == 1 ? "Вызывает" : ru(abs(d), "шаг", "шага", "шагов") + (d < 0 ? " вверх" : " вниз"), x, top))
-            x += Self.chipW + Self.gap
+            for (i, n) in list.enumerated() { chips[n.key] = CGRect(x: x, y: top + CGFloat(i) * Self.row, width: Self.chipW, height: Self.chipH) }
+            let h = abs(d) / 2
+            let title = d % 2 != 0 ? "" : d == -2 ? "Откуда приходит" : d == 2 ? "Куда уходит" : ru(h, "шаг", "шага", "шагов") + (d < 0 ? " вверх" : " вниз")
+            columns.append((title, x, top))
+            x += Self.chipW + gap
         }
         size = CGSize(width: x - Self.gap, height: max(height, Self.centre.height) + 60)
     }

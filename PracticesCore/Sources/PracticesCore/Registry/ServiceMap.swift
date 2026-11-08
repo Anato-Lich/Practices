@@ -67,13 +67,24 @@ public enum ServiceMap {
         public var topics: [Topic]?
     }
 
-    /// A service's thread: who calls it, who calls those, … (`up[0]` — the direct callers) and
-    /// whom it calls, transitively (`down`), up to `hops` steps; a service is placed once, on the
-    /// side and at the distance where it is met first. `pairs` run left to right only.
+    /// A service's thread (decision 16): where its data comes from, to the left, and where it goes,
+    /// to the right, up to `hops` steps; a service is placed once, on the side and at the distance
+    /// where it is met first. Data follows `access`: a topic or db `write` flows into the broker or
+    /// storage, a `read` out of it; other links run caller → callee. A broker is passed per topic
+    /// (a writer of `t` reaches the readers of `t`, not every client) and does not count as a step;
+    /// it is drawn once per crossing, between the two steps. `pairs` run left to right, between keys.
     public struct Thread: Sendable {
-        public var up: [[Service]]
-        public var down: [[Service]]
+        /// A card: `key` is the service id, or `id@step` for a broker crossed between two steps.
+        public struct Node: Sendable {
+            public var key: String, service: Service, broker: Bool
+            public init(key: String, service: Service, broker: Bool) { self.key = key; self.service = service; self.broker = broker }
+        }
+        /// Left to right, the service itself (step 0) left out: ∓2d d steps up / down, a broker at ∓(2d − 1).
+        public var columns: [(step: Int, nodes: [Node])]
         public var pairs: [Pair]
+        /// Services (not brokers) d steps up, nearest first.
+        public var up: [[Service]] { columns.filter { $0.step < 0 && $0.step % 2 == 0 }.reversed().map { $0.nodes.map(\.service) } }
+        public var down: [[Service]] { columns.filter { $0.step > 0 && $0.step % 2 == 0 }.map { $0.nodes.map(\.service) } }
     }
 
     public static let hubCallers = 5
@@ -184,26 +195,58 @@ public enum ServiceMap {
     }
 
     public static func thread(_ id: String, in c: Catalogue, hops: Int = 3) -> Thread {
-        let all = pairs(in: c)
-        let byID = Dictionary(c.services.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        // Column: 0 the service, -d a caller d steps up, +d a callee d steps down.
-        var column: [String: Int] = [id: 0]
-        for (sign, next) in [(-1, { (p: Pair) in (p.to, p.from) }), (1, { (p: Pair) in (p.from, p.to) })] {
+        let byID = resolved(c).byID
+        // Each link as the way its data runs; `broker` — the topic's broker.
+        let flows = resolved(c).links.filter { $0.from.id != $0.to.id }.map { l in
+            let back = l.link.access == "read" && ["topic", "db"].contains(l.link.via ?? "")
+            return (from: back ? l.to.id : l.from.id, to: back ? l.from.id : l.to.id, link: l.link,
+                    broker: l.link.via == "topic" ? l.to.id : nil as String?)
+        }
+        var step: [String: Int] = [id: 0], brokers: [String: String] = [:], edges: [(from: String, to: String, link: Link)] = []
+        for sign in [-1, 1] {
+            let near = { (f: (from: String, to: String, link: Link, broker: String?)) in sign > 0 ? f.from : f.to }
+            let far = { (f: (from: String, to: String, link: Link, broker: String?)) in sign > 0 ? f.to : f.from }
+            func edge(_ a: String, _ b: String, _ l: Link) { edges.append(sign > 0 ? (a, b, l) : (b, a, l)) }
             var frontier = [id]
             for d in 1...max(hops, 1) {
                 var found: [String] = []
-                for p in all {
-                    let (at, other) = next(p)
-                    if frontier.contains(at) && column[other] == nil { column[other] = sign * d; found.append(other) }
+                func reach(_ x: String) { if step[x] == nil { step[x] = sign * 2 * d; found.append(x) } }
+                for n in frontier {
+                    for f in flows where near(f) == n {
+                        guard let b = f.broker, b != n else {
+                            // A broker's own clients count only when it is the centre.
+                            if f.broker == nil || n == id { reach(far(f)); edge(n, far(f), f.link) }
+                            continue
+                        }
+                        let key = "\(b)@\(sign * (2 * d - 1))"
+                        brokers[key] = b
+                        edge(n, key, f.link)
+                        for g in flows where g.broker == b && near(g) == b && g.link.what == f.link.what {
+                            reach(far(g)); edge(key, far(g), g.link)
+                        }
+                    }
                 }
                 frontier = found
             }
         }
-        let side = { (sign: Int) in (1...max(hops, 1)).map { d in
-            column.filter { $0.value == sign * d }.keys.compactMap { byID[$0] }.sorted { ($0.project, $0.id) < ($1.project, $1.id) } }
-            .filter { !$0.isEmpty } }
-        return Thread(up: side(-1), down: side(1),
-                      pairs: all.filter { p in column[p.from].flatMap { a in column[p.to].map { a < $0 } } ?? false })
+        // Calls between services already placed, left to right (a caller further up, say).
+        edges += flows.filter { $0.broker == nil && step[$0.from] != nil && step[$0.to] != nil }.map { ($0.from, $0.to, $0.link) }
+        let at = { (k: String) in step[k] ?? brokers[k].flatMap { _ in Int(k.split(separator: "@").last!) } }
+        var order: [[String]] = [], links: [[String]: [Link]] = [:]
+        for e in edges {
+            guard let a = at(e.from), let b = at(e.to), a < b else { continue }
+            let key = [e.from, e.to]
+            if links[key] == nil { order.append(key) }
+            if !links[key, default: []].contains(e.link) { links[key, default: []].append(e.link) }
+        }
+        let pairs = order.map { Pair(from: $0[0], to: $0[1], links: links[$0]!) }
+        let used = Set(pairs.flatMap { [$0.from, $0.to] })
+        var nodes = step.keys.filter { $0 != id }.compactMap { k in byID[k].map { (k, Thread.Node(key: k, service: $0, broker: false)) } }
+        nodes += brokers.filter { used.contains($0.key) }.compactMap { k, b in byID[b].map { (k, Thread.Node(key: k, service: $0, broker: true)) } }
+        let columns = Dictionary(grouping: nodes, by: { at($0.0)! }).map { st, xs in
+            (step: st, nodes: xs.map(\.1).sorted { ($0.service.project, $0.service.id) < ($1.service.project, $1.service.id) })
+        }.sorted { $0.step < $1.step }
+        return Thread(columns: columns, pairs: pairs)
     }
 
     public static func service(_ id: String, in c: Catalogue) -> ServiceFocus {

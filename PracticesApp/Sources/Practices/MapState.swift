@@ -65,13 +65,14 @@ final class MapState {
     static let zoomRange: ClosedRange<CGFloat> = 0.4...4
 
     /// The whole content in view, centred, between `minimum` and 1×; past the minimum it is
-    /// aligned to the top left, where the first columns are.
-    func fit(minimum: CGFloat = 0.4) {
+    /// aligned to the top left, where the first columns are, or centred on `anchor` (the thread's service).
+    func fit(minimum: CGFloat = 0.4, anchor: CGPoint? = nil) {
         guard contentSize.width > 0, viewSize.width > 0 else { return }
         let pad: CGFloat = 32
         let k = min(1, max(minimum, min((viewSize.width - 2 * pad) / contentSize.width, (viewSize.height - 2 * pad) / contentSize.height)))
         scale = k
         pan = CGSize(width: max(pad, (viewSize.width - contentSize.width * k) / 2), height: max(pad, (viewSize.height - contentSize.height * k) / 2))
+        if let a = anchor, contentSize.width * k > viewSize.width - 2 * pad { pan.width = viewSize.width / 2 - a.x * k }
         if let z = renderZoom { zoom(to: k * z, around: CGPoint(x: viewSize.width / 2, y: viewSize.height / 2)) }
     }
 

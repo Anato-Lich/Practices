@@ -506,7 +506,8 @@ private struct ProjectMapView: View {
 
 // MARK: - Level 3: service
 
-/// Variant A filtered to the thread: callers chain left, callees chain right, up to `hops`.
+/// Variant A filtered to the thread: where the data comes from on the left, where it goes on the
+/// right, up to `hops`; a broker between two steps, the topics on its lines.
 private struct ServiceMapView: View {
     let state: MapState
 
@@ -515,9 +516,12 @@ private struct ServiceMapView: View {
             let key = "thread:\(id):\(state.hops)"
             let thread = state.cached(key) { ServiceMap.thread(id, in: state.catalogue, hops: state.hops) }
             let layout = state.cached(key + ":layout") { ThreadLayout(thread, centre: s) }
-            let lit = litSet(state, thread.pairs)
-            let byID = Dictionary((thread.up + thread.down).flatMap { $0 }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            ZoomPan(state: state, key: key, size: layout.size) {
+            let nodes = Dictionary(thread.columns.flatMap(\.nodes).map { ($0.key, $0.service) }, uniquingKeysWith: { a, _ in a })
+            let sid = { (k: String) in nodes[k]?.id ?? k }
+            // Hover and pin go by service id: a broker crossed twice lights up on both sides.
+            let lit = litSet(state, thread.pairs.map { var p = $0; p.from = sid(p.from); p.to = sid(p.to); return p })
+            let mid = layout.chips[id].map { CGPoint(x: $0.midX, y: $0.midY) }
+            ZoomPan(state: state, key: key, size: layout.size, anchor: mid) {
                 ZStack(alignment: .topLeading) {
                     ForEach(layout.columns.indices, id: \.self) { i in
                         if !layout.columns[i].title.isEmpty { SectionTitle(layout.columns[i].title).placed(layout.columns[i].x, layout.columns[i].top - 24) }
@@ -526,18 +530,32 @@ private struct ServiceMapView: View {
                         guard let a = layout.chips[p.from], let b = layout.chips[p.to] else { return nil }
                         let t = MapGeometry.thread(a, b)
                         return (MapLine(path: t.path, tip: t.tip, back: t.back, color: color(p), width: MapGeometry.width(p.links.count),
-                                        opacity: 0.8, dashed: p.via == "build"), [p.from, p.to])
+                                        opacity: 0.8, dashed: p.via == "build"), [sid(p.from), sid(p.to)])
                     }, focus: state.focused))
-                    ForEach(byID.keys.sorted(), id: \.self) { sid in
-                        MapChip(state: state, service: byID[sid]!, size: CGSize(width: ThreadLayout.chipW, height: ThreadLayout.chipH),
+                    ForEach(thread.pairs.indices, id: \.self) { i in topics(thread.pairs[i], layout) }
+                    ForEach(nodes.keys.sorted(), id: \.self) { k in
+                        MapChip(state: state, service: nodes[k]!, size: CGSize(width: ThreadLayout.chipW, height: ThreadLayout.chipH),
                                 lit: lit, bar: true, projectDot: true, radius: 5)
-                            .placed(layout.chips[sid]!)
+                            .placed(layout.chips[k]!)
                     }
                     centre(s).placed(layout.chips[id]!)
                 }
             } overlay: {
-                MapLegend(note: thread.up.isEmpty && thread.down.isEmpty ? "ни вызывающих, ни вызываемых" : "клик — закрепить; клик по закреплённому в панели «Нить» — перейти к нему")
+                MapLegend(note: thread.columns.isEmpty ? "данные не приходят и не уходят" : "слева — откуда приходят данные, справа — куда уходят; клик — закрепить")
             }
+        }
+    }
+
+    /// The topics of a line to or from a broker, at the line's middle.
+    @ViewBuilder private func topics(_ p: ServiceMap.Pair, _ layout: ThreadLayout) -> some View {
+        let names = Array(Set(p.links.filter { $0.via == "topic" }.compactMap(\.what))).sorted()
+        if !names.isEmpty, let a = layout.chips[p.from], let b = layout.chips[p.to] {
+            let text = names.count > 2 ? "\(names[0]) +\(names.count - 1)" : names.joined(separator: ", ")
+            Text(verbatim: text).font(Theme.mono(10)).foregroundStyle(Theme.Color.textSecondary)
+                .padding(.horizontal, 3).background(Theme.Color.windowBg.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+                .fixedSize()
+                .help(names.joined(separator: "\n"))
+                .position(x: (a.maxX + b.minX) / 2, y: (a.midY + b.midY) / 2)
         }
     }
 

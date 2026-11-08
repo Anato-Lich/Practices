@@ -80,6 +80,8 @@ struct ZoomPan<Content: View, Overlay: View>: View {
     let key: String
     let size: CGSize
     var minimum: CGFloat = 0.4
+    /// A content point kept in the middle when the content does not fit.
+    var anchor: CGPoint? = nil
     @ViewBuilder var content: Content
     /// Drawn over the map in view coordinates (edge markers, the legend).
     @ViewBuilder var overlay: Overlay
@@ -93,7 +95,7 @@ struct ZoomPan<Content: View, Overlay: View>: View {
                 .offset(state.pan)
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
                 .background(Theme.Color.windowBg.onTapGesture {
-                    if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { state.fit(minimum: minimum) } else { state.pinned = nil }
+                    if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { state.fit(minimum: minimum, anchor: anchor) } else { state.pinned = nil }
                 })
                 .overlay { overlay.allowsHitTesting(false) }
                 .clipped()
@@ -118,7 +120,7 @@ struct ZoomPan<Content: View, Overlay: View>: View {
         state.contentSize = size
         guard force else { return }
         state.fitted = key
-        state.fit(minimum: minimum)
+        state.fit(minimum: minimum, anchor: anchor)
     }
 
     private func handle(_ e: NSEvent, at p: CGPoint) {

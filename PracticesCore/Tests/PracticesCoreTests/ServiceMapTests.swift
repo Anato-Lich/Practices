@@ -71,14 +71,43 @@ import Testing
 
     @Test func thread() {
         let t = ServiceMap.thread("api", in: Self.catalogue)
-        #expect(t.up.map { $0.map(\.id) } == [["worker"]])
-        #expect(t.down.map { $0.map(\.id) } == [["db", "ext1", "sso", "sysapi", "wifi", "kafka"]])
+        #expect(t.up.map { $0.map(\.id) } == [["worker"], ["job"]])        // job writes t1, which worker reads
+        #expect(t.down.map { $0.map(\.id) } == [["db", "ext1", "sso", "sysapi", "wifi"]])
+        #expect(t.columns.map(\.step) == [-4, -3, -2, 1, 2])                // kafka between steps, twice
         #expect(!t.pairs.contains { $0.from == "db" })                      // db→sso runs within one column
-        #expect(t.pairs.contains { $0.from == "worker" && $0.to == "kafka" }) // left to right, skipping the centre
+        #expect(t.pairs.contains { $0.from == "api" && $0.to == "kafka@1" })
         let one = ServiceMap.thread("sso", in: Self.catalogue, hops: 1)
         #expect(one.up.count == 1 && one.up[0].count == 5 && one.down.isEmpty)
         let two = ServiceMap.thread("sso", in: Self.catalogue, hops: 2)
         #expect(two.up.count == 1)                 // every caller of sso is already in the first column
+    }
+
+    /// writer → t → bus → reader, through the broker per topic; db by access.
+    @Test func threadFollowsData() {
+        let services = ["writer", "reader", "other", "clean", "api", "store", "report"].map { Self.svc($0, "worker", "p") }
+            + [Self.svc("bus", "kafka", "p")]
+        let links: [(from: String, link: Link)] = [
+            ("writer", Link(to: "bus", via: "topic", what: "t", access: "write")),
+            ("clean", Link(to: "bus", via: "topic", what: "t", access: "read")),
+            ("clean", Link(to: "bus", via: "topic", what: "t.clean", access: "write")),
+            ("clean", Link(to: "api", via: "http", access: "read")),
+            ("other", Link(to: "bus", via: "topic", what: "u", access: "read")),     // another topic: not on the thread
+            ("reader", Link(to: "bus", via: "topic", what: "t.clean", access: "read")),
+            ("reader", Link(to: "store", via: "db", access: "write")),
+            ("report", Link(to: "store", via: "db", access: "read"))]
+        let c = Catalogue(projects: [Project(id: "p", space: "sp", name: "P")], services: services, links: links)
+        let t = ServiceMap.thread("clean", in: c)
+        #expect(t.up.map { $0.map(\.id) } == [["writer"]])
+        #expect(t.down.map { $0.map(\.id) } == [["api", "reader"], ["store"], ["report"]])
+        #expect(t.columns.map(\.step) == [-2, -1, 1, 2, 4, 6])               // the broker once on each side, no step of its own
+        #expect(t.columns.first { $0.step == 1 }?.nodes.map(\.key) == ["bus@1"])
+        let ends = Set(t.pairs.map { "\($0.from)>\($0.to)" })
+        #expect(ends == ["writer>bus@-1", "bus@-1>clean", "clean>bus@1", "bus@1>reader", "clean>api", "reader>store", "store>report"])
+        #expect(t.pairs.first { $0.to == "bus@1" }?.links.map(\.what) == ["t.clean"])
+        #expect(!t.pairs.contains { $0.from.contains("other") || $0.to.contains("other") })
+        let bus = ServiceMap.thread("bus", in: c, hops: 1)                    // the broker itself: all writers left, readers right
+        #expect(bus.up.map { $0.map(\.id) } == [["clean", "writer"]])
+        #expect(bus.down.map { $0.map(\.id) } == [["other", "reader"]])        // clean is placed already, up
     }
 
     @Test func spaceView() {
