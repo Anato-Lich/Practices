@@ -324,6 +324,7 @@ struct Sidebar: View {
                     if !row.count.isEmpty {
                         Text(verbatim: row.count).font(Theme.mono(10.5)).monospacedDigit()
                             .foregroundStyle(selected ? Color.white.opacity(0.85) : row.countColor)
+                            .help(Text(verbatim: { if case .space? = row.item { "проектов · сервисов" } else { "" } }()))
                     }
                 }
                 .foregroundStyle(selected ? .white : row.disabled ? Theme.Color.textDisabled : Theme.Color.text)

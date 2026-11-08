@@ -145,7 +145,11 @@ struct MainWindow: View {
         } else {
             switch registry.selection {
             case .space(let id):
-                Breadcrumb(prefix: abbreviated(registry.registry.dir(ofSpace: id).deletingLastPathComponent()) + "/", title: id)
+                HStack(spacing: 12) {
+                    Text(verbatim: registry.spaces.first { $0.id == id }?.name ?? id).font(Theme.ui(15, .semibold)).foregroundStyle(Theme.Color.text)
+                    Text(verbatim: abbreviated(registry.registry.dir(ofSpace: id))).font(Theme.mono(12)).foregroundStyle(Theme.Color.textMuted)
+                }
+                .lineLimit(1)
             case .project(let id):
                 Breadcrumb(crumbs: crumbs(space: registry.project(id)?.space, project: registry.project(id)?.parent), title: id)
             case .service(let id):

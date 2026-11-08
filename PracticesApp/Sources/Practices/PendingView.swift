@@ -145,7 +145,7 @@ struct PendingView: View {
         }
         let note = change.state == "new" && practice != nil
             ? "черновик агента" + (practice.flatMap { registry.lastRun(of: $0.ref) } == nil ? " · не запускалась" : "")
-            : "изменено агентом"
+            : "ждёт приёмки"
         return HStack(spacing: 10) {
             if case let (id, rest)? = change.servicePath {
                 Button { registry.selection = .service(id) } label: {

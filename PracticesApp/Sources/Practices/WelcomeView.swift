@@ -39,9 +39,14 @@ struct WelcomeView: View {
                      state: states[1], current: current == 1) {
                 EmptyView()
             } content: {
-                CreateSpaceRow(label: "Создать пространство")
+                if states[1] == .done {
+                    Text(verbatim: "есть: " + registry.spaces.map(\.name).joined(separator: ", ") + " · ещё одно — в «Настройке»")
+                        .font(Theme.mono(11.5)).foregroundStyle(Theme.Color.textMuted)
+                } else {
+                    CreateSpaceRow(label: "Создать пространство")
+                }
             }
-            StepCard(n: 3, title: "Агенты", text: "MCP-сервер и блок инструкций в найденных инструментах; то же, что practicesctl setup agents",
+            StepCard(n: 3, title: "Агенты", text: "MCP-сервер в найденных инструментах, блок инструкций — Claude Code и Codex",
                      state: states[2], current: current == 2) {
                 let tools = (status?.tools ?? []).filter { $0.found && !unchecked.contains($0.tool) }.map(\.tool)
                 let scope = scope ?? setup.scope ?? .global
@@ -99,7 +104,8 @@ struct WelcomeView: View {
 
     private func agentRow(_ tool: SetupStatus.Tool) -> some View {
         let home = AgentHome()
-        let global = (scope ?? registry.setup.scope ?? .global) == .global
+        // Cursor keeps its rules in its own settings: it gets the MCP server only.
+        let global = (scope ?? registry.setup.scope ?? .global) == .global && home.instructions(tool.tool) != nil
         let where_ = [tilde(home.mcpConfig(tool.tool).path), global ? home.instructions(tool.tool).map { tilde($0.path) } : nil].compactMap { $0 }.joined(separator: " и ")
         let on = Binding(get: { tool.found && !unchecked.contains(tool.tool) },
                          set: { if $0 { unchecked.remove(tool.tool) } else { unchecked.insert(tool.tool) } })
@@ -276,7 +282,7 @@ struct AgentState: View {
     var body: some View {
         let file = AgentHome().instructions(tool.tool)
         let state = tool.instructions ?? "current"
-        let (text, color): (String, Color) = !tool.mcp && state == "absent" ? ("не записан", Theme.Color.textMuted)
+        let (text, color): (String, Color) = !tool.mcp && (tool.instructions ?? "absent") == "absent" ? ("не записан", Theme.Color.textMuted)
             : state.hasPrefix("outdated") ? ("устарел · есть новая версия", Theme.Color.warn)
             : !tool.mcp || state == "absent" ? ("записан частично", Theme.Color.warn)
             : ("записан" + (file.flatMap { modified($0.path) }.map { " · " + shortDate($0) } ?? ""), Theme.Color.ok)

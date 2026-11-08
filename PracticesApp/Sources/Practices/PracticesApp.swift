@@ -14,8 +14,19 @@ struct PracticesApp: App {
     init() {
         #if DEBUG
         DevRender.runIfRequested()
+        #else
+        // Without DevRender these would start the real app instead of a render.
+        if CommandLine.arguments.contains(where: Self.devFlags.contains) {
+            FileHandle.standardError.write(Data("render flags are available in Debug builds only\n".utf8))
+            exit(2)
+        }
         #endif
     }
+
+    /// DevRender's flags.
+    static let devFlags: Set<String> = ["--render-window", "--check-to", "--palette", "--welcome", "--settings", "--doctor", "--pending",
+                                        "--unassigned", "--map", "--search", "--space", "--project", "--service", "--practice",
+                                        "--expand", "--wait", "--remove", "--failed", "--step", "--load"]
 
     var body: some Scene {
         MenuBarExtra(isInserted: $inMenuBar) {
