@@ -1,277 +1,487 @@
 import SwiftUI
 import PracticesCore
 
-/// Geometry of the three map levels (`design/Map*.dc.html`): explicit rectangles, so the views
-/// only place cards and draw lines between them. Coordinates are inside the content, without
-/// its 20pt padding.
+/// Geometry of the map's pictures (`work/2026-11-08-map`, ported from the approved prototype):
+/// rectangles and line points in content coordinates; the views only place and draw.
 
-/// A line on the map; `tip` gets a 7×7 arrow pointing away from `back`.
-struct MapLine {
-    var path: Path
-    var tip: CGPoint?
-    var back: CGPoint = .zero
-    var color: Color
-    var width: CGFloat
-    var opacity: Double
+private func up8(_ v: CGFloat) -> CGFloat { (v / 8).rounded(.up) * 8 }
+
+/// Order of chips by kind inside a column or a frame (front, api, bus, data, hw, other, ext).
+private func kindOrder(_ s: Service) -> Int {
+    [ServiceClass.front, .api, .bus, .data, .hw, .worker, .other, .ext].firstIndex(of: ServiceClass(for: s)) ?? 9
 }
 
-enum MapGeometry {
-    /// A cubic curve from a card's right middle to the target's left middle (left to right when
-    /// the target lies to the left); two cards of one column are joined by a loop on the right.
-    static func curve(_ a: CGRect, _ b: CGRect) -> (path: Path, tip: CGPoint, back: CGPoint) {
-        let start: CGPoint, tip: CGPoint, c1: CGPoint, c2: CGPoint
-        if abs(a.minX - b.minX) < 1 {
-            start = CGPoint(x: a.maxX, y: a.midY); tip = CGPoint(x: b.maxX, y: b.midY)
-            c1 = CGPoint(x: a.maxX + 40, y: a.midY); c2 = CGPoint(x: b.maxX + 40, y: b.midY)
-        } else {
-            let forward = a.midX < b.midX
-            start = CGPoint(x: forward ? a.maxX : a.minX, y: a.midY); tip = CGPoint(x: forward ? b.minX : b.maxX, y: b.midY)
-            let mx = (start.x + tip.x) / 2
-            c1 = CGPoint(x: mx, y: start.y); c2 = CGPoint(x: mx, y: tip.y)
-        }
-        var path = Path()
-        path.move(to: start)
-        path.addCurve(to: tip, control1: c1, control2: c2)
-        return (path, tip, c2)
-    }
+/// Neighbours over the pairs, both directions.
+private func adjacency(_ pairs: [ServiceMap.Pair]) -> [String: Set<String>] {
+    var adj: [String: Set<String>] = [:]
+    for p in pairs { adj[p.from, default: []].insert(p.to); adj[p.to, default: []].insert(p.from) }
+    return adj
+}
 
-    /// A link's line: by `via`, a write to a database warn and thicker; along `route` when given.
-    static func line(_ a: CGRect, _ b: CGRect, links: [PracticesCore.Link], width: CGFloat = 1.4, route: [CGPoint]? = nil) -> MapLine {
-        var (path, tip, back) = curve(a, b)
-        if let route, route.count > 1 { path = rounded(route); tip = route[route.count - 1]; back = route[route.count - 2] }
-        if let w = links.first(where: { $0.via == "db" && $0.access == "write" }) {
-            return MapLine(path: path, tip: tip, back: back, color: Theme.viaColor(w.via, access: w.access), width: 1.8, opacity: 0.9)
-        }
-        return MapLine(path: path, tip: tip, back: back, color: Theme.viaColor(links.first?.via), width: width, opacity: 0.75)
-    }
-
-    /// Straight segments through `points` with corners rounded to `radius`.
-    static func rounded(_ points: [CGPoint], radius: CGFloat = 4) -> Path {
-        var path = Path()
-        path.move(to: points[0])
-        for i in points.indices.dropFirst().dropLast() {
-            let (p, c, n) = (points[i - 1], points[i], points[i + 1])
-            let r = min(radius, hypot(c.x - p.x, c.y - p.y) / 2, hypot(n.x - c.x, n.y - c.y) / 2)
-            path.addArc(tangent1End: c, tangent2End: n, radius: r)
-        }
-        path.addLine(to: points[points.count - 1])
-        return path
-    }
-
-    /// Orthogonal routes (design «Линии на карте»): out of the source's right side (left when the
-    /// target lies wholly to its left), into the target's side facing the line; segments only on
-    /// lines through the middle of the gaps between `obstacles`, so no line crosses a card. Ends
-    /// sharing a card side are spread 7 apart; each route gets a lane a few points off the middle.
-    static func routes(_ ends: [(from: CGRect, to: CGRect)], obstacles: [CGRect], bounds: CGRect) -> [[CGPoint]] {
-        // Stubs 2i and 2i+1: the start and the end of route i; side +1 is the right edge, -1 the left.
-        var stubs: [(rect: CGRect, side: CGFloat, other: CGFloat)] = []
-        for (a, b) in ends {
-            let out: CGFloat = b.maxX < a.minX ? -1 : 1
-            stubs.append((a, out, b.midY))
-            stubs.append((b, out > 0 && b.minX > a.maxX ? -1 : 1, a.midY))
-        }
-        let ys = stubs.indices.map { i -> CGFloat in
-            let s = stubs[i]
-            let group = stubs.indices.filter { stubs[$0].rect == s.rect && stubs[$0].side == s.side }
-            let k = group.filter { (stubs[$0].other, $0) < (s.other, i) }.count
-            let step = min(7, max(s.rect.height - 16, 0) / CGFloat(max(group.count - 1, 1)))
-            return s.rect.midY + (CGFloat(k) - CGFloat(group.count - 1) / 2) * step
-        }
-        let inflated = obstacles.map { $0.insetBy(dx: -3, dy: -3) }
-        return ends.indices.map { i in
-            let (s, e) = (stubs[2 * i], stubs[2 * i + 1])
-            return route(CGPoint(x: s.side > 0 ? s.rect.maxX : s.rect.minX, y: ys[2 * i]), out: s.side > 0 ? 0 : 1,
-                         CGPoint(x: e.side > 0 ? e.rect.maxX : e.rect.minX, y: ys[2 * i + 1]), into: e.side > 0 ? 1 : 0,
-                         obstacles: inflated, bounds: bounds, lane: i)
+/// Barycentre sweeps: each column reordered by the mean position of its neighbours in other
+/// columns, so threads run as straight as they can.
+private func barycentre(_ columns: inout [[Service]], adj: [String: Set<String>], sweeps: Int, centred: Bool, fixed: Set<Int> = []) {
+    var pos: [String: Double] = [:], col: [String: Int] = [:]
+    func place() {
+        for (c, list) in columns.enumerated() {
+            for (i, s) in list.enumerated() { pos[s.id] = Double(i) - (centred ? Double(list.count - 1) / 2 : 0); col[s.id] = c }
         }
     }
-
-    /// Dijkstra on the sparse grid of gap lines, a bend costing 24pt; `out`/`into` are the first and
-    /// the last move (0 = +x, 1 = −x).
-    private static func route(_ s: CGPoint, out: Int, _ t: CGPoint, into: Int, obstacles: [CGRect], bounds: CGRect, lane: Int) -> [CGPoint] {
-        let shift = CGFloat(lane % 7 - 3) * 3
-        func lines(_ edges: [CGFloat], _ ends: [CGFloat]) -> [CGFloat] {
-            let e = Set(edges).sorted()
-            var lines = Set(ends)
-            for (lo, hi) in zip(e, e.dropFirst()) where hi - lo >= 4 {
-                let half = (hi - lo) / 2 - 1.5
-                lines.insert((lo + hi) / 2 + max(-half, min(half, shift)))
-            }
-            return lines.sorted()
+    place()
+    for _ in 0..<sweeps {
+        for c in columns.indices where !fixed.contains(c) {
+            let bc = Dictionary(columns[c].map { s -> (String, Double) in
+                let ns = (adj[s.id] ?? []).filter { col[$0] != nil && col[$0] != c }
+                return (s.id, ns.isEmpty ? pos[s.id]! : ns.reduce(0) { $0 + pos[$1]! } / Double(ns.count))
+            }, uniquingKeysWith: { a, _ in a })
+            columns[c].sort { (bc[$0.id]!, pos[$0.id]!) < (bc[$1.id]!, pos[$1.id]!) }
+            place()
         }
-        let xs = lines(obstacles.flatMap { [$0.minX, $0.maxX] } + [bounds.minX, bounds.maxX], [s.x, t.x])
-        let ys = lines(obstacles.flatMap { [$0.minY, $0.maxY] } + [bounds.minY, bounds.maxY], [s.y, t.y])
-        let (nx, ny) = (xs.count, ys.count)
-        // The cards an end sits in do not block the segment leaving or entering it.
-        let atS = obstacles.filter { $0.contains(s) }, atT = obstacles.filter { $0.contains(t) }
-        func free(_ p: CGPoint, _ q: CGPoint) -> Bool {
-            obstacles.allSatisfy { r in
-                if (p == s || q == s) && atS.contains(r) || (p == t || q == t) && atT.contains(r) { return true }
-                return !(max(p.x, q.x) > r.minX && min(p.x, q.x) < r.maxX && max(p.y, q.y) > r.minY && min(p.y, q.y) < r.maxY)
+    }
+}
+
+// MARK: - Project: variant E
+
+/// One project on an even grid: one-line cards 232×32 in columns «Вызывают из других проектов →
+/// Фронты → API → Воркеры → Данные и шина → Внешние и другие проекты» (API and workers one column
+/// up to 5 cards), a column wrapping into sub-columns at 14 rows. Each link has its own ports on
+/// the cards' sides and its own lane in the corridor between columns; a link skipping columns
+/// crosses them in a row gap, and the gaps grow with the links they carry.
+struct ProjectGrid {
+    static let cardW: CGFloat = 232, cardH: CGFloat = 32, budget = 14, lane: CGFloat = 6, titleH: CGFloat = 40
+
+    enum Group: Hashable { case callers, front, api, work, mid, data, ext }
+    struct Card { var service: Service; var rect: CGRect; var stub: Bool }
+    struct Head { var project: String; var count: Int; var rect: CGRect }
+    struct Title { var text: String; var count: Int; var x0: CGFloat; var x1: CGFloat }
+    struct Edge { var pair: ServiceMap.Pair; var points: [CGPoint] }
+
+    var cards: [String: Card] = [:]
+    var heads: [Head] = []
+    var titles: [Title] = []
+    var edges: [Edge] = []
+    var size = CGSize.zero
+
+    init(_ map: ServiceMap.ProjectMap, roles: [String: Service.Role]) {
+        let ownIDs = Set(map.own.map(\.id)), callerIDs = Set(map.callers.map(\.id))
+        func group(_ s: Service) -> Group {
+            if !ownIDs.contains(s.id) { return callerIDs.contains(s.id) ? .callers : .ext }
+            switch roles[s.id] ?? .worker {
+            case .external: return .ext
+            case .front: return .front
+            case .infra: return .data
+            case .bff, .backend: return .api
+            default: return .work
             }
         }
-        func point(_ n: Int) -> CGPoint { CGPoint(x: xs[n / ny], y: ys[n % ny]) }
-        // freeX[n]: node n to its +x neighbour; freeY[n]: to its +y neighbour.
-        let freeX = (0..<nx * ny).map { $0 / ny + 1 < nx && free(point($0), point($0 + ny)) }
-        let freeY = (0..<nx * ny).map { $0 % ny + 1 < ny && free(point($0), point($0 + 1)) }
-        let start = (xs.firstIndex(of: s.x)! * ny + ys.firstIndex(of: s.y)!) * 4 + out
-        let goal = (xs.firstIndex(of: t.x)! * ny + ys.firstIndex(of: t.y)!) * 4 + into
-        var dist = [CGFloat](repeating: .infinity, count: nx * ny * 4), prev = [Int](repeating: -1, count: nx * ny * 4)
-        var heap: [(CGFloat, Int)] = [(0, start)]
-        dist[start] = 0
-        while !heap.isEmpty {
-            let (d, state) = heap[0]
-            let last = heap.removeLast()
-            if !heap.isEmpty {
-                heap[0] = last
-                var i = 0
-                while true {
-                    var m = i
-                    for c in [2 * i + 1, 2 * i + 2] where c < heap.count && heap[c].0 < heap[m].0 { m = c }
-                    if m == i { break }
-                    heap.swapAt(i, m); i = m
+        let split = map.own.filter { [.api, .work].contains(group($0)) }.count > 5
+        let logical: [(Group, String)] = [(.callers, "Вызывают из других проектов"), (.front, "Фронты")]
+            + (split ? [(.api, "API"), (.work, "Воркеры")] : [(.mid, "API и воркеры")])
+            + [(.data, "Данные и шина"), (.ext, "Внешние и другие проекты")]
+        func g2(_ s: Service) -> Group { let g = group(s); return !split && (g == .api || g == .work) ? .mid : g }
+
+        // Own cards by column, ordered by kind, then by their neighbours.
+        let extMine = map.own.filter { g2($0) == .ext }
+        var columns = logical.map { g, _ in g == .callers ? map.callers : g == .ext ? extMine + map.callees
+            : map.own.filter { g2($0) == g }.sorted { (kindOrder($0), $0.id) < (kindOrder($1), $1.id) } }
+        // Stubs keep their project groups; own columns follow them.
+        barycentre(&columns, adj: adjacency(map.pairs), sweeps: 4, centred: false, fixed: [0, columns.count - 1])
+
+        // Busy cards span more rows, so their ports stay 6 apart.
+        var outs: [String: Int] = [:], ins: [String: Int] = [:]
+        for p in map.pairs { outs[p.from, default: 0] += 1; ins[p.to, default: 0] += 1 }
+        func span(_ id: String) -> Int {
+            let ports = CGFloat(max(outs[id] ?? 0, ins[id] ?? 0) + 1) * Self.lane
+            return 1 + max(0, Int(((ports - Self.cardH) / (Self.cardH + 16)).rounded(.up)))
+        }
+        enum Item { case card(Service, span: Int, stub: Bool), head(String, Int) }
+        let items: [[Item]] = columns.enumerated().map { li, list in
+            let stubs = logical[li].0 == .callers || logical[li].0 == .ext
+            var out: [Item] = [], last: String?
+            for s in list {
+                let stub = stubs && !ownIDs.contains(s.id)
+                if stub && s.project != last { out.append(.head(s.project, list.filter { $0.project == s.project && !ownIDs.contains($0.id) }.count)) }
+                if stub { last = s.project }
+                out.append(.card(s, span: span(s.id), stub: stub))
+            }
+            return out
+        }
+
+        // Wrap each column into sub-columns of at most `budget` rows (a head stays with its first card).
+        var place: [String: (col: Int, row: Int, span: Int, stub: Bool, service: Service)] = [:]
+        var headPlaces: [(project: String, count: Int, col: Int, row: Int)] = []
+        var physOf: [[Int]] = [], nc = 0, rows = 0
+        for list in items {
+            guard !list.isEmpty else { physOf.append([]); continue }
+            var row = 0, cols = [nc]
+            nc += 1
+            for (k, item) in list.enumerated() {
+                let need: Int
+                switch item {
+                case .head: if case .card(_, let s, _)? = list.dropFirst(k + 1).first { need = 1 + s } else { need = 1 }
+                case .card(_, let s, _): need = s
+                }
+                if row + need > Self.budget && row > 0 { row = 0; cols.append(nc); nc += 1 }
+                switch item {
+                case .head(let p, let n): headPlaces.append((p, n, nc - 1, row)); row += 1
+                case .card(let s, let sp, let stub): place[s.id] = (nc - 1, row, sp, stub, s); row += sp
+                }
+                rows = max(rows, row)
+            }
+            physOf.append(cols)
+        }
+
+        // Which gap (above row g) a link skipping columns crosses: the nearest to its target that no
+        // spanning card of the columns in between covers.
+        let pairs = map.pairs.filter { place[$0.from] != nil && place[$0.to] != nil }
+        var gapOf: [Int: Int] = [:], tracks = [Int](repeating: 0, count: rows + 1)
+        for (i, p) in pairs.enumerated() {
+            let (a, b) = (place[p.from]!, place[p.to]!)
+            guard b.col > a.col + 1 else { continue }
+            let between = place.values.filter { $0.col > a.col && $0.col < b.col }
+            let mid = Double(b.row) + Double(b.span) / 2
+            let g = (0...rows).sorted { (abs(Double($0) - mid), $0) < (abs(Double($1) - mid), $1) }
+                .first { g in !between.contains { $0.row < g && g < $0.row + $0.span } } ?? b.row
+            gapOf[i] = g; tracks[g] += 1
+        }
+        let gapH = tracks.map { max(16, up8(CGFloat($0) * Self.lane + 10)) }
+        var rowTop = [CGFloat](repeating: 0, count: rows + 1)
+        rowTop[0] = Self.titleH + gapH[0]
+        for r in stride(from: 1, through: rows, by: 1) { rowTop[r] = rowTop[r - 1] + Self.cardH + gapH[r] }
+        func top(_ row: Int) -> CGFloat { rowTop[row] }
+        func height(_ row: Int, _ span: Int) -> CGFloat { rowTop[row + span - 1] + Self.cardH - rowTop[row] }
+
+        // Ports: outgoing on the right side, incoming on the left (a link within a column on the
+        // right at both ends), spread evenly, ordered by the other end's height.
+        let mid = { (id: String) in top(place[id]!.row) + height(place[id]!.row, place[id]!.span) / 2 }
+        var portLists: [String: [(Int, Bool, String)]] = [:]   // "o"/"i" + id → (pair, outgoing, other)
+        for (i, p) in pairs.enumerated() {
+            let same = place[p.from]!.col == place[p.to]!.col
+            portLists["o" + p.from, default: []].append((i, true, p.to))
+            portLists[(same ? "o" : "i") + p.to, default: []].append((i, false, p.from))
+        }
+        var sy = [CGFloat](repeating: 0, count: pairs.count), ty = sy
+        for (key, list) in portLists {
+            let id = String(key.dropFirst()), y0 = top(place[id]!.row), h = height(place[id]!.row, place[id]!.span)
+            for (k, port) in list.sorted(by: { (mid($0.2), $0.0) < (mid($1.2), $1.0) }).enumerated() {
+                let y = y0 + (h * CGFloat(k + 1) / CGFloat(list.count + 1)).rounded()
+                if port.1 { sy[port.0] = y } else { ty[port.0] = y }
+            }
+        }
+
+        // Lanes: corridor k lies left of physical column k; a link takes one right of its source
+        // and, unless that is the same corridor, one left of its target.
+        var lanes = [[Int]](repeating: [], count: nc + 1)
+        for (i, p) in pairs.enumerated() {
+            let (a, b) = (place[p.from]!.col, place[p.to]!.col)
+            lanes[a + 1].append(i)
+            if b != a && b != a + 1 { lanes[b].append(i) }
+        }
+        for k in lanes.indices { lanes[k].sort { (sy[$0], ty[$0], $0) < (sy[$1], ty[$1], $1) } }
+        let cw = lanes.map { max(40, up8(CGFloat($0.count) * Self.lane + 24)) }
+        var colX: [CGFloat] = [], x = cw[0]
+        for c in 0..<nc { colX.append(x); x += Self.cardW + cw[c + 1] }
+        func laneX(_ k: Int, _ i: Int) -> CGFloat {
+            let n = lanes[k].count, j = lanes[k].firstIndex(of: i)!
+            return (k == 0 ? 0 : colX[k - 1] + Self.cardW) + cw[k] / 2 + (CGFloat(j) - CGFloat(n - 1) / 2) * Self.lane
+        }
+        let gridBottom = (rows > 0 ? rowTop[rows - 1] + Self.cardH : Self.titleH) + 16
+        var back = 0
+        let gapTracks = Dictionary(grouping: gapOf.keys.sorted { (sy[$0], $0) < (sy[$1], $1) }, by: { gapOf[$0]! })
+        for (i, p) in pairs.enumerated() {
+            let (a, b) = (place[p.from]!.col, place[p.to]!.col)
+            let sx = colX[a] + Self.cardW, tx = colX[b], x1 = laneX(a + 1, i)
+            let pts: [CGPoint]
+            if b == a {
+                pts = [CGPoint(x: sx, y: sy[i]), CGPoint(x: x1, y: sy[i]), CGPoint(x: x1, y: ty[i]), CGPoint(x: sx, y: ty[i])]
+            } else if b == a + 1 {
+                pts = [CGPoint(x: sx, y: sy[i]), CGPoint(x: x1, y: sy[i]), CGPoint(x: x1, y: ty[i]), CGPoint(x: tx, y: ty[i])]
+            } else {
+                let y: CGFloat
+                if b < a {
+                    y = gridBottom + CGFloat(back) * Self.lane; back += 1
+                } else {
+                    let g = gapOf[i]!, list = gapTracks[g]!, k = list.firstIndex(of: i)!
+                    y = top(g) - gapH[g] / 2 + (CGFloat(k) - CGFloat(list.count - 1) / 2) * Self.lane
+                }
+                let x2 = laneX(b, i)
+                pts = [CGPoint(x: sx, y: sy[i]), CGPoint(x: x1, y: sy[i]), CGPoint(x: x1, y: y), CGPoint(x: x2, y: y), CGPoint(x: x2, y: ty[i]), CGPoint(x: tx, y: ty[i])]
+            }
+            edges.append(Edge(pair: p, points: pts))
+        }
+
+        for (id, pl) in place {
+            cards[id] = Card(service: pl.service, rect: CGRect(x: colX[pl.col], y: top(pl.row), width: Self.cardW, height: height(pl.row, pl.span)), stub: pl.stub)
+        }
+        heads = headPlaces.map { Head(project: $0.project, count: $0.count, rect: CGRect(x: colX[$0.col], y: top($0.row), width: Self.cardW, height: Self.cardH)) }
+        for (li, (_, title)) in logical.enumerated() where !physOf[li].isEmpty {
+            let n = items[li].filter { if case .card = $0 { true } else { false } }.count
+            titles.append(Title(text: title, count: n, x0: colX[physOf[li].first!], x1: colX[physOf[li].last!] + Self.cardW))
+        }
+        size = CGSize(width: x, height: gridBottom + CGFloat(back) * Self.lane + 8)
+    }
+}
+
+// MARK: - Space: variant B, frames
+
+/// Projects as frames with their services as rows (1 column, 2 above 7), on a grid placed so
+/// heavy pairs sit close; lines run in 120-pt corridors between frames: zoomed out one bundle per
+/// pair of projects with its count, zoomed in every service → service link.
+struct SpaceFrames {
+    static let chipW: CGFloat = 228, chipH: CGFloat = 22, rowGap: CGFloat = 6, colGap: CGFloat = 14, pad: CGFloat = 14, head: CGFloat = 46, gap: CGFloat = 120
+
+    struct Frame { var project: String; var title: String; var rect: CGRect; var services: [Service]; var inner: Int; var c = 0; var r = 0; var cols = 1 }
+    struct Line { var pair: ServiceMap.Pair; var points: [CGPoint] }
+    struct Bundle { var a: String; var b: String; var count: Int; var ends: Set<String>; var points: [CGPoint]; var badge: CGPoint }
+
+    var frames: [Frame] = []
+    var chips: [String: CGRect] = [:]
+    var lines: [Line] = []
+    var bundles: [Bundle] = []
+    var size = CGSize.zero
+
+    init(space: String, catalogue c: Catalogue, pairs all: [ServiceMap.Pair]) {
+        let byID = Dictionary(c.services.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let mine = Set(c.services.filter { $0.space == space }.map(\.id))
+        let pairs = all.filter { mine.contains($0.from) || mine.contains($0.to) }
+        // Services of other spaces this one links with join as frames of their own projects.
+        let shown = mine.union(pairs.flatMap { [$0.from, $0.to] })
+        let byProject = Dictionary(grouping: shown.compactMap { byID[$0] }, by: \.project)
+        let projectOf = { (id: String) in byID[id]!.project }
+        var weight: [String: [String: Int]] = [:]
+        for p in pairs where projectOf(p.from) != projectOf(p.to) {
+            weight[projectOf(p.from), default: [:]][projectOf(p.to), default: 0] += p.links.count
+            weight[projectOf(p.to), default: [:]][projectOf(p.from), default: 0] += p.links.count
+        }
+        let pw = { (a: String, b: String) in weight[a]?[b] ?? 0 }
+        let total = { (a: String) in weight[a]?.values.reduce(0, +) ?? 0 }
+        let foreign = { (p: String) in byProject[p]?.first.map { $0.space != space } ?? false }
+        let ids = byProject.keys.sorted { (foreign($0) ? 1 : 0, -byProject[$0]!.count, $0) < (foreign($1) ? 1 : 0, -byProject[$1]!.count, $1) }
+
+        frames = ids.map { p in
+            let ss = byProject[p]!.sorted { (kindOrder($0), $0.id) < (kindOrder($1), $1.id) }
+            let cols = ss.count > 7 ? 2 : 1, rows = (ss.count + cols - 1) / cols
+            let w = Self.pad * 2 + CGFloat(cols) * Self.chipW + CGFloat(cols - 1) * Self.colGap
+            let h = Self.head + CGFloat(rows) * (Self.chipH + Self.rowGap) - Self.rowGap + Self.pad
+            let inner = pairs.filter { projectOf($0.from) == p && projectOf($0.to) == p }.reduce(0) { $0 + $1.links.count }
+            let title = foreign(p) ? "\(ss[0].space) / \(p)" : p
+            return Frame(project: p, title: title, rect: CGRect(x: 0, y: 0, width: w, height: h), services: ss, inner: inner, cols: cols)
+        }
+
+        // Heaviest first; each next into the free slot nearest, by weight, to those placed.
+        let gridCols = max(1, Int(Double(frames.count * 2).squareRoot().rounded(.up))), gridRows = (frames.count + gridCols - 1) / gridCols
+        let slots = (0..<gridRows).flatMap { r in (0..<gridCols).map { (c: $0, r: r) } }
+        var used = Set<Int>()
+        let order = frames.indices.sorted { (-total(frames[$0].project), $0) < (-total(frames[$1].project), $1) }
+        for (k, f) in order.enumerated() {
+            let placed = order.prefix(k)
+            let best = slots.indices.filter { !used.contains($0) }.min { a, b in
+                func cost(_ s: Int) -> Double {
+                    if k == 0 { return abs(Double(slots[s].c) - Double(gridCols - 1) / 2) + Double(slots[s].r) }
+                    return placed.reduce(0.0) { t, o in t + Double(pw(frames[f].project, frames[o].project)) * Double(abs(slots[s].c - frames[o].c) + abs(slots[s].r - frames[o].r)) }
+                }
+                return (cost(a), a) < (cost(b), b)
+            }!
+            used.insert(best); frames[f].c = slots[best].c; frames[f].r = slots[best].r
+        }
+        let colW = (0..<gridCols).map { c in frames.filter { $0.c == c }.map(\.rect.width).max() ?? 0 }
+        let rowH = (0..<gridRows).map { r in frames.filter { $0.r == r }.map(\.rect.height).max() ?? 0 }
+        var colX = [Self.gap], rowY = [Self.gap]
+        for w in colW { colX.append(colX.last! + w + Self.gap) }
+        for h in rowH { rowY.append(rowY.last! + h + Self.gap) }
+        let vx = { (v: Int) in colX[v] - Self.gap / 2 }, hy = { (h: Int) in rowY[h] - Self.gap / 2 }
+        var frameOf: [String: Int] = [:], chipCol: [String: Int] = [:]
+        for i in frames.indices {
+            frames[i].rect.origin = CGPoint(x: colX[frames[i].c], y: rowY[frames[i].r])
+            let f = frames[i], rows = (f.services.count + f.cols - 1) / f.cols
+            for (k, s) in f.services.enumerated() {
+                let (ic, ir) = (k / rows, k % rows)
+                chips[s.id] = CGRect(x: f.rect.minX + Self.pad + CGFloat(ic) * (Self.chipW + Self.colGap),
+                                     y: f.rect.minY + Self.head + CGFloat(ir) * (Self.chipH + Self.rowGap), width: Self.chipW, height: Self.chipH)
+                frameOf[s.id] = i; chipCol[s.id] = ic
+            }
+        }
+
+        // An end: its x and y, the vertical corridor it enters (v) and its row of frames.
+        struct End { var x: CGFloat; var y: CGFloat; var v: Int; var r: Int }
+        func end(_ id: String, toward other: String) -> End {
+            let f = frames[frameOf[id]!], chip = chips[id]!
+            let right = f.cols == 2 ? chipCol[id] == 1 : frames[frameOf[other]!].c >= f.c
+            return End(x: right ? chip.maxX : chip.minX, y: chip.midY, v: f.c + (right ? 1 : 0), r: f.r)
+        }
+        var sideCount: [String: Int] = [:]
+        func frameEnd(_ i: Int, toward o: Int) -> End {
+            let f = frames[i], right = frames[o].c >= f.c, key = "\(i)\(right)"
+            let k = sideCount[key, default: 0]; sideCount[key] = k + 1
+            return End(x: right ? f.rect.maxX : f.rect.minX, y: f.rect.minY + 60 + CGFloat(k) * 18, v: f.c + (right ? 1 : 0), r: f.r)
+        }
+        // Two passes: count the lanes of each corridor, then spread them across it.
+        func route(_ ends: [(s: End, t: End)], step: CGFloat) -> [[CGPoint]] {
+            func keys(_ s: End, _ t: End) -> [String] {
+                if s.v == t.v { return ["v\(s.v)"] }
+                let h = s.r == t.r ? (s.r == 0 ? 0 : s.r + 1) : max(s.r, t.r)
+                return ["v\(s.v)", "h\(h)", "v\(t.v)"]
+            }
+            var counts: [String: Int] = [:], index: [String: Int] = [:]
+            for e in ends { for k in keys(e.s, e.t) { counts[k, default: 0] += 1 } }
+            func offset(_ k: String) -> CGFloat {
+                let i = index[k, default: -1] + 1, n = counts[k]!
+                index[k] = i
+                return (CGFloat(i) - CGFloat(n - 1) / 2) * min(step, (Self.gap - 24) / CGFloat(n))
+            }
+            return ends.map { s, t in
+                let ks = keys(s, t), o = ks.map(offset)
+                if ks.count == 1 {
+                    let x = vx(s.v) + o[0]
+                    return [CGPoint(x: s.x, y: s.y), CGPoint(x: x, y: s.y), CGPoint(x: x, y: t.y), CGPoint(x: t.x, y: t.y)]
+                }
+                let xs = vx(s.v) + o[0], y = hy(Int(ks[1].dropFirst())!) + o[1], xt = vx(t.v) + o[2]
+                return [CGPoint(x: s.x, y: s.y), CGPoint(x: xs, y: s.y), CGPoint(x: xs, y: y), CGPoint(x: xt, y: y), CGPoint(x: xt, y: t.y), CGPoint(x: t.x, y: t.y)]
+            }
+        }
+        let near = pairs.map { (pair: $0, s: end($0.from, toward: $0.to), t: end($0.to, toward: $0.from)) }
+            .sorted { ($0.s.y, $0.t.y, $0.pair.from, $0.pair.to) < ($1.s.y, $1.t.y, $1.pair.from, $1.pair.to) }
+        lines = zip(near, route(near.map { ($0.s, $0.t) }, step: 4)).map { Line(pair: $0.pair, points: $1) }
+
+        var groups: [[Int]: (count: Int, ends: Set<String>)] = [:]
+        for p in pairs {
+            let (a, b) = (frameOf[p.from]!, frameOf[p.to]!)
+            guard a != b else { continue }
+            let key = [min(a, b), max(a, b)]
+            groups[key, default: (0, [])].count += p.links.count
+            groups[key]!.ends.formUnion([p.from, p.to])
+        }
+        let keys = groups.keys.sorted { $0.lexicographicallyPrecedes($1) }
+        let ends = keys.map { (s: frameEnd($0[0], toward: $0[1]), t: frameEnd($0[1], toward: $0[0])) }
+        let routes = route(ends, step: 14)
+        // Badges on the middle segment, moved along it until none touches another.
+        var badges: [CGPoint] = []
+        for (k, key) in keys.enumerated() {
+            let pts = routes[k], m = (pts.count - 1) / 2, (p1, p2) = (pts[m], pts[m + 1])
+            let candidates = [0.5, 0.3, 0.7, 0.2, 0.8, 0.4, 0.6, 0.1, 0.9].map { CGPoint(x: p1.x + (p2.x - p1.x) * $0, y: p1.y + (p2.y - p1.y) * $0) }
+            let badge = candidates.first { c in badges.allSatisfy { hypot($0.x - c.x, $0.y - c.y) >= 30 } } ?? candidates[0]
+            badges.append(badge)
+            bundles.append(Bundle(a: frames[key[0]].project, b: frames[key[1]].project, count: groups[key]!.count, ends: groups[key]!.ends, points: pts, badge: badge))
+        }
+        size = CGSize(width: colX.last!, height: rowY.last!)   // corridors outside the frames stay inside the canvas
+    }
+}
+
+// MARK: - Space: variant A, flow
+
+/// Columns by role, left to right along the data: devices, ingest, bus, processing, storage,
+/// API, fronts, external; «Обработка» split into sub-columns of at most 14 rows, whole projects
+/// packed into them under a project label, so it does not become a poster. Ops services are left
+/// out. Threads are curves left to right.
+struct SpaceFlow {
+    static let chipW: CGFloat = 228, chipH: CGFloat = 22, row: CGFloat = 30, gap: CGFloat = 110, budget = 14
+
+    struct Column { var title: String; var count: Int; var x: CGFloat; var top: CGFloat; var heads: [(project: String, y: CGFloat)] }
+    var columns: [Column] = []
+    var chips: [String: CGRect] = [:]
+    var lines: [(pair: ServiceMap.Pair, from: CGRect, to: CGRect)] = []
+    var hidden = 0
+    var size = CGSize.zero
+
+    static let titles = ["Устройства", "Приём", "Шина", "Обработка", "Хранение", "API / BFF", "Фронты", "Внешнее"]
+
+    static func column(_ s: Service, _ role: Service.Role) -> Int? {
+        switch role {
+        case .device: 0
+        case .ingest: 1
+        case .infra: ServiceMap.isBus(s) ? 2 : 4
+        case .processing, .worker, .relay: 3
+        case .bff, .backend: 5
+        case .front: 6
+        case .external: 7
+        case .ops: nil
+        }
+    }
+
+    init(space: String, catalogue c: Catalogue, pairs all: [ServiceMap.Pair], roles: [String: Service.Role]) {
+        let byID = Dictionary(c.services.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let mine = Set(c.services.filter { $0.space == space }.map(\.id))
+        let pairs = all.filter { mine.contains($0.from) || mine.contains($0.to) }
+        let shown = mine.union(pairs.flatMap { [$0.from, $0.to] }).compactMap { byID[$0] }
+        // Another space's service is external here, whatever it is at home.
+        let col = { (s: Service) -> Int? in s.space != space ? 7 : Self.column(s, roles[s.id] ?? .worker) }
+        hidden = shown.filter { col($0) == nil }.count
+        // Physical columns: one per role column; «Обработка» packs project groups (a label row each).
+        var phys: [(logical: Int, services: [Service], heads: [(String, Int)])] = []
+        var processing = Set<Int>()
+        for l in Self.titles.indices {
+            let ss = shown.filter { col($0) == l }.sorted { ($0.project, $0.id) < ($1.project, $1.id) }
+            guard !ss.isEmpty else { continue }
+            guard l == 3 else { phys.append((l, ss, [])); continue }
+            var current: (services: [Service], heads: [(String, Int)]) = ([], [])
+            for (project, list) in Dictionary(grouping: ss, by: \.project).sorted(by: { ($0.value.count, $1.key) > ($1.value.count, $0.key) }) {
+                for chunk in stride(from: 0, to: list.count, by: Self.budget - 1) {
+                    let part = Array(list[chunk..<min(chunk + Self.budget - 1, list.count)])
+                    if !current.services.isEmpty && current.services.count + current.heads.count + part.count + 1 > Self.budget {
+                        processing.insert(phys.count); phys.append((l, current.services, current.heads)); current = ([], [])
+                    }
+                    current.heads.append((project, current.services.count + current.heads.count))
+                    current.services += part
                 }
             }
-            if state == goal { break }
-            guard d <= dist[state] else { continue }
-            let (node, dir) = (state / 4, state % 4)
-            for nd in 0..<4 where nd != dir ^ 1 && (state != start || nd == out) {
-                let next: Int
-                switch nd {
-                case 0: guard freeX[node] else { continue }; next = node + ny
-                case 1: guard node >= ny, freeX[node - ny] else { continue }; next = node - ny
-                case 2: guard freeY[node] else { continue }; next = node + 1
-                default: guard node % ny > 0, freeY[node - 1] else { continue }; next = node - 1
-                }
-                let (p, q) = (point(node), point(next))
-                let cost = d + abs(q.x - p.x) + abs(q.y - p.y) + (nd == dir ? 0 : 24)
-                let ns = next * 4 + nd
-                guard cost < dist[ns] else { continue }
-                dist[ns] = cost; prev[ns] = state
-                heap.append((cost, ns))
-                var i = heap.count - 1
-                while i > 0, heap[(i - 1) / 2].0 > heap[i].0 { heap.swapAt(i, (i - 1) / 2); i = (i - 1) / 2 }
-            }
+            processing.insert(phys.count); phys.append((l, current.services, current.heads))
         }
-        guard dist[goal] < .infinity else { return [s, CGPoint(x: (s.x + t.x) / 2, y: s.y), CGPoint(x: (s.x + t.x) / 2, y: t.y), t] }
-        var states = [goal]
-        while let p = states.last.map({ prev[$0] }), p >= 0 { states.append(p) }
-        // Keep the corners only: a state whose direction differs from the next one's.
-        let path = states.reversed().map { $0 }
-        var points = [s]
-        for (a, b) in zip(path, path.dropFirst()) where a % 4 != b % 4 && a != start { points.append(point(a / 4)) }
-        points.append(t)
-        return points
+        var cols = phys.map(\.services)
+        // Processing sub-columns keep their project groups; the rest follow the threads.
+        barycentre(&cols, adj: adjacency(pairs), sweeps: 12, centred: true, fixed: processing)
+        let rows = phys.map { $0.services.count + $0.heads.count }
+        let tallest = CGFloat(rows.max() ?? 0)
+        var x: CGFloat = 0
+        for (k, list) in cols.enumerated() {
+            let top = (tallest - CGFloat(rows[k])) / 2 * Self.row + 44
+            var row = 0, heads: [(project: String, y: CGFloat)] = []
+            for s in list {
+                if let h = phys[k].heads.first(where: { $0.1 == row }) { heads.append((h.0, top + CGFloat(row) * Self.row)); row += 1 }
+                chips[s.id] = CGRect(x: x, y: top + CGFloat(row) * Self.row, width: Self.chipW, height: Self.chipH)
+                row += 1
+            }
+            let l = phys[k].logical, first = k == 0 || phys[k - 1].logical != l
+            columns.append(Column(title: first ? Self.titles[l] : "", count: first ? phys.filter { $0.logical == l }.reduce(0) { $0 + $1.services.count } : 0,
+                                  x: x, top: top, heads: heads))
+            x += Self.chipW + (k + 1 < phys.count && phys[k + 1].logical == l ? Self.gap / 2 : Self.gap)
+        }
+        lines = pairs.compactMap { p in chips[p.from].flatMap { a in chips[p.to].map { (p, a, $0) } } }
+        size = CGSize(width: max(0, x - Self.gap + 40), height: tallest * Self.row + 60)
     }
 }
 
-/// Level 1: top-level projects with children as dashed frames (their cards inside, three to a
-/// row), standalone projects as cards; frames and cards wrap in rows 20 apart, with a 20pt
-/// corridor below the last row for the lines.
-struct SpaceLayout {
-    static let card = CGSize(width: 170, height: 64)
-    var cards: [(project: Project, rect: CGRect)] = []
-    var frames: [(project: Project, rect: CGRect, services: Int)] = []
+// MARK: - Service: the thread
+
+/// The service in the middle, its callers chain to the left (nearest first) and the services it
+/// calls to the right, a column per step.
+struct ThreadLayout {
+    static let chipW: CGFloat = 228, chipH: CGFloat = 22, row: CGFloat = 30, gap: CGFloat = 120
+    static let centre = CGSize(width: 260, height: 48)
+
+    var chips: [String: CGRect] = [:]
+    var columns: [(title: String, x: CGFloat, top: CGFloat)] = []
     var size = CGSize.zero
 
-    init(_ map: ServiceMap.SpaceMap, services: [Service], width: CGFloat) {
-        // The tree is a preorder: a top-level project, then everything under it.
-        var groups: [[Project]] = []
-        for (p, depth) in map.projects {
-            if depth == 0 || groups.isEmpty { groups.append([p]) } else { groups[groups.count - 1].append(p) }
-        }
-        let withServices = Set(services.map(\.project))
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-        for group in groups {
-            let framed = group.count > 1
-            // shortcut: projects nested deeper than one level are cards of the top frame, not frames in frames.
-            let inner = framed && !withServices.contains(group[0].id) ? Array(group.dropFirst()) : group
-            let cols = CGFloat(min(inner.count, 3)), rows = CGFloat((inner.count + 2) / 3)
-            let w = framed ? 24 + cols * 170 + (cols - 1) * 10 : 170
-            let h = framed ? 32 + rows * 64 + (rows - 1) * 10 + 12 : 64
-            if x > 0 && x + w > width { x = 0; y += rowHeight + 20; rowHeight = 0 }
-            if framed {
-                let ids = Set(group.map(\.id))
-                frames.append((group[0], CGRect(x: x, y: y, width: w, height: h), services.filter { ids.contains($0.project) }.count))
+    init(_ thread: ServiceMap.Thread, centre: Service) {
+        var cols = thread.up.reversed() + [[centre]] + thread.down
+        barycentre(&cols, adj: adjacency(thread.pairs), sweeps: 8, centred: true)
+        let tallest = CGFloat(cols.map(\.count).max() ?? 1)
+        let height = tallest * Self.row
+        var x: CGFloat = 0
+        for (k, list) in cols.enumerated() {
+            let d = k - thread.up.count
+            if d == 0 {
+                let r = CGRect(x: x, y: 44 + (height - Self.centre.height) / 2, width: Self.centre.width, height: Self.centre.height)
+                chips[centre.id] = r
+                columns.append(("", x, r.minY))
+                x += Self.centre.width + Self.gap
+                continue
             }
-            for (i, p) in inner.enumerated() {
-                let origin = framed ? CGPoint(x: x + 12 + CGFloat(i % 3) * 180, y: y + 32 + CGFloat(i / 3) * 74) : CGPoint(x: x, y: y)
-                cards.append((p, CGRect(origin: origin, size: Self.card)))
-            }
-            x += w + 20
-            rowHeight = max(rowHeight, h)
-            size.width = max(size.width, x - 20)
+            let top = 44 + (tallest - CGFloat(list.count)) / 2 * Self.row
+            for (i, s) in list.enumerated() { chips[s.id] = CGRect(x: x, y: top + CGFloat(i) * Self.row, width: Self.chipW, height: Self.chipH) }
+            columns.append((d == -1 ? "Вызывают" : d == 1 ? "Вызывает" : ru(abs(d), "шаг", "шага", "шагов") + (d < 0 ? " вверх" : " вниз"), x, top))
+            x += Self.chipW + Self.gap
         }
-        // A corridor under the last row: a line between cards that are not neighbours goes below
-        // the cards in between (rows above have their 20pt gaps).
-        size.height = y + rowHeight + 20
-    }
-
-    /// What lines go around: the cards and the frame labels (mono 12, about 7.3 a character).
-    var obstacles: [CGRect] {
-        cards.map(\.rect) + frames.map { f in
-            CGRect(x: f.rect.minX + 10, y: f.rect.minY + 6, width: CGFloat("\(f.project.id) · \(f.services)".count) * 7.3 + 4, height: 18)
-        }
-    }
-}
-
-/// Level 2: columns 220 wide at x = 10 / 280 / 550 (empty ones dropped, the rest move left),
-/// the externals column 188 wide 22 after the last; cards from y 76, 108 apart (design).
-struct ProjectLayout {
-    var columns: [(column: ServiceMap.Column, x: CGFloat, services: [Service])] = []
-    /// Own service cards and external rows, by service id: the ends of the lines.
-    var rects: [String: CGRect] = [:]
-    var externals: [(project: Project, services: [Service], rect: CGRect)] = []
-    var externalX: CGFloat = 10
-    var boxHeight: CGFloat = 500
-    var size = CGSize.zero
-
-    init(_ map: ServiceMap.ProjectMap) {
-        var x: CGFloat = 10, bottom: CGFloat = 76
-        for column in ServiceMap.Column.allCases {
-            guard let services = map.own[column], !services.isEmpty else { continue }
-            columns.append((column, x, services))
-            for (i, s) in services.enumerated() { rects[s.id] = CGRect(x: x + 10, y: 76 + CGFloat(i) * 108, width: 200, height: 92) }
-            bottom = max(bottom, 76 + CGFloat(services.count) * 108 - 16)
-            x += 270
-        }
-        externalX = columns.isEmpty ? 10 : x - 270 + 242
-        var y: CGFloat = 76
-        for e in map.externals {
-            // padding 8, header 16 + 2, rows 22 with gap 2, padding 8
-            let h = 8 + 18 + CGFloat(e.services.count) * 24 + 8
-            externals.append((e.project, e.services, CGRect(x: externalX + 10, y: y, width: 170, height: h)))
-            for (i, s) in e.services.enumerated() { rects[s.id] = CGRect(x: externalX + 10, y: y + 28 + CGFloat(i) * 24, width: 170, height: 22) }
-            y += h + 8
-        }
-        boxHeight = max(500, max(bottom, y - 8) + 16 - 44)
-        let width = map.externals.isEmpty ? externalX - 22 : externalX + 188
-        size = CGSize(width: max(width, 560), height: 44 + boxHeight)
-    }
-
-    /// What lines go around: each column's header and cards as one block (no line across a column
-    /// between its cards), external cards and the legend; free stay the corridor above the headers
-    /// (y 19–41), the gaps between columns and the space below a column's last card.
-    var obstacles: [CGRect] {
-        columns.map { c in c.services.compactMap { rects[$0.id] }.reduce(CGRect(x: c.x, y: 44, width: 220, height: 26)) { $0.union($1) } }
-            + externals.map(\.rect) + (externals.isEmpty ? [] : [CGRect(x: externalX, y: 44, width: 188, height: 26)])
-            + [CGRect(x: 0, y: 0, width: size.width, height: 16)]
-    }
-}
-
-/// Level 3: callers 210×64 at x 20 from y 76, 72 apart; the centre 260×120 at x 440, level with
-/// the middle of the taller column; callees at x 790.
-struct ServiceLayout {
-    var callers: [CGRect] = []
-    var callees: [CGRect] = []
-    var centre = CGRect.zero
-    var size = CGSize.zero
-
-    init(callers: Int, callees: Int) {
-        let column = CGFloat(max(callers, callees, 1)) * 72 - 8
-        centre = CGRect(x: 440, y: 76 + max(0, (column - 120) / 2), width: 260, height: 120)
-        self.callers = (0..<callers).map { CGRect(x: 20, y: 76 + CGFloat($0) * 72, width: 210, height: 64) }
-        self.callees = (0..<callees).map { CGRect(x: 790, y: 76 + CGFloat($0) * 72, width: 210, height: 64) }
-        size = CGSize(width: 1000, height: max(76 + column, centre.maxY) + 20)
+        size = CGSize(width: x - Self.gap, height: max(height, Self.centre.height) + 60)
     }
 }

@@ -2,53 +2,31 @@ import SwiftUI
 import AppKit
 import PracticesCore
 
-/// Where the map is: the level and what it shows. Kept by `MapView` while the screen is open.
-@MainActor @Observable
-final class MapState {
-    enum Level: Hashable { case space, project, service }
-    var level = Level.space
-    var space = ""
-    var project: String?
-    var service: String?
-    /// The «Общие» pill clicked: its callers lit, its lines drawn.
-    var hub: String?
-    var catalogue = Catalogue(projects: [], services: [], links: [])
-
-    func lookup(_ id: String) -> Service? { catalogue.services.first { $0.id == id } }
-
-    func open(project id: String) {
-        project = id
-        space = catalogue.projects.first { $0.id == id }?.space ?? space
-        hub = nil
-        level = .project
-    }
-
-    func focus(_ id: String) {
-        service = id
-        if let s = lookup(id) { project = s.project; space = s.space }
-        level = .service
-    }
-
-    /// Caller → hub: the link behind a `→ hub` chip, for its colour.
-    func link(from: String, to: String) -> PracticesCore.Link? { catalogue.links.first { $0.from == from && $0.link.to == to }?.link }
-}
-
-/// The map (DECISIONS 33–35): space → project → service, read-only.
+/// The map (`work/2026-11-08-map`): space (frames or flow) → project (even grid) → service
+/// (its thread); zoom and pan on every level, a click pins a service and opens the side panel.
 struct MapView: View {
     @Environment(RegistryModel.self) private var registry
     private var state: MapState { registry.map }
 
     var body: some View {
-        Group {
-            switch state.level {
-            case .space: SpaceMapView(state: state)
-            case .project: ProjectMapView(state: state)
-            case .service: ServiceMapView(state: state)
+        HStack(spacing: 0) {
+            Group {
+                switch state.level {
+                case .space: SpaceMapView(state: state)
+                case .project: ProjectMapView(state: state)
+                case .service: ServiceMapView(state: state)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            if let id = state.pinned, let s = state.lookup(id) {
+                MapSidePanel(state: state, service: s)
+                    .frame(width: 320)
+                    .overlay(alignment: .leading) { Theme.Color.border.frame(width: 1) }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.Color.windowBg)
         .toolbarLeading { MapTitle(state: state) }
-        .toolbarTrailing { ToolbarButton("Открыть карточку") { openCard() } }
+        .toolbarTrailing { MapControls(state: state) { openCard() } }
         .onAppear { start() }
     }
 
@@ -79,10 +57,9 @@ private struct MapTitle: View {
     var body: some View {
         HStack(spacing: 10) {
             if state.level == .space, registry.spaces.count > 1 {
-                // Which space the map shows, and the way to the others.
                 Menu {
                     ForEach(registry.spaces, id: \.id) { s in
-                        Button { state.space = s.id; state.hub = nil } label: { Text(verbatim: "\(s.id) — \(s.name)") }
+                        Button { state.show(space: s.id) } label: { Text(verbatim: "\(s.id) — \(s.name)") }
                     }
                 } label: {
                     HStack(spacing: 5) {
@@ -108,12 +85,11 @@ private struct MapTitle: View {
         }
     }
 
-    /// The space, then the projects above the shown one (all of them for a service); each opens its level.
     private var crumbs: [Crumb] {
         guard state.level != .space else { return [] }
         var path = registry.path(of: state.project ?? "")
         if state.level == .project { path = Array(path.dropLast()) }
-        return [Crumb(label: state.space) { state.level = .space }]
+        return [Crumb(label: state.space) { state.show(space: state.space) }]
             + path.map { p in Crumb(label: p.id, color: registry.zoneColor(of: p.id)) { state.open(project: p.id) } }
     }
 
@@ -123,550 +99,210 @@ private struct MapTitle: View {
         case .space:
             let map = ServiceMap.space(state.space, in: c)
             return [ru(map.projects.count, "проект", "проекта", "проектов"),
-                    ru(map.pairs.reduce(0) { $0 + $1.count }, "связь", "связи", "связей"),
-                    ru(map.pairs.count, "связанная пара", "связанные пары", "связанных пар")].joined(separator: " · ")
+                    ru(map.pairs.reduce(0) { $0 + $1.count }, "связь", "связи", "связей") + " между проектами"].joined(separator: " · ")
         case .project:
             guard let id = state.project else { return "" }
             let map = ServiceMap.project(id, in: c)
-            return [ru(map.own.values.reduce(0) { $0 + $1.count }, "сервис", "сервиса", "сервисов"),
-                    ru(map.edges.count, "связь", "связи", "связей") + " линиями",
-                    ru(map.hubs.count, "общий", "общих", "общих"),
-                    ru(map.externals.reduce(0) { $0 + $1.services.count }, "внешний", "внешних", "внешних")].joined(separator: " · ")
+            return [ru(map.own.count, "сервис", "сервиса", "сервисов"),
+                    ru(map.pairs.reduce(0) { $0 + $1.links.count }, "связь", "связи", "связей"),
+                    ru(map.callers.count + map.callees.count, "сосед", "соседа", "соседей")].joined(separator: " · ")
         case .service:
             guard let id = state.service else { return "" }
-            let f = ServiceMap.service(id, in: c)
-            let links = (f.callers + f.callees).reduce(0) { $0 + $1.links.count }
-            return ru(f.callers.count, "вызывающий", "вызывающих", "вызывающих")
-                + " из " + ru(Set(f.callers.map(\.service.project)).count, "проекта", "проектов", "проектов")
-                + " · " + ru(links, "связь", "связи", "связей") + " · " + ru(f.callees.count, "зависимость", "зависимости", "зависимостей")
+            let t = ServiceMap.thread(id, in: c, hops: state.hops)
+            return ru(t.up.reduce(0) { $0 + $1.count }, "выше", "выше", "выше") + " · "
+                + ru(t.down.reduce(0) { $0 + $1.count }, "ниже", "ниже", "ниже") + " · до " + ru(state.hops, "шага", "шагов", "шагов")
         }
     }
 
-    /// Segment control: padding 2, radius 7; segments padding 3 14, radius 5, accent when on.
     private var levels: some View {
         HStack(spacing: 0) {
-            segment("Пространство", .space, enabled: true)
-            segment("Проект", .project, enabled: state.project != nil)
-            segment("Сервис", .service, enabled: state.service != nil)
+            segment("Пространство", enabled: true, on: state.level == .space) { state.show(space: state.space) }
+            segment("Проект", enabled: state.project != nil, on: state.level == .project) { state.open(project: state.project!) }
+            segment("Сервис", enabled: state.service != nil, on: state.level == .service) { state.focus(state.service!) }
         }
         .padding(2)
         .background(Theme.Color.buttonBg, in: RoundedRectangle(cornerRadius: 7))
         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.Color.border))
     }
-
-    private func segment(_ label: String, _ level: MapState.Level, enabled: Bool) -> some View {
-        let on = state.level == level
-        return Button { state.level = level } label: {
-            Text(verbatim: label).font(Theme.ui(13))
-                .foregroundStyle(on ? .white : enabled ? Theme.Color.text : Theme.Color.textDisabled)
-                .padding(.horizontal, 14).padding(.vertical, 3)
-                .background(on ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 5))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-    }
 }
 
-// MARK: - Level 1: space
-
-private struct SpaceMapView: View {
-    @Environment(RegistryModel.self) private var registry
-    let state: MapState
-    static let threshold = 3
-    /// The card under the pointer: its pairs accent, the rest dimmed.
-    @State private var hover: String?
-
-    var body: some View {
-        let map = ServiceMap.space(state.space, in: state.catalogue)
-        let services = state.catalogue.services.filter { $0.space == state.space }
-        GeometryReader { geo in
-            let layout = SpaceLayout(map, services: services, width: geo.size.width - 40)
-            let rect = Dictionary(layout.cards.map { ($0.project.id, $0.rect) }, uniquingKeysWith: { a, _ in a })
-            let strong = map.pairs.filter { $0.count >= Self.threshold && rect[$0.a] != nil && rect[$0.b] != nil }
-            let routes = MapGeometry.routes(strong.map { p in
-                let (a, b) = (rect[p.a]!, rect[p.b]!)
-                return a.minX <= b.minX ? (from: a, to: b) : (from: b, to: a)
-            }, obstacles: layout.obstacles, bounds: CGRect(origin: .zero, size: layout.size))
-            let order = strong.indices.sorted { lit(strong[$0]) == lit(strong[$1]) ? $0 < $1 : !lit(strong[$0]) }
-            ScrollView([.vertical, .horizontal]) {
-                VStack(alignment: .leading, spacing: 12) {
-                    ZStack(alignment: .topLeading) {
-                        MapLines(lines: order.map { i -> MapLine in
-                            let on = lit(strong[i])
-                            return MapLine(path: MapGeometry.rounded(routes[i]), color: on ? Theme.Color.accent : Color(hex: 0x9A9AA3),
-                                           width: 1 + log2(CGFloat(strong[i].count)), opacity: on ? 0.95 : hover == nil ? 0.55 : 0.2)
-                        })
-                        ForEach(strong.indices, id: \.self) { i in
-                            Text(verbatim: "\(strong[i].count)").font(Theme.mono(10.5)).foregroundStyle(Theme.Color.text)
-                                .padding(.horizontal, 3).background(Theme.Color.windowBg, in: RoundedRectangle(cornerRadius: 3))
-                                .position(label(routes[i]))
-                        }
-                        ForEach(layout.frames.indices, id: \.self) { i in zoneFrame(layout.frames[i]) }
-                        ForEach(layout.cards.indices, id: \.self) { i in
-                            let id = layout.cards[i].project.id
-                            card(layout.cards[i].project, services: services, weak: map.pairs).placed(layout.cards[i].rect)
-                                .onHover { hover = $0 ? id : nil }
-                        }
-                    }
-                    .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-                    legend(cross: map.crossSpace)
-                }
-                .padding(20)
-            }
-        }
+/// Segment of a control: padding 3 14, radius 5, accent when on.
+private func segment(_ label: String, enabled: Bool = true, on: Bool, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        Text(verbatim: label).font(Theme.ui(13))
+            .foregroundStyle(on ? .white : enabled ? Theme.Color.text : Theme.Color.textDisabled)
+            .padding(.horizontal, 14).padding(.vertical, 3)
+            .background(on ? Theme.Color.accent : .clear, in: RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
     }
-
-    private func lit(_ p: (a: String, b: String, count: Int)) -> Bool { hover == p.a || hover == p.b }
-
-    /// A pair's count sits in the middle of its route's longest segment.
-    private func label(_ route: [CGPoint]) -> CGPoint {
-        let (a, b) = zip(route, route.dropFirst()).max { hypot($0.1.x - $0.0.x, $0.1.y - $0.0.y) < hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }!
-        return CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
-    }
-
-    /// Dashed frame of a parent (radius 12, 1.5 dashed at 0.6, fill 0.05); its label opens it.
-    private func zoneFrame(_ f: (project: Project, rect: CGRect, services: Int)) -> some View {
-        let zone = registry.zoneColor(of: f.project.id)
-        return RoundedRectangle(cornerRadius: 12).fill(zone.opacity(0.05))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(zone.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])))
-            .overlay(alignment: .topLeading) {
-                Button { state.open(project: f.project.id) } label: {
-                    Text(verbatim: "\(f.project.id) · \(f.services)").font(Theme.mono(12, .semibold)).foregroundStyle(zone)
-                }
-                .buttonStyle(.plain).padding(.leading, 12).padding(.top, 8)
-            }
-            .placed(f.rect)
-    }
-
-    /// 170×64: id, composition bar, «N серв · M репо»; pairs under the threshold as «+N».
-    private func card(_ p: Project, services: [Service], weak pairs: [(a: String, b: String, count: Int)]) -> some View {
-        let own = services.filter { $0.project == p.id }
-        let weak = pairs.filter { $0.count < Self.threshold && ($0.a == p.id || $0.b == p.id) }.reduce(0) { $0 + $1.count }
-        let parts = ServiceClass.allCases.map { c in (c, own.filter { ServiceClass(for: $0) == c }.count) }
-        return VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: p.id).font(Theme.mono(12, .semibold)).lineLimit(1).truncationMode(.tail)
-            CompositionBar(parts).padding(.top, 4).padding(.bottom, 3)
-            Text(verbatim: "\(own.count) серв · \(p.repos.count) репо" + (weak > 0 ? " · +\(weak)" : ""))
-                .font(Theme.mono(10.5)).foregroundStyle(Theme.Color.textMuted).lineLimit(1)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(width: 170, height: 64, alignment: .leading)
-        .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.Color.borderCard))
-        .help(weak > 0 ? "\(p.name) · +" + ru(weak, "слабая связь", "слабых связи", "слабых связей") : p.name)
-        .contentShape(Rectangle())
-        .onTapGesture { state.open(project: p.id) }
-    }
-
-    private func legend(cross: Int) -> some View {
-        HStack(spacing: 14) {
-            Text(verbatim: "линии — пары с ≥ \(Self.threshold) связями, толщина ∝ log₂")
-            if cross > 0 { Text(verbatim: ru(cross, "связь", "связи", "связей") + " с другими пространствами не показаны") }
-            ForEach([ServiceClass.front, .api, .data, .bus, .ext], id: \.self) { c in
-                HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c.color).frame(width: 8, height: 8); Text(verbatim: c.rawValue) }
-            }
-        }
-        .font(Theme.mono(10.5)).foregroundStyle(Theme.Color.textMuted).fixedSize()
-    }
+    .buttonStyle(.plain)
+    .disabled(!enabled)
 }
 
-// MARK: - Level 2: project
-
-private struct ProjectMapView: View {
-    @Environment(RegistryModel.self) private var registry
-    let state: MapState
-    @State private var hover: String?
-    /// The card or external row under the pointer: its lines accent, the rest dimmed.
-    @State private var hoverCard: String?
+/// Right of the toolbar: «Рамки / Поток» or the thread's depth, the zoom, «1:1», the card.
+private struct MapControls: View {
+    @Bindable var state: MapState
+    let openCard: () -> Void
 
     var body: some View {
-        if let id = state.project {
-            let map = ServiceMap.project(id, in: state.catalogue)
-            let layout = ProjectLayout(map)
-            let hub = hover ?? state.hub
-            let lit: Set<String>? = hub.map { h in Set(map.chips.filter { $0.value.contains(h) }.keys) }
-            VStack(spacing: 0) {
-                ScrollView([.vertical, .horizontal]) {
-                    ZStack(alignment: .topLeading) {
-                        boxes(layout)
-                        MapLines(lines: lines(map, layout, hub: hub, dim: lit != nil))
-                        MapLegend(items: viaLegend, note: "⚑ условие · чип «→ имя» — связь с общим сервисом")
-                        titles(layout, map)
-                        ForEach(layout.columns.indices, id: \.self) { c in
-                            ForEach(layout.columns[c].services, id: \.id) { s in
-                                card(s, chips: map.chips[s.id] ?? []).opacity(lit.map { $0.contains(s.id) ? 1 : 0.35 } ?? 1)
-                                    .onHover { hoverCard = $0 ? s.id : nil }
-                                    .placed(layout.rects[s.id]!)
-                            }
-                        }
-                        ForEach(layout.externals.indices, id: \.self) { i in external(layout.externals[i], lit: lit).placed(layout.externals[i].rect) }
-                    }
-                    .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-                    .padding(20)
+        HStack(spacing: 8) {
+            if state.level == .space {
+                HStack(spacing: 0) {
+                    segment("Рамки", on: state.spaceMode == .frames) { state.spaceMode = .frames }
+                    segment("Поток", on: state.spaceMode == .flow) { state.spaceMode = .flow }
                 }
-                if !map.hubs.isEmpty { strip(map.hubs) }
+                .padding(2)
+                .background(Theme.Color.buttonBg, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.Color.border))
+                .fixedSize()
             }
-        }
-    }
-
-    private var viaLegend: [(String, Color)] { ["http", "topic", "db", "network", "build"].map { ($0, Theme.viaColor($0)) } }
-
-    /// Column backgrounds: the class colour at 0.05, border 0.25; externals pink, dashed.
-    @ViewBuilder private func boxes(_ layout: ProjectLayout) -> some View {
-        ForEach(layout.columns.indices, id: \.self) { i in
-            let c = ServiceClass(rawValue: layout.columns[i].column.rawValue) ?? .other
-            RoundedRectangle(cornerRadius: 10).fill(Color(hex: c.hex, alpha: 0.05))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(hex: c.hex, alpha: 0.25)))
-                .placed(CGRect(x: layout.columns[i].x, y: 44, width: 220, height: layout.boxHeight))
-        }
-        if !layout.externals.isEmpty {
-            RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0xFF7AA2, alpha: 0.04))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(hex: 0xFF7AA2, alpha: 0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                .placed(CGRect(x: layout.externalX, y: 44, width: 188, height: layout.boxHeight))
-        }
-    }
-
-    @ViewBuilder private func titles(_ layout: ProjectLayout, _ map: ServiceMap.ProjectMap) -> some View {
-        let names: [ServiceMap.Column: String] = [.front: "Фронты", .api: "API и воркеры", .data: "Данные"]
-        ForEach(layout.columns.indices, id: \.self) { i in
-            let col = layout.columns[i]
-            SectionTitle("\(names[col.column] ?? "") · \(col.services.count)", color: (ServiceClass(rawValue: col.column.rawValue) ?? .other).color)
-                .placed(col.x + 10, 52)
-        }
-        if !layout.externals.isEmpty {
-            SectionTitle("Внешние · \(map.externals.reduce(0) { $0 + $1.services.count })", color: ZonePalette.external).placed(layout.externalX + 10, 52)
-        }
-    }
-
-    /// Plain links routed orthogonally, a hovered card's on top in accent; with a hub shown, its
-    /// callers' links to the strip below.
-    private func lines(_ map: ServiceMap.ProjectMap, _ layout: ProjectLayout, hub: String?, dim: Bool) -> [MapLine] {
-        let grouped = Dictionary(grouping: map.edges) { [$0.from, $0.link.to] }
-        // Sorted, so a link keeps its lane from one render to the next.
-        let keys = grouped.keys.filter { layout.rects[$0[0]] != nil && layout.rects[$0[1]] != nil }.sorted { $0.joined(separator: " ") < $1.joined(separator: " ") }
-        let ends = keys.map { (from: layout.rects[$0[0]]!, to: layout.rects[$0[1]]!) }
-        let routes = MapGeometry.routes(ends, obstacles: layout.obstacles, bounds: CGRect(origin: .zero, size: layout.size))
-        var lines = keys.indices.map { i -> MapLine in
-            var line = MapGeometry.line(ends[i].from, ends[i].to, links: grouped[keys[i]]!.map(\.link), route: routes[i])
-            if let card = hoverCard {
-                if keys[i].contains(card) { line.color = Theme.Color.accent; line.opacity = 0.95 } else { line.opacity *= 0.35 }
-            } else if dim { line.opacity *= 0.35 }
-            return line
-        }
-        if let card = hoverCard { lines = keys.indices.filter { !keys[$0].contains(card) }.map { lines[$0] } + keys.indices.filter { keys[$0].contains(card) }.map { lines[$0] } }
-        guard let hub else { return lines }
-        let target = CGPoint(x: layout.size.width / 2, y: layout.size.height)
-        for (caller, hubs) in map.chips where hubs.contains(hub) {
-            guard let a = layout.rects[caller] else { continue }
-            let link = state.link(from: caller, to: hub)
-            var path = Path()
-            let start = CGPoint(x: a.midX, y: a.maxY), back = CGPoint(x: target.x, y: target.y - 60)
-            path.move(to: start)
-            path.addCurve(to: target, control1: CGPoint(x: start.x, y: start.y + 60), control2: back)
-            lines.append(MapLine(path: path, tip: target, back: back, color: Theme.viaColor(link?.via, access: link?.access), width: 1.6, opacity: 0.75))
-        }
-        return lines
-    }
-
-    /// 200×92: dot, id, ⚑; name; kind badge and `→ hub` chips in the link's colour.
-    private func card(_ s: Service, chips: [String]) -> some View {
-        let cls = ServiceClass(for: s)
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Circle().fill(cls.color).frame(width: 7, height: 7)
-                Text(verbatim: s.id).font(Theme.mono(12, .semibold)).lineLimit(1).truncationMode(.tail)
-                Spacer(minLength: 0)
-                if !s.conditionIDs.isEmpty {
-                    Text(verbatim: "⚑").font(Theme.ui(11)).foregroundStyle(Theme.Color.warn).help(s.conditionIDs.joined(separator: ", "))
+            if state.level == .service {
+                Stepper(value: $state.hops, in: 1...5) {
+                    Text(verbatim: "шагов: \(state.hops)").font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary)
                 }
+                .fixedSize()
             }
-            Text(verbatim: s.name).font(Theme.ui(11)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
-            Spacer(minLength: 0)
-            MapFlow(spacing: 3) {
-                KindBadge(cls)
-                ForEach(chips, id: \.self) { hub in
-                    let link = state.link(from: s.id, to: hub)
-                    Chip("→ \(hub)", color: Theme.viaColor(link?.via, access: link?.access))
-                }
-            }
+            Text(verbatim: "\(Int((state.scale * 100).rounded())) %").font(Theme.mono(11)).foregroundStyle(Theme.Color.textMuted)
+                .monospacedDigit().frame(width: 44, alignment: .trailing)
+            ToolbarButton("1:1") { state.zoom(to: 1, around: CGPoint(x: state.viewSize.width / 2, y: state.viewSize.height / 2)) }
+                .help("Масштаб 1:1; двойной клик по карте — вписать")
+            ToolbarButton("Открыть карточку", action: openCard)
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(width: 200, height: 92, alignment: .topLeading)
-        .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.Color.borderCard))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .help(s.description ?? s.name)
-        .contentShape(Rectangle())
-        .onTapGesture { state.focus(s.id) }
-    }
-
-    /// One card per outside project: «project · N» in its zone colour, rows of 22.
-    private func external(_ e: (project: Project, services: [Service], rect: CGRect), lit: Set<String>?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Button { state.open(project: e.project.id) } label: {
-                Text(verbatim: "\(e.project.id) · \(e.services.count)").font(Theme.mono(11.5, .semibold))
-                    .foregroundStyle(registry.zoneColor(of: e.project.id)).lineLimit(1).frame(height: 16)
-            }
-            .buttonStyle(.plain).padding(.bottom, 2)
-            ForEach(e.services, id: \.id) { s in
-                HStack(spacing: 6) {
-                    Text(verbatim: s.id).font(Theme.mono(11)).lineLimit(1).truncationMode(.tail)
-                    Spacer(minLength: 0)
-                    KindBadge(ServiceClass(for: s))
-                }
-                .padding(.horizontal, 4).frame(height: 22)
-                .contentShape(Rectangle())
-                .onTapGesture { state.focus(s.id) }
-                .onHover { hoverCard = $0 ? s.id : nil }
-                .opacity(lit.map { $0.contains(s.id) ? 1 : 0.35 } ?? 1)
-            }
-        }
-        .padding(8)
-        .frame(width: 170, alignment: .topLeading)
-        .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.Color.borderCard))
-    }
-
-    /// «Общие», pinned under the scrolled map: hover or click lights the callers; «›» or ⌥-click opens the hub.
-    private func strip(_ hubs: [(service: Service, callers: Int)]) -> some View {
-        MapFlow(spacing: 8) {
-            SectionTitle("Общие · линии скрыты").padding(.trailing, 8).frame(height: 26)
-            ForEach(hubs, id: \.service.id) { h in
-                let id = h.service.id
-                HStack(spacing: 6) {
-                    Text(verbatim: id).font(Theme.mono(12))
-                    Text(verbatim: "\(h.callers)").font(Theme.mono(11)).foregroundStyle(Theme.Color.textSecondary)
-                    KindBadge(ServiceClass(for: h.service))
-                    Button { state.focus(id) } label: {
-                        Text(verbatim: "›").font(Theme.mono(12)).foregroundStyle(Theme.Color.textMuted).frame(width: 20, height: 20).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 2)
-                .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(state.hub == id ? Theme.Color.accent : Theme.Color.borderCard))
-                .help("\(h.service.name) · " + ru(h.callers, "вызывающий", "вызывающих", "вызывающих"))
-                .onHover { hover = $0 ? id : nil }
-                .onTapGesture {
-                    if NSEvent.modifierFlags.contains(.option) { state.focus(id) } else { state.hub = state.hub == id ? nil : id }
-                }
-            }
-            Text(verbatim: "наведение на плашку подсвечивает вызывающих; ⌥-клик открывает карту сервиса")
-                .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).padding(.leading, 8).frame(height: 26)
-        }
-        .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Color.windowBg)
-        .overlay(alignment: .top) { Theme.Color.border.frame(height: 1) }
-    }
-}
-
-// MARK: - Level 3: service
-
-private struct ServiceMapView: View {
-    @Environment(RegistryModel.self) private var registry
-    let state: MapState
-
-    var body: some View {
-        if let id = state.service, let s = state.lookup(id) {
-            let focus = ServiceMap.service(id, in: state.catalogue)
-            ScrollView([.vertical, .horizontal]) {
-                Group {
-                    if let topics = focus.topics { topicTable(s, topics) } else { fan(s, focus) }
-                }
-                .padding(20)
-            }
-        }
-    }
-
-    private func fan(_ s: Service, _ focus: ServiceMap.ServiceFocus) -> some View {
-        let layout = ServiceLayout(callers: focus.callers.count, callees: focus.callees.count)
-        let lines = focus.callers.indices.map { MapGeometry.line(layout.callers[$0], layout.centre, links: focus.callers[$0].links, width: 1.6) }
-            + focus.callees.indices.map { MapGeometry.line(layout.centre, layout.callees[$0], links: focus.callees[$0].links, width: 1.6) }
-        return ZStack(alignment: .topLeading) {
-            MapLines(lines: lines)
-            ForEach(focus.callers.indices, id: \.self) { i in
-                label(focus.callers[i].links, width: 190).position(x: 335, y: (layout.callers[i].midY + layout.centre.midY) / 2)
-            }
-            ForEach(focus.callees.indices, id: \.self) { i in
-                label(focus.callees[i].links, width: 84).position(x: 745, y: (layout.callees[i].midY + layout.centre.midY) / 2)
-            }
-            MapLegend(items: [("http", Theme.viaColor("http")), ("topic", Theme.viaColor("topic")), ("db read", Theme.viaColor("db")),
-                              ("db write", Theme.viaColor("db", access: "write")), ("network", Theme.viaColor("network")), ("build", Theme.viaColor("build"))],
-                      note: nil)
-            SectionTitle("Вызывают · \(focus.callers.count)").placed(20, 52)
-            SectionTitle("Вызывает · \(focus.callees.count)").placed(790, 52)
-            if focus.callers.isEmpty { hint("никто не вызывает").placed(20, 80) }
-            if focus.callees.isEmpty { hint("никуда не ходит").placed(790, 80) }
-            ForEach(focus.callers.indices, id: \.self) { i in side(focus.callers[i]).placed(layout.callers[i]) }
-            ForEach(focus.callees.indices, id: \.self) { i in side(focus.callees[i]).placed(layout.callees[i]) }
-            centre(s).placed(layout.centre)
-        }
-        .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
-    }
-
-    private func hint(_ text: String) -> some View { Text(verbatim: text).font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted) }
-
-    /// `what (access)` of each link, joined; long ones truncated, whole in the tooltip.
-    private func label(_ links: [PracticesCore.Link], width: CGFloat) -> some View {
-        var seen = Set<String>()
-        let text = links.map { ($0.what ?? $0.via ?? "—") + ($0.access.map { " (\($0))" } ?? "") }.filter { seen.insert($0).inserted }.joined(separator: " · ")
-        let write = links.contains { $0.via == "db" && $0.access == "write" }
-        return Text(verbatim: text).font(Theme.mono(10.5)).foregroundStyle(write ? Theme.Color.warn : Theme.Color.text)
-            .lineLimit(1).truncationMode(.tail)
-            .padding(.horizontal, 3).background(Theme.Color.windowBg, in: RoundedRectangle(cornerRadius: 3))
-            .frame(maxWidth: width)
-            .help(text)
-    }
-
-    /// 210×64: id and kind; the project as a chip in its zone colour, the count of links.
-    private func side(_ entry: (service: Service, links: [PracticesCore.Link])) -> some View {
-        let s = entry.service
-        let writes = entry.links.filter { $0.access == "write" }.count
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(verbatim: s.id).font(Theme.mono(12, .semibold)).lineLimit(1).truncationMode(.tail)
-                KindBadge(ServiceClass(for: s))
-            }
-            Spacer(minLength: 0)
-            HStack(spacing: 6) {
-                Chip(s.project, color: registry.zoneColor(of: s.project))
-                Text(verbatim: ru(entry.links.count, "связь", "связи", "связей") + (writes > 0 ? " · \(writes) write" : ""))
-                    .font(Theme.ui(10.5)).foregroundStyle(Theme.Color.textMuted)
-            }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .frame(width: 210, height: 64, alignment: .topLeading)
-        .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.Color.borderCard))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .contentShape(Rectangle())
-        .onTapGesture { state.focus(s.id) }
-    }
-
-    /// 260×120, 2pt border in the class colour: id 15/600, name · project, kind and conditions.
-    private func centre(_ s: Service) -> some View {
-        let cls = ServiceClass(for: s)
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(verbatim: s.id).font(Theme.mono(15, .semibold)).lineLimit(1)
-            Text(verbatim: "\(s.name) · \(s.project)").font(Theme.ui(11.5)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
-            MapFlow(spacing: 3) {
-                KindBadge(cls)
-                ForEach(s.conditionIDs, id: \.self) { c in
-                    Text(verbatim: "⚑ \(c)").font(Theme.mono(10.5)).foregroundStyle(Theme.Color.warn)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Theme.Color.warn))
-                }
-            }
-            .padding(.top, 4)
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .frame(width: 260, height: 120, alignment: .topLeading)
-        .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(cls.color, lineWidth: 2))
-    }
-
-    /// A broker: the node, then Топик / Пишут / Читают / Используют instead of the fan.
-    private func topicTable(_ s: Service, _ topics: [ServiceMap.Topic]) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            centre(s)
-            SectionTitle("Топики · \(topics.count)")
-            Grid(alignment: .topLeading, horizontalSpacing: 14, verticalSpacing: 5) {
-                GridRow {
-                    ForEach(["Топик", "Пишут", "Читают", "Используют"], id: \.self) { SectionTitle($0) }
-                }
-                Theme.Color.borderSoft.frame(height: 1)
-                ForEach(topics.indices, id: \.self) { i in
-                    GridRow {
-                        Text(verbatim: topics[i].what ?? "—").font(Theme.mono(12)).foregroundStyle(Theme.Color.text)
-                        chips(topics[i].writers)
-                        chips(topics[i].readers)
-                        chips(topics[i].users)
-                    }
-                    Theme.Color.borderSoft.frame(height: 1)
-                }
-            }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: 980, alignment: .leading)
-        }
-    }
-
-    private func chips(_ services: [Service]) -> some View {
-        MapFlow(spacing: 3) {
-            ForEach(services, id: \.id) { s in
-                Chip(s.id, color: ServiceClass(for: s).color).onTapGesture { state.focus(s.id) }
-            }
-        }
-        .frame(minWidth: 160, alignment: .leading)
     }
 }
 
 // MARK: - Shared pieces
 
-/// The map's lines in one canvas, under the cards; arrows 7×7.
-private struct MapLines: View {
-    let lines: [MapLine]
+/// Focus: the focused service, its neighbours over `pairs`; nil — nothing focused.
+@MainActor private func litSet(_ state: MapState, _ pairs: [ServiceMap.Pair]) -> Set<String>? {
+    guard let f = state.focused else { return nil }
+    var lit: Set<String> = [f]
+    for p in pairs where p.from == f || p.to == f { lit.insert(p.from); lit.insert(p.to) }
+    return lit
+}
+
+/// A pair's colour: by its via, a write to a database warn.
+private func color(_ p: ServiceMap.Pair) -> Color {
+    p.links.contains { $0.via == "db" && $0.access == "write" } ? Theme.viaColor("db", access: "write") : Theme.viaColor(p.via)
+}
+
+/// Lines lit by the focus go on top, the rest dimmed.
+private func ordered(_ lines: [(line: MapLine, ends: [String])], focus: String?) -> [MapLine] {
+    guard let f = focus else { return lines.map(\.line) }
+    let on = lines.filter { $0.ends.contains(f) }.map(\.line)
+    let off = lines.filter { !$0.ends.contains(f) }.map { l -> MapLine in var x = l.line; x.opacity *= 0.18; return x }
+    return off + on
+}
+
+private func tooltip(_ s: Service) -> String { [s.name, s.description].compactMap { $0 }.joined(separator: "\n") }
+
+/// A one-line card: the kind dot (or bar), the id, ⚑ when it has conditions. Lit when focused
+/// (white border) or a neighbour of the focused one (accent glow); dimmed otherwise.
+private struct MapChip: View {
+    let state: MapState
+    let service: Service
+    var size: CGSize
+    var lit: Set<String>?
+    var stub = false
+    var bar = false
+    var projectDot = false
+    var radius: CGFloat = 6
+
     var body: some View {
-        Canvas { ctx, _ in
-            for l in lines {
-                let color = l.color.opacity(l.opacity)
-                ctx.stroke(l.path, with: .color(color), style: StrokeStyle(lineWidth: l.width, lineCap: .round))
-                guard let tip = l.tip else { continue }
-                let (dx, dy) = (tip.x - l.back.x, tip.y - l.back.y), len = max(hypot(dx, dy), 0.001)
-                let (ux, uy) = (dx / len, dy / len)
-                var arrow = Path()
-                arrow.move(to: tip)
-                arrow.addLine(to: CGPoint(x: tip.x - ux * 7 - uy * 3.5, y: tip.y - uy * 7 + ux * 3.5))
-                arrow.addLine(to: CGPoint(x: tip.x - ux * 7 + uy * 3.5, y: tip.y - uy * 7 - ux * 3.5))
-                arrow.closeSubpath()
-                ctx.fill(arrow, with: .color(color))
-            }
+        let id = service.id, cls = ServiceClass(for: service)
+        let isSelf = state.focused == id, glow = !isSelf && (lit?.contains(id) ?? false)
+        HStack(spacing: 7) {
+            if bar { RoundedRectangle(cornerRadius: 2).fill(cls.color).frame(width: 4).padding(.vertical, 0) }
+            else { Circle().fill(cls.color).frame(width: 8, height: 8) }
+            if projectDot { Circle().fill(state.color(ofProject: service.project)).frame(width: 7, height: 7) }
+            Text(verbatim: id).font(Theme.mono(12, stub ? .regular : .semibold))
+                .foregroundStyle(stub ? Theme.Color.textSecondary : Theme.Color.text).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 0)
+            if !service.conditionIDs.isEmpty { Text(verbatim: "⚑").font(Theme.ui(11)).foregroundStyle(Theme.Color.warn) }
         }
-        .allowsHitTesting(false)
+        .padding(.leading, bar ? 0 : 10).padding(.trailing, 8)
+        .frame(width: size.width, height: min(size.height, bar ? size.height : 32), alignment: .leading)
+        .frame(width: size.width, height: size.height, alignment: .top)
+        .background(stub ? Color(hex: 0x212124) : Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: radius))
+        .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(
+            isSelf ? .white : glow ? Theme.Color.accent : Theme.Color.borderCard,
+            style: StrokeStyle(lineWidth: isSelf || glow ? 2 : 1, dash: stub && !glow && !isSelf ? [3, 3] : [])))
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .shadow(color: glow ? Theme.Color.accent.opacity(0.8) : .clear, radius: 5)
+        .opacity(lit.map { $0.contains(id) ? 1 : 0.3 } ?? 1)
+        .help(tooltip(service))
+        .contentShape(Rectangle())
+        .onHover { state.hover = $0 ? id : (state.hover == id ? nil : state.hover) }
+        .onTapGesture { state.pin(id) }
     }
 }
 
-/// Legend: markers 16×3 radius 2, gap 14, mono 10.5 muted.
+/// Bottom-left legend: kind dots, via lines and a note.
 private struct MapLegend: View {
-    let items: [(String, Color)]
-    let note: String?
+    var projects: [(String, Color)] = []
+    var note: String?
     var body: some View {
-        HStack(spacing: 14) {
-            ForEach(items.indices, id: \.self) { i in
-                HStack(spacing: 5) { RoundedRectangle(cornerRadius: 2).fill(items[i].1).frame(width: 16, height: 3); Text(verbatim: items[i].0) }
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 10) {
+                Text(verbatim: "вид")
+                ForEach([ServiceClass.front, .api, .data, .bus, .hw, .worker, .ext], id: \.self) { c in
+                    HStack(spacing: 4) { Circle().fill(c.color).frame(width: 8, height: 8); Text(verbatim: c.rawValue) }
+                }
             }
-            if let note { Text(verbatim: note).padding(.leading, 10) }
+            HStack(spacing: 10) {
+                Text(verbatim: "связь")
+                ForEach(["http", "topic", "db", "network", "build"], id: \.self) { v in
+                    HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(Theme.viaColor(v)).frame(width: 14, height: 3); Text(verbatim: v) }
+                }
+                HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(Theme.viaColor("db", access: "write")).frame(width: 14, height: 3); Text(verbatim: "db write") }
+            }
+            if !projects.isEmpty {
+                HStack(spacing: 10) {
+                    Text(verbatim: "проект")
+                    ForEach(projects.indices, id: \.self) { i in
+                        HStack(spacing: 4) { Circle().fill(projects[i].1).frame(width: 8, height: 8); Text(verbatim: projects[i].0) }
+                    }
+                }
+            }
+            if let note { Text(verbatim: note) }
         }
-        .font(Theme.mono(10.5)).foregroundStyle(Theme.Color.textMuted).fixedSize()
+        .font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(Theme.Color.cardBg.opacity(0.92), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.Color.border))
+        .fixedSize()
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 }
 
-/// Views in a row that wraps (chips, the «Общие» pills).
-private struct MapFlow: Layout {
-    var spacing: CGFloat
+/// Pills at the view's edge for the focused card's neighbours that are out of view.
+private struct EdgeMarks: View {
+    let state: MapState
+    let rects: [String: CGRect]
+    let pairs: [ServiceMap.Pair]
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(proposal.width ?? .infinity, subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (i, point) in arrange(bounds.width, subviews).points.enumerated() {
-            subviews[i].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+    var body: some View {
+        let size = state.viewSize
+        ZStack(alignment: .topLeading) {
+            if let f = state.focused, rects[f] != nil {
+                let others = Set(pairs.filter { $0.from == f || $0.to == f }.map { $0.from == f ? $0.to : $0.from })
+                ForEach(others.sorted(), id: \.self) { id in
+                    if let r = rects[id] {
+                        let p = state.onScreen(CGPoint(x: r.midX, y: r.midY))
+                        if p.x < 0 || p.x > size.width || p.y < 0 || p.y > size.height {
+                            let text = (p.x < 0 ? "← " : p.x > size.width ? "" : p.y < 0 ? "↑ " : "↓ ") + id + (p.x > size.width ? " →" : "")
+                            Text(verbatim: text).font(Theme.mono(11)).foregroundStyle(.white)
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(Theme.Color.accent, in: Capsule())
+                                .fixedSize()
+                                .position(x: min(max(p.x, 70), size.width - 70), y: min(max(p.y, 14), size.height - 14))
+                        }
+                    }
+                }
+            }
         }
-    }
-
-    private func arrange(_ width: CGFloat, _ subviews: Subviews) -> (points: [CGPoint], size: CGSize) {
-        var points: [CGPoint] = [], x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x > 0 && x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
-            points.append(CGPoint(x: x, y: y))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-            maxX = max(maxX, x - spacing)
-        }
-        return (points, CGSize(width: maxX, height: y + rowHeight))
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 }
 
@@ -674,4 +310,320 @@ private extension View {
     /// At a rectangle of the map's content (inside a top-leading `ZStack`).
     func placed(_ r: CGRect) -> some View { frame(width: r.width, height: r.height, alignment: .topLeading).offset(x: r.minX, y: r.minY) }
     func placed(_ x: CGFloat, _ y: CGFloat) -> some View { fixedSize().offset(x: x, y: y) }
+}
+
+// MARK: - Level 1: space
+
+private struct SpaceMapView: View {
+    let state: MapState
+
+    var body: some View {
+        switch state.spaceMode {
+        case .frames: SpaceFramesView(state: state)
+        case .flow: SpaceFlowView(state: state)
+        }
+    }
+}
+
+/// Variant B: project frames; under 0.8× bundles with counts, from 0.8× every link.
+private struct SpaceFramesView: View {
+    let state: MapState
+
+    var body: some View {
+        let space = state.space
+        let layout = state.cached("frames:\(space)") { SpaceFrames(space: space, catalogue: state.catalogue, pairs: state.pairs) }
+        let pairs = layout.lines.map(\.pair)
+        ZoomPan(state: state, key: "frames:\(space)", size: layout.size) {
+            ZStack(alignment: .topLeading) {
+                ForEach(layout.frames.indices, id: \.self) { i in frame(layout.frames[i]) }
+                FramesLines(state: state, layout: layout)
+                ForEach(layout.frames.indices, id: \.self) { i in
+                    ForEach(layout.frames[i].services, id: \.id) { s in
+                        MapChip(state: state, service: s, size: CGSize(width: SpaceFrames.chipW, height: SpaceFrames.chipH),
+                                lit: litSet(state, pairs), bar: true, radius: 5)
+                            .placed(layout.chips[s.id]!)
+                    }
+                }
+            }
+        } overlay: {
+            MapLegend(note: "< 80 % — пучки между проектами с числом связей, ≥ 80 % — каждая связь сервис → сервис; клик — закрепить")
+        }
+    }
+
+    /// Frame: radius 12, a colour bar under the title (it opens the project), counts on the right.
+    private func frame(_ f: SpaceFrames.Frame) -> some View {
+        RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x222225))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color(hex: 0x3A3A3E)))
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Button { state.open(project: f.project) } label: {
+                        Text(verbatim: f.title).font(Theme.ui(17, .semibold)).foregroundStyle(Theme.Color.text).lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    RoundedRectangle(cornerRadius: 1.5).fill(state.color(ofProject: f.project)).frame(width: 30, height: 3)
+                }
+                .padding(.leading, SpaceFrames.pad).padding(.top, 10)
+            }
+            .overlay(alignment: .topTrailing) {
+                Text(verbatim: f.cols > 1 || f.title.count < 12 ? "\(f.services.count) серв · \(f.inner) внутр." : "\(f.services.count)").font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted)
+                    .monospacedDigit().padding(.trailing, SpaceFrames.pad).padding(.top, 15)
+            }
+            .placed(f.rect)
+    }
+}
+
+/// The frames' lines: they depend on the zoom, so only they are redrawn while it changes.
+private struct FramesLines: View {
+    let state: MapState
+    let layout: SpaceFrames
+
+    var body: some View {
+        let far = state.scale < 0.8, focus = state.focused
+        ZStack(alignment: .topLeading) {
+            if far {
+                MapLines(lines: ordered(layout.bundles.map { b in
+                    (MapLine(path: MapGeometry.rounded(b.points), color: Color(hex: 0x8A8A90), width: MapGeometry.width(b.count) + 1, opacity: 0.8),
+                     focus.map { b.ends.contains($0) } == true ? [focus!] : [])
+                }, focus: focus))
+                ForEach(layout.bundles.indices, id: \.self) { i in
+                    let b = layout.bundles[i], dim = focus != nil && !b.ends.contains(focus!)
+                    Text(verbatim: "\(b.count)").font(Theme.ui(13, .semibold)).monospacedDigit().foregroundStyle(Theme.Color.text)
+                        .frame(width: 26, height: 26)
+                        .background(Color(hex: 0x2C2C2F), in: Circle())
+                        .overlay(Circle().strokeBorder(Color(hex: 0x666666)))
+                        .help("\(b.a) ↔ \(b.b): " + ru(b.count, "связь", "связи", "связей") + "\nприблизьте (≥ 80 %), чтобы увидеть каждую")
+                        .opacity(dim ? 0.25 : 1)
+                        .position(b.badge)
+                }
+            } else {
+                MapLines(lines: ordered(layout.lines.map { l in
+                    let pts = l.points, n = pts.count
+                    return (MapLine(path: MapGeometry.rounded(pts, radius: 4), tip: pts[n - 1], back: pts[n - 2], color: color(l.pair),
+                                    width: MapGeometry.width(l.pair.links.count), opacity: 0.8, dashed: l.pair.via == "build"), [l.pair.from, l.pair.to])
+                }, focus: focus))
+            }
+        }
+        .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+        .allowsHitTesting(far)
+    }
+}
+
+/// Variant A: columns by role, threads left to right, the project as a colour dot.
+private struct SpaceFlowView: View {
+    let state: MapState
+
+    var body: some View {
+        let space = state.space
+        let layout = state.cached("flow:\(space)") { SpaceFlow(space: space, catalogue: state.catalogue, pairs: state.pairs, roles: state.roles) }
+        let pairs = layout.lines.map(\.pair), lit = litSet(state, pairs)
+        let byID = Dictionary(state.catalogue.services.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let projects = Set(layout.chips.keys.compactMap { byID[$0]?.project }).sorted()
+        ZoomPan(state: state, key: "flow:\(space)", size: layout.size) {
+            ZStack(alignment: .topLeading) {
+                ForEach(layout.columns.indices, id: \.self) { i in header(layout.columns[i]) }
+                MapLines(lines: ordered(layout.lines.map { l in
+                    let t = MapGeometry.thread(l.from, l.to)
+                    return (MapLine(path: t.path, tip: t.tip, back: t.back, color: color(l.pair), width: MapGeometry.width(l.pair.links.count),
+                                    opacity: 0.7, dashed: l.pair.via == "build"), [l.pair.from, l.pair.to])
+                }, focus: state.focused))
+                ForEach(layout.chips.keys.sorted(), id: \.self) { id in
+                    if let s = byID[id] {
+                        MapChip(state: state, service: s, size: CGSize(width: SpaceFlow.chipW, height: SpaceFlow.chipH), lit: lit, bar: true, projectDot: true, radius: 5)
+                            .placed(layout.chips[id]!)
+                    }
+                }
+            }
+        } overlay: {
+            MapLegend(projects: projects.map { ($0, state.color(ofProject: $0)) },
+                      note: layout.hidden > 0 ? "служебные (ops) скрыты: \(layout.hidden)" : nil)
+        }
+    }
+
+    @ViewBuilder private func header(_ c: SpaceFlow.Column) -> some View {
+        if !c.title.isEmpty { SectionTitle("\(c.title) · \(c.count)").monospacedDigit().placed(c.x, c.top - 26) }
+        ForEach(c.heads.indices, id: \.self) { i in
+            let h = c.heads[i]
+            Text(verbatim: h.project).font(Theme.ui(11, .semibold)).foregroundStyle(state.color(ofProject: h.project)).placed(c.x + 2, h.y + 6)
+        }
+    }
+}
+
+// MARK: - Level 2: project
+
+/// Variant E: the even grid; the whole project fits when opened (not under 0.5×).
+private struct ProjectMapView: View {
+    @Environment(RegistryModel.self) private var registry
+    let state: MapState
+
+    var body: some View {
+        if let id = state.project {
+            let grid = state.cached("project:\(id)") { ProjectGrid(ServiceMap.project(id, in: state.catalogue), roles: state.roles) }
+            let pairs = grid.edges.map(\.pair), lit = litSet(state, pairs)
+            ZoomPan(state: state, key: "project:\(id)", size: grid.size, minimum: 0.5) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(grid.titles.indices, id: \.self) { i in title(grid.titles[i]) }
+                    MapLines(lines: ordered(grid.edges.map { e in
+                        let pts = e.points, n = pts.count
+                        return (MapLine(path: MapGeometry.rounded(pts), tip: pts[n - 1], back: pts[n - 2], color: color(e.pair),
+                                        width: MapGeometry.width(e.pair.links.count), opacity: 0.9, dashed: e.pair.via == "build"), [e.pair.from, e.pair.to])
+                    }, focus: state.focused))
+                    ForEach(grid.heads.indices, id: \.self) { i in head(grid.heads[i]) }
+                    ForEach(grid.cards.keys.sorted(), id: \.self) { sid in
+                        let c = grid.cards[sid]!
+                        MapChip(state: state, service: c.service, size: c.rect.size, lit: lit, stub: c.stub, radius: c.stub ? 7 : 8)
+                            .placed(c.rect)
+                    }
+                }
+            } overlay: {
+                ZStack {
+                    EdgeMarks(state: state, rects: grid.cards.mapValues(\.rect), pairs: pairs)
+                    MapLegend(note: "пунктир — сервисы других проектов; клик — закрепить, двойной клик по полю — вписать")
+                }
+            }
+        }
+    }
+
+    /// Column header and a 1 px hairline across its sub-columns; no frame.
+    private func title(_ t: ProjectGrid.Title) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionTitle("\(t.text) · \(t.count)").monospacedDigit()
+            Color(hex: 0x3A3A3E).frame(width: t.x1 - t.x0, height: 1)
+        }
+        .placed(t.x0, 8)
+    }
+
+    /// A neighbour project's group: «project · N» in its colour; opens it.
+    private func head(_ h: ProjectGrid.Head) -> some View {
+        Button { state.open(project: h.project) } label: {
+            Text(verbatim: "\(h.project) · \(h.count)").font(Theme.ui(12, .semibold)).foregroundStyle(state.color(ofProject: h.project))
+        }
+        .buttonStyle(.plain)
+        .frame(width: h.rect.width, height: h.rect.height, alignment: .bottomLeading)
+        .padding(.leading, 2)
+        .offset(x: h.rect.minX, y: h.rect.minY)
+    }
+}
+
+// MARK: - Level 3: service
+
+/// Variant A filtered to the thread: callers chain left, callees chain right, up to `hops`.
+private struct ServiceMapView: View {
+    let state: MapState
+
+    var body: some View {
+        if let id = state.service, let s = state.lookup(id) {
+            let key = "thread:\(id):\(state.hops)"
+            let thread = state.cached(key) { ServiceMap.thread(id, in: state.catalogue, hops: state.hops) }
+            let layout = state.cached(key + ":layout") { ThreadLayout(thread, centre: s) }
+            let lit = litSet(state, thread.pairs)
+            let byID = Dictionary((thread.up + thread.down).flatMap { $0 }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            ZoomPan(state: state, key: key, size: layout.size) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(layout.columns.indices, id: \.self) { i in
+                        if !layout.columns[i].title.isEmpty { SectionTitle(layout.columns[i].title).placed(layout.columns[i].x, layout.columns[i].top - 24) }
+                    }
+                    MapLines(lines: ordered(thread.pairs.compactMap { p in
+                        guard let a = layout.chips[p.from], let b = layout.chips[p.to] else { return nil }
+                        let t = MapGeometry.thread(a, b)
+                        return (MapLine(path: t.path, tip: t.tip, back: t.back, color: color(p), width: MapGeometry.width(p.links.count),
+                                        opacity: 0.8, dashed: p.via == "build"), [p.from, p.to])
+                    }, focus: state.focused))
+                    ForEach(byID.keys.sorted(), id: \.self) { sid in
+                        MapChip(state: state, service: byID[sid]!, size: CGSize(width: ThreadLayout.chipW, height: ThreadLayout.chipH),
+                                lit: lit, bar: true, projectDot: true, radius: 5)
+                            .placed(layout.chips[sid]!)
+                    }
+                    centre(s).placed(layout.chips[id]!)
+                }
+            } overlay: {
+                MapLegend(note: thread.up.isEmpty && thread.down.isEmpty ? "ни вызывающих, ни вызываемых" : "клик — закрепить; клик по закреплённому в панели «Нить» — перейти к нему")
+            }
+        }
+    }
+
+    /// The service: 260×48, 2 pt border in its kind colour, id and `name · project`.
+    private func centre(_ s: Service) -> some View {
+        let cls = ServiceClass(for: s)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: s.id).font(Theme.mono(14, .semibold)).lineLimit(1)
+            Text(verbatim: "\(s.name) · \(s.project)").font(Theme.ui(11)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .frame(width: ThreadLayout.centre.width, height: ThreadLayout.centre.height, alignment: .leading)
+        .background(Theme.Color.cardBg, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(cls.color, lineWidth: 2))
+        .help(tooltip(s))
+        .contentShape(Rectangle())
+        .onTapGesture { state.pin(s.id) }
+    }
+}
+
+// MARK: - Side panel
+
+/// The pinned service: what it is, its role, its links both ways (each opens its end).
+private struct MapSidePanel: View {
+    @Environment(RegistryModel.self) private var registry
+    let state: MapState
+    let service: Service
+
+    var body: some View {
+        let s = service
+        let out = state.catalogue.links.filter { $0.from == s.id }.map(\.link)
+        let incoming = state.catalogue.links.filter { $0.link.to == s.id }
+        let role = state.role(of: s.id)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top) {
+                    Text(verbatim: s.id).font(Theme.mono(14, .semibold)).textSelection(.enabled)
+                    Spacer()
+                    Button { state.pinned = nil } label: { Image(systemName: "xmark").foregroundStyle(Theme.Color.textMuted) }.buttonStyle(.plain)
+                }
+                Text(verbatim: s.name).font(Theme.ui(13)).foregroundStyle(Theme.Color.text)
+                HStack(spacing: 6) {
+                    KindBadge(ServiceClass(for: s))
+                    if let role { Chip(role.rawValue + (s.role == role.rawValue ? "" : " ?"), color: Theme.Color.textChip).help(s.role == role.rawValue ? "роль задана" : "роль выведена по виду и связям") }
+                    Chip(s.project, color: state.color(ofProject: s.project))
+                }
+                if !s.conditionIDs.isEmpty {
+                    Text(verbatim: "⚑ " + s.conditionIDs.joined(separator: ", ")).font(Theme.mono(11)).foregroundStyle(Theme.Color.warn)
+                }
+                if let d = s.description { Text(verbatim: d).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary).textSelection(.enabled) }
+                HStack(spacing: 8) {
+                    ToolbarButton("Карточка") { registry.selection = .service(s.id) }
+                    ToolbarButton("Нить") { state.focus(s.id) }
+                    ToolbarButton("Проект") { state.open(project: s.project) }
+                }
+                .padding(.vertical, 4)
+                SectionTitle("Исходящие · \(out.count)").padding(.top, 6)
+                ForEach(out.indices, id: \.self) { i in row(out[i], other: out[i].to) }
+                if out.isEmpty { none }
+                SectionTitle("Входящие · \(incoming.count)").padding(.top, 6)
+                ForEach(incoming.indices, id: \.self) { i in row(incoming[i].link, other: incoming[i].from) }
+                if incoming.isEmpty { none }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.Color.cardBg)
+    }
+
+    private var none: some View { Text(verbatim: "нет").font(Theme.ui(12)).foregroundStyle(Theme.Color.textMuted) }
+
+    private func row(_ l: PracticesCore.Link, other: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(verbatim: l.via ?? "—").font(Theme.mono(10.5)).foregroundStyle(.black)
+                    .padding(.horizontal, 5).background(Theme.viaColor(l.via, access: l.access), in: RoundedRectangle(cornerRadius: 4))
+                Button { state.pinned = other } label: {
+                    Text(verbatim: other).font(Theme.mono(12)).foregroundStyle(Theme.Color.link)
+                }
+                .buttonStyle(.plain)
+                if let a = l.access { Text(verbatim: a).font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted) }
+            }
+            if let w = l.what { Text(verbatim: w).font(Theme.ui(11)).foregroundStyle(Theme.Color.textSecondary).lineLimit(3) }
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { Theme.Color.borderSoft.frame(height: 1) }
+    }
 }
