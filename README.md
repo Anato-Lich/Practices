@@ -82,7 +82,7 @@ git clone https://github.com/Anato-Lich/Practices && cd Practices
 Release, кладёт `practicesctl`, его ресурсы и `uv` из `Contents/Helpers` собранного приложения в
 `$PRACTICES_HOME/bin` (по умолчанию `~/.practices/bin`, поверх прежнего, ссылка — в
 `~/.local/bin`), закрывает запущенную копию, удаляет `/Applications/Practices.app`, ставит новую и
-открывает её. Данные в `~/.practices` (пространства,
+открывает её и кладёт ярлык Practices на рабочий стол. Данные в `~/.practices` (пространства,
 `local.yaml`, секреты) не трогает.
 
 `tools/release.sh` собирает Release и упаковывает его в `dist/Practices-<версия>.dmg` — это
