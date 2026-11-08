@@ -1,0 +1,3 @@
+#!/bin/sh
+# Assistants add a co-author trailer by habit; the owner does not want it in this repository.
+sed -i '' -E '/^Co-Authored-By: (Claude|.*anthropic\.com)/Id' "$1"
