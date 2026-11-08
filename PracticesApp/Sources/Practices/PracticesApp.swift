@@ -64,6 +64,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.post(name: .openMainWindow, object: nil)
         return false
     }
+
+    /// Closing the window leaves the app in the menu bar: the next Dock click only shows the window.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Started by hand (Dock, Finder), the app shows its window; at login and in a render copy it
+    /// stays in the menu bar.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        let atLogin = event?.eventID == kAEOpenApplication
+            && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        guard !atLogin, !CommandLine.arguments.contains(where: PracticesApp.devFlags.contains) else { return }
+        // The menu-bar label that opens it is in place after this turn of the run loop.
+        DispatchQueue.main.async { NotificationCenter.default.post(name: .openMainWindow, object: nil) }
+    }
 }
 
 /// `openWindow` needs a view inside a scene; the menu-bar label is the one that always exists.
