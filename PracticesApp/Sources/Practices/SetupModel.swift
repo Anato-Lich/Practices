@@ -42,7 +42,7 @@ final class SetupModel {
 
     /// After a change: the setup screen and the catalogue both read again.
     private func changed() async {
-        app?.reload()
+        await app?.reload()
         await refresh()
     }
 

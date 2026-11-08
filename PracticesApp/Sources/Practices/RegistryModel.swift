@@ -18,6 +18,11 @@ final class RegistryModel {
     /// space id → its conditions.
     private(set) var conditions: [String: [Condition]] = [:]
     private(set) var services: [Service] = []
+    @ObservationIgnored private var serviceByID: [String: Service] = [:]
+    @ObservationIgnored private var projectByID: [String: Project] = [:]
+    /// service id → whom it calls / who calls it, from `map.catalogue`.
+    @ObservationIgnored private var linksOut: [String: [Link]] = [:]
+    @ObservationIgnored private var linksIn: [String: [(from: String, link: Link)]] = [:]
     /// project id → `space / parent / project`, for display.
     private(set) var projectPaths: [String: String] = [:]
     /// service id → its practices; project id → its chains.
@@ -69,7 +74,8 @@ final class RegistryModel {
     /// A project waiting for the user to confirm its removal.
     var removalCandidate: String?
 
-    /// Opened again on every reload: «Настройка» changes `local.yaml` (roots) under it.
+    /// Opened again on every reload: «Настройка» changes `local.yaml` (roots) under it. Its folder
+    /// listing is that of the last reload (`Registry.indexed`): writes go through a fresh `Registry()`.
     private(set) var registry = Registry()
     let store = SecretStore()
     @ObservationIgnored private(set) lazy var setup: SetupModel = {
@@ -81,50 +87,76 @@ final class RegistryModel {
     /// позже» or a pick in the sidebar — not until the first space, which comes at step 2 of 3.
     var welcomeShown = false
 
-    func reload() {
-        registry = Registry()
-        // Ids are unique by rule, not by construction: a card written by hand may repeat one,
-        // and the window must still open to show it.
-        func first<T>(_ a: T, _: T) -> T { a }
-        do {
-            spaces = try registry.spaces()
-            tree = Registry.tree(try registry.projects())
-            // The tree is a preorder: the last project of a smaller depth is the parent.
-            var above: [Project] = []
-            topProjects = []
-            childProjects = [:]
-            for (project, depth) in tree {
-                above.removeLast(above.count - depth)
-                if let parent = above.last { childProjects[parent.id, default: []].append(project) } else { topProjects.append(project) }
-                above.append(project)
-            }
-            conditions = Dictionary(spaces.map { ($0.id, registry.conditions(space: $0.id)) }, uniquingKeysWith: first)
-            services = try registry.services()
-            projectPaths = Dictionary(projects.map { ($0.id, ([$0.space] + path(of: $0.id).map(\.id)).joined(separator: " / ")) }, uniquingKeysWith: first)
-            keyStatus = Dictionary(services.map { ($0.id, (try? store.status(service: $0)) ?? [:]) }, uniquingKeysWith: first)
-            let practiceStore = PracticeStore(registry: registry)
-            practices = Dictionary(services.map { ($0.id, practiceStore.list(service: $0.id)) }, uniquingKeysWith: first)
-            loadChecks()
-            chains = Dictionary(projects.map { ($0.id, practiceStore.chains(project: $0.id)) }, uniquingKeysWith: first)
-            map.catalogue = try registry.catalogue()
-            // A removed project or service stays remembered otherwise; its row would lead nowhere.
-            recent.removeAll { item in
-                switch item {
-                case .project(let id): project(id) == nil
-                case .service(let id): service(id) == nil
-                default: false
-                }
-            }
-        } catch {
-            fail("прочитать каталог", error)
+    /// Reads the catalogue again, off the main thread, and puts it in place in one go: until then
+    /// the window shows the previous one. `ifChanged`: only when a file under the spaces, `local.yaml`
+    /// or the secrets changed since the last read (coming back to the window), and not a second time
+    /// while one is running.
+    func reload(ifChanged: Bool = false) async {
+        if ifChanged, let loading { await loading.value; return }
+        let previous = ifChanged ? stamp : nil
+        let store = store
+        generation += 1
+        let mine = generation
+        let task = Task.detached { () -> Result<CatalogueSnapshot, any Error>? in
+            let stamp = CatalogueSnapshot.stamp(of: Registry(), store: store)
+            if stamp == previous { return nil }
+            return Result { try CatalogueSnapshot(stamp: stamp, store: store) }
+        }
+        let waiting = Task { _ = await task.value }
+        loading = waiting
+        let result = await task.value
+        if loading == waiting { loading = nil }
+        // A later reload started meanwhile: its result is the one to show.
+        guard mine == generation, let result else { return }
+        switch result {
+        case .success(let snapshot): apply(snapshot)
+        case .failure(let error): fail("прочитать каталог", error)
         }
     }
 
-    func service(_ id: String) -> Service? { services.first { $0.id == id } }
+    @ObservationIgnored private var loading: Task<Void, Never>?
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var stamp: Int?
+    /// A first reload has finished: an empty `spaces` means none, not «not read yet».
+    var loaded: Bool { stamp != nil }
+
+    private func apply(_ s: CatalogueSnapshot) {
+        stamp = s.stamp
+        registry = s.registry
+        spaces = s.spaces
+        tree = s.tree
+        childProjects = s.childProjects
+        topProjects = s.topProjects
+        projectByID = s.projectByID
+        conditions = s.conditions
+        services = s.services
+        serviceByID = s.serviceByID
+        projectPaths = s.projectPaths
+        keyStatus = s.keyStatus
+        practices = s.practices
+        chains = s.chains
+        linksOut = s.linksOut
+        linksIn = s.linksIn
+        for (id, check) in s.savedChecks where checks[id] == nil {
+            checks[id] = check.results
+            lastCheck[id] = check.date
+        }
+        map.catalogue = s.catalogue
+        // A removed project or service stays remembered otherwise; its row would lead nowhere.
+        recent.removeAll { item in
+            switch item {
+            case .project(let id): project(id) == nil
+            case .service(let id): service(id) == nil
+            default: false
+            }
+        }
+    }
+
+    func service(_ id: String) -> Service? { serviceByID[id] }
     func services(of project: Project) -> [Service] { services.filter { $0.project == project.id && $0.space == project.space } }
 
     var projects: [Project] { tree.map(\.project) }
-    func project(_ id: String) -> Project? { projects.first { $0.id == id } }
+    func project(_ id: String) -> Project? { projectByID[id] }
 
     /// A project with its ancestors, outermost first. Bounded by the number of projects: a
     /// cycle written by hand must not spin.
@@ -170,12 +202,23 @@ final class RegistryModel {
     /// Where the project's repositories are cloned (a walk of the search roots, off the main
     /// thread) and how the clones stand: local `git status` and `git log`, no fetch.
     func loadGitStates(of project: Project) async {
-        let roots = registry.searchRoots
-        clones = await Task.detached { Repos.clones(roots: roots) }.value
+        await loadClones()
         for repo in project.repos.map(\.repo) {
             if let path = clones[repo] { gitStates[repo] = await Repos.gitState(ofClone: path) }
         }
     }
+
+    /// The walk is done once per set of roots and again after the window comes back
+    /// (`forgetClones`): a clone made meanwhile shows up then.
+    func loadClones() async {
+        let roots = registry.searchRoots
+        guard clonesRoots != roots else { return }
+        clonesRoots = roots
+        clones = await Task.detached { Repos.clones(roots: roots) }.value
+    }
+
+    func forgetClones() { clonesRoots = nil }
+    @ObservationIgnored private var clonesRoots: [String]?
 
     func loadUnassigned() async {
         loadingUnassigned = true
@@ -189,17 +232,17 @@ final class RegistryModel {
 
     func assign(_ repo: RepoID, to project: String) async {
         do {
-            try await registry.assign(repo, to: project)
+            try await Registry().assign(repo, to: project)
             unassigned?.removeAll { $0.repo == repo }
-            reload()
+            await reload()
         } catch { fail("назначить репозиторий", error) }
     }
 
     func ignore(_ repo: RepoID, in space: String, _ ignored: Bool = true) async {
         do {
-            try await registry.ignore(repo, in: space, ignored)
+            try await Registry().ignore(repo, in: space, ignored)
             if let i = unassigned?.firstIndex(where: { $0.repo == repo }) { unassigned?[i].ignored = ignored }
-            reload()
+            await reload()
         } catch { fail(ignored ? "скрыть репозиторий" : "вернуть репозиторий", error) }
     }
 
@@ -207,21 +250,21 @@ final class RegistryModel {
     func remove(project id: String, ignoreRepos: Bool = true, trash: [String] = []) async {
         let space = project(id)?.space
         do {
-            _ = try await registry.remove(project: id, ignoreRepos: ignoreRepos)
+            _ = try await Registry().remove(project: id, ignoreRepos: ignoreRepos)
             for path in trash { try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil) }
         } catch { fail("удалить проект \(id)", error) }
         if let space { selection = .space(space) }
-        reload()
+        await reload()
         await refreshPending()
     }
 
     /// Services and links the project's clones give (`practicesctl scan <id> --write`), left for acceptance.
     func scanLinks(of id: String) async {
-        let (registry, store) = (registry, store)
+        let (registry, store) = (Registry(), store)
         // The scan walks the clones: off the main thread.
         do { _ = try await Task.detached { try Scanner.write(try Scanner.scan([id], registry: registry, store: store), registry: registry) }.value }
         catch { fail("найти связи в коде \(id)", error) }
-        reload()
+        await reload()
         await refreshPending()
         selection = .pending
     }
@@ -237,15 +280,15 @@ final class RegistryModel {
 
     /// Commits one pending change, or all of them.
     func accept(_ change: Pending? = nil) async {
-        do { try await registry.accept(space: change?.space, paths: change.map { [$0.path] } ?? []) } catch { fail("принять " + (change?.path ?? "изменения"), error) }
-        reload()
+        do { try await Registry().accept(space: change?.space, paths: change.map { [$0.path] } ?? []) } catch { fail("принять " + (change?.path ?? "изменения"), error) }
+        await reload()
         await refreshPending()
     }
 
     /// Drops one pending change: the file goes back to what the catalogue holds.
     func discard(_ change: Pending) async {
-        do { try await registry.discard(change) } catch { fail("отклонить " + change.path, error) }
-        reload()
+        do { try await Registry().discard(change) } catch { fail("отклонить " + change.path, error) }
+        await reload()
         await refreshPending()
     }
 
@@ -277,19 +320,7 @@ final class RegistryModel {
 
     /// Last results survive restarts: services are checked only when asked, and the window
     /// shows what the last attempt found and when (DECISIONS 56).
-    private struct SavedCheck: Codable { let date: Date; let results: [CheckResult] }
-    private static var checksURL: URL { PracticesHome.url.appendingPathComponent("checks.json") }
-
-    private func loadChecks() {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let data = try? Data(contentsOf: Self.checksURL),
-              let saved = try? decoder.decode([String: SavedCheck].self, from: data) else { return }
-        for (id, check) in saved where checks[id] == nil {
-            checks[id] = check.results
-            lastCheck[id] = check.date
-        }
-    }
+    nonisolated static var checksURL: URL { PracticesHome.url.appendingPathComponent("checks.json") }
 
     private func saveChecks() {
         var saved: [String: SavedCheck] = [:]
@@ -323,7 +354,7 @@ final class RegistryModel {
     func set(_ value: String, key: String, service id: String, env: String) {
         do {
             try store.set(value, key: key, service: id, env: env)
-            reload()
+            Task { await reload() }
         } catch {
             fail("сохранить \(key)", error)
         }
@@ -332,7 +363,7 @@ final class RegistryModel {
     func unset(key: String, service id: String, env: String) {
         do {
             try store.remove(key: key, service: id, env: env)
-            reload()
+            Task { await reload() }
         } catch {
             fail("удалить \(key)", error)
         }
@@ -347,15 +378,16 @@ final class RegistryModel {
     func notes(of id: String) -> String? { registry.notes(of: id) }
     func docs(of id: String) -> [ServiceDoc] { registry.docs(of: id) }
     func fields(of id: String) -> [FieldDoc] { registry.fields(of: id) }
-    func condition(_ id: String) -> Condition? { registry.condition(id) }
-    func links(of id: String) -> [Link] { registry.links(of: id) }
-    func links(to id: String) -> [(from: String, link: Link)] { registry.links(to: id) }
+    func condition(_ id: String) -> Condition? { conditions.values.lazy.flatMap { $0 }.first { $0.id == id } }
+    func links(of id: String) -> [Link] { linksOut[id] ?? [] }
+    func links(to id: String) -> [(from: String, link: Link)] { linksIn[id] ?? [] }
 
     /// A document is a link, a file in a repository's clone, or a file under the card's `docs/`.
-    func open(_ doc: ServiceDoc, of id: String) {
+    func open(_ doc: ServiceDoc, of id: String) async {
         if let url = doc.url.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url); return }
         guard let path = doc.path else { return }
-        let base = doc.repo.map { Repos.clones(roots: registry.searchRoots)[$0].map(URL.init(fileURLWithPath:)) }
+        if doc.repo != nil { await loadClones() }
+        let base = doc.repo.map { clones[$0].map(URL.init(fileURLWithPath:)) }
             ?? registry.dir(of: id)?.appendingPathComponent("docs")
         guard let file = path.hasPrefix("/") ? URL(fileURLWithPath: path) : base?.appendingPathComponent(path) else { return }
         NSWorkspace.shared.open(file)
@@ -364,5 +396,92 @@ final class RegistryModel {
     func revealService(_ id: String) {
         guard let dir = registry.dir(of: id) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([dir.appendingPathComponent("service.yaml")])
+    }
+}
+
+/// The last results of checks as `checks.json` keeps them.
+struct SavedCheck: Codable { let date: Date; let results: [CheckResult] }
+
+/// What `RegistryModel.reload` reads from disk, built off the main thread. Derived lists the
+/// views ask for on every render (by id, links of a service) are made here once.
+struct CatalogueSnapshot: Sendable {
+    let stamp: Int
+    let registry: Registry
+    var spaces: [Space] = []
+    var tree: [(project: Project, depth: Int)] = []
+    var childProjects: [String: [Project]] = [:]
+    var topProjects: [Project] = []
+    var projectByID: [String: Project] = [:]
+    var conditions: [String: [Condition]] = [:]
+    var services: [Service] = []
+    var serviceByID: [String: Service] = [:]
+    var projectPaths: [String: String] = [:]
+    var keyStatus: [String: [String: Set<String>]] = [:]
+    var practices: [String: [Practice]] = [:]
+    var chains: [String: [Practice]] = [:]
+    var catalogue: Catalogue
+    var linksOut: [String: [Link]] = [:]
+    var linksIn: [String: [(from: String, link: Link)]] = [:]
+    var savedChecks: [String: SavedCheck] = [:]
+
+    init(stamp: Int, store: SecretStore) throws {
+        self.stamp = stamp
+        let registry = Registry().indexed()
+        self.registry = registry
+        // Ids are unique by rule, not by construction: a card written by hand may repeat one,
+        // and the window must still open to show it.
+        func first<T>(_ a: T, _: T) -> T { a }
+        spaces = try registry.spaces()
+        catalogue = try registry.catalogue()
+        tree = Registry.tree(catalogue.projects)
+        projectByID = Dictionary(catalogue.projects.map { ($0.id, $0) }, uniquingKeysWith: first)
+        // The tree is a preorder: the last project of a smaller depth is the parent.
+        var above: [Project] = []
+        for (project, depth) in tree {
+            above.removeLast(above.count - depth)
+            if let parent = above.last { childProjects[parent.id, default: []].append(project) } else { topProjects.append(project) }
+            above.append(project)
+            projectPaths[project.id] = projectPaths[project.id] ?? ([project.space] + above.map(\.id)).joined(separator: " / ")
+        }
+        conditions = Dictionary(spaces.map { ($0.id, registry.conditions(space: $0.id)) }, uniquingKeysWith: first)
+        services = catalogue.services
+        serviceByID = Dictionary(services.map { ($0.id, $0) }, uniquingKeysWith: first)
+        keyStatus = (try? store.status(of: services)) ?? [:]
+        let practiceStore = PracticeStore(registry: registry)
+        practices = Dictionary(services.map { ($0.id, practiceStore.list(service: $0.id)) }, uniquingKeysWith: first)
+        chains = Dictionary(catalogue.projects.map { ($0.id, practiceStore.chains(project: $0.id)) }, uniquingKeysWith: first)
+        for (from, link) in catalogue.links {
+            linksOut[from, default: []].append(link)
+            linksIn[link.to, default: []].append((from, link))
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let data = try? Data(contentsOf: RegistryModel.checksURL),
+           let saved = try? decoder.decode([String: SavedCheck].self, from: data) { savedChecks = saved }
+    }
+
+    /// Every file and folder under the spaces (their `.git` aside), `local.yaml` and the secrets, by
+    /// path, modification time and size: what an agent's edit, a new card or a removed one changes.
+    /// About 600 entries: a few milliseconds, against a full read.
+    static func stamp(of registry: Registry, store: SecretStore) -> Int {
+        var hasher = Hasher()
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        func add(_ url: URL) {
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            hasher.combine(url.path)
+            hasher.combine(values?.contentModificationDate)
+            hasher.combine(values?.fileSize)
+        }
+        for url in [registry.home.appendingPathComponent("local.yaml"), store.url, registry.root] { add(url) }
+        for id in registry.spaceIDs() {
+            let dir = registry.dir(ofSpace: id)
+            add(dir)
+            guard let walk = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: keys) else { continue }
+            for case let url as URL in walk {
+                if url.lastPathComponent == ".git" { walk.skipDescendants(); continue }
+                add(url)
+            }
+        }
+        return hasher.finalize()
     }
 }

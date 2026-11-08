@@ -37,7 +37,7 @@ struct PracticesApp: App {
                 .modifier(OpensMainWindow())
                 // A menu-bar agent has no window at launch: the menu's counts load here.
                 .task {
-                    registry.reload(); await registry.refreshPending()
+                    await registry.reload(); await registry.refreshPending()
                     // Not in a render copy: it would relink ~/.local/bin to a scratch PRACTICES_HOME.
                     if inMenuBar { await Task.detached { await SetupModel.refreshCommandIfOutdated() }.value }
                 }

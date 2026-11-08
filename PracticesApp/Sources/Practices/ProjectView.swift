@@ -7,8 +7,6 @@ import PracticesCore
 struct ProjectView: View {
     @Environment(RegistryModel.self) private var registry
     let project: Project
-    /// Links are read from the cards' `links.yaml`, once per change of the services.
-    @State private var catalogue: Catalogue?
 
     var body: some View {
         let services = registry.services(of: project)
@@ -34,7 +32,6 @@ struct ProjectView: View {
         }
         .toolbarTrailing { toolbar }
         .task(id: project.id) { await registry.loadGitStates(of: project) }
-        .task(id: registry.services) { catalogue = try? registry.registry.catalogue() }
     }
 
     // MARK: kv-block
@@ -102,7 +99,7 @@ struct ProjectView: View {
 
     /// Links from this project's own services to other projects, by project; and links between its own.
     private func linkCounts() -> (out: [(project: String, n: Int)], inside: Int) {
-        guard let c = catalogue else { return ([], 0) }
+        let c = registry.map.catalogue
         let projectOf = Dictionary(c.services.map { ($0.id, $0.project) }, uniquingKeysWith: { a, _ in a })
         var out: [String: Int] = [:], inside = 0
         for l in c.links where projectOf[l.from] == project.id {

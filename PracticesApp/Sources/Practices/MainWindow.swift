@@ -59,23 +59,35 @@ struct MainWindow: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
-            registry.reload()
-            if registry.selection == nil, let first = registry.spaces.first { registry.selection = .space(first.id) }
-            if registry.spaces.isEmpty, registry.selection == nil { registry.welcomeShown = true }
+            pickFirstScreen()
             guard !CommandLine.arguments.contains("--render-window") else { return }
+            // The window is up with the catalogue last read; a newer one replaces it when ready.
+            Task {
+                await registry.reload(ifChanged: true)
+                pickFirstScreen()
+            }
             NSApp.setActivationPolicy(.regular)
             Task { await registry.scanCopies() }
         }
         // Agents write to the spaces while the window is in the background: coming back to it
-        // shows what they left. Local files and `git status` only.
+        // shows what they left. Local files and `git status` only, off the main thread; «Настройка»
+        // and «Начало» check the setup themselves.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            registry.reload()
-            Task { await registry.refreshPending() }
-            // An agent may have run `setup …` over MCP meanwhile; there is no signal from it otherwise.
-            if registry.setup.status != nil { Task { await registry.setup.refresh() } }
+            registry.forgetClones()
+            Task {
+                await registry.reload(ifChanged: true)
+                await registry.refreshPending()
+            }
         }
         .task { await registry.refreshPending() }
         .onDisappear { NSApp.setActivationPolicy(.accessory) }
+    }
+
+    /// A first launch opens on the first space, or on «Начало» when there is none.
+    private func pickFirstScreen() {
+        guard registry.loaded else { return }
+        if registry.selection == nil, let first = registry.spaces.first { registry.selection = .space(first.id) }
+        if registry.spaces.isEmpty, registry.selection == nil { registry.welcomeShown = true }
     }
 
     @ViewBuilder private var detail: some View {

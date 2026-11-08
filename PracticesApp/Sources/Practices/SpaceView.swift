@@ -8,8 +8,7 @@ import PracticesCore
 struct SpaceView: View {
     @Environment(RegistryModel.self) private var registry
     let space: Space
-    /// Links are read from the cards' `links.yaml`, once per change of the services.
-    @State private var catalogue: Catalogue?
+    private var catalogue: Catalogue { registry.map.catalogue }
 
     var body: some View {
         let tops = registry.topProjects.filter { $0.space == space.id }
@@ -48,7 +47,6 @@ struct SpaceView: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 16)
         }
-        .task(id: registry.services) { catalogue = try? registry.registry.catalogue() }
     }
 
     // MARK: Stats
@@ -58,14 +56,14 @@ struct SpaceView: View {
         let repos = projects.reduce(0) { $0 + $1.repos.count }
         let services = registry.services.filter { $0.space == space.id }
         let ids = Set(services.map(\.id))
-        let links = catalogue?.links.filter { ids.contains($0.from) }.count
+        let links = catalogue.links.filter { ids.contains($0.from) }.count
         return HStack(spacing: 10) {
             tile(projects.count, word(projects.count, "проект", "проекта", "проектов") + " · " + ru(groups, "группа", "группы", "групп"), nil)
             tile(repos, word(repos, "репозиторий", "репозитория", "репозиториев") + " · "
                  + ru(space.ignore.count, "игнорируется", "игнорируются", "игнорируются"), .unassigned)
             tile(services.count, word(services.count, "сервис", "сервиса", "сервисов") + " · "
                  + ru(registry.conditions[space.id]?.count ?? 0, "условие", "условия", "условий"), .map, color: ServiceClass.api.color)
-            tile(links, word(links ?? 0, "связь", "связи", "связей") + " · " + ru(hubs, "общий сервис", "общих сервиса", "общих сервисов"),
+            tile(links, word(links, "связь", "связи", "связей") + " · " + ru(hubs, "общий сервис", "общих сервиса", "общих сервисов"),
                  .map, color: ServiceClass.data.color)
         }
     }
@@ -155,7 +153,7 @@ struct SpaceView: View {
     /// Services of the space with at least `ServiceMap.hubCallers` distinct callers, or tagged `shared`.
     private func hubs() -> [(service: Service, callers: Int)] {
         var callers: [String: Set<String>] = [:]
-        for l in catalogue?.links ?? [] { callers[l.link.to, default: []].insert(l.from) }
+        for l in catalogue.links { callers[l.link.to, default: []].insert(l.from) }
         return registry.services.filter { $0.space == space.id }
             .map { (service: $0, callers: callers[$0.id]?.count ?? 0) }
             .filter { $0.callers >= ServiceMap.hubCallers || $0.service.tags.contains("shared") }

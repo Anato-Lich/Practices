@@ -16,7 +16,7 @@ enum DevRender {
             let path = args[i + 1]
             Task { @MainActor in
                 let registry = RegistryModel()
-                registry.reload()
+                await registry.reload()
                 await registry.checkAll()
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -30,7 +30,7 @@ enum DevRender {
         let path = args[i + 1]
         Task { @MainActor in
             let registry = RegistryModel()
-            registry.reload()
+            await registry.reload()
             if args.contains("--doctor") {
                 registry.selection = .doctor
                 await registry.runDoctor()

@@ -354,7 +354,7 @@ struct ServiceView: View {
         let docs = registry.docs(of: service.id)
         return SectionCard("Документация", spacing: 6) {
             ForEach(docs, id: \.self) { doc in
-                Button { registry.open(doc, of: service.id) } label: {
+                Button { Task { await registry.open(doc, of: service.id) } } label: {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(verbatim: doc.title).font(Theme.ui(12)).foregroundStyle(Theme.Color.link)
                         Text(verbatim: [doc.kind.rawValue, doc.section].compactMap { $0 }.joined(separator: " · "))

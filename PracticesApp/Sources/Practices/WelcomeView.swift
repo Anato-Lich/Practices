@@ -74,9 +74,11 @@ struct WelcomeView: View {
             Spacer(minLength: 0)
             HStack(spacing: 14) {
                 Button {
-                    registry.reload()
-                    registry.selection = registry.spaces.first.map { .space($0.id) }
-                    registry.welcomeShown = false
+                    Task {
+                        await registry.reload()
+                        registry.selection = registry.spaces.first.map { .space($0.id) }
+                        registry.welcomeShown = false
+                    }
                 } label: { Text(verbatim: "Открыть каталог").font(Theme.ui(13, .semibold)) }
                     .buttonStyle(CompactButtonStyle(prominent: true, height: 30))
                     .disabled(registry.spaces.isEmpty)
