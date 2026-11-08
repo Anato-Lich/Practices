@@ -340,7 +340,7 @@ private struct SpaceFramesView: View {
                 FramesLines(state: state, layout: layout)
                 ForEach(layout.frames.indices, id: \.self) { i in
                     ForEach(layout.frames[i].services, id: \.id) { s in
-                        MapChip(state: state, service: s, size: CGSize(width: SpaceFrames.chipW, height: SpaceFrames.chipH),
+                        MapChip(state: state, service: s, size: layout.chips[s.id]!.size,
                                 lit: litSet(state, pairs), bar: true, radius: 5)
                             .placed(layout.chips[s.id]!)
                     }

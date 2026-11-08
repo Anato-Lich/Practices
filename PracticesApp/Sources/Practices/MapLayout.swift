@@ -282,9 +282,11 @@ struct SpaceFrames {
         // Rows of `p` from `y` at `x`, then its sub-projects framed below; returns the bottom.
         func lay(_ p: String, x: CGFloat, y: CGFloat, w: CGFloat) -> CGFloat {
             let ss = services(p), cols = ss.count > 7 ? 2 : 1, rows = (ss.count + cols - 1) / cols
+            // One column of rows spans the frame, so a line meets the row at the frame's padding.
+            let cw = cols == 1 ? w - Self.pad * 2 : Self.chipW
             for (k, s) in ss.enumerated() {
                 let (ic, ir) = (k / rows, k % rows)
-                rel[s.id] = CGRect(x: x + Self.pad + CGFloat(ic) * (Self.chipW + Self.colGap), y: y + CGFloat(ir) * (Self.chipH + Self.rowGap), width: Self.chipW, height: Self.chipH)
+                rel[s.id] = CGRect(x: x + Self.pad + CGFloat(ic) * (Self.chipW + Self.colGap), y: y + CGFloat(ir) * (Self.chipH + Self.rowGap), width: cw, height: Self.chipH)
                 chipCol[s.id] = cols == 2 ? ic : -1
             }
             var bottom = rows > 0 ? y + CGFloat(rows) * (Self.chipH + Self.rowGap) - Self.rowGap : y - Self.rowGap * 2
