@@ -1,56 +1,118 @@
 # Practices
 
-**One place that describes all of a developer's projects: what belongs where, which services
-talk to which, where the credentials, the documentation and the ready query code are.** A
-personal macOS app (a window plus a menu-bar agent), the `practicesctl` CLI and an MCP server;
-the first reader is the agent working in a project.
+## Что это
 
-- **Catalogue** — a *space* (an organisation) holds *projects*, which nest; a project holds
-  *repositories*, known by their remote address, and *services*: a compose service of a
-  repository or an external system (a database, an API, Kafka). A service has endpoints, names
-  of its keys, named *conditions* ("needs the corporate network"), notes, a dictionary of
-  result fields and *links* to the services it calls. Each space is a git repository under
-  `~/.practices/spaces/`; values of secrets stay outside git in `~/.practices/secrets.json`.
-- **Practices** — under each service live *practices*: named cells of code ("fetch device
-  data") with a Run button, a readable result (table, JSON tree, text), timings and version
-  history; *chains* combine them. Practices are copied into projects; through MCP the agent
-  reads the catalogue and sends practices and links back as uncommitted changes the user
-  accepts.
+Practices — одно место, где описаны все проекты разработчика: что к чему относится, какой сервис
+кого вызывает, где ключи, документация и готовый код запросов. Это личное приложение для macOS
+(окно и значок в строке меню), CLI `practicesctl` и MCP-сервер. Первый читатель — агент, который
+работает в проекте: он спрашивает каталог, прежде чем писать новый клиент к чужому сервису.
 
-Plan and stages: [`PLAN.md`](PLAN.md). Choices and their alternatives:
-[`DECISIONS.md`](DECISIONS.md).
+**Каталог.** *Пространство* (организация) содержит *проекты*, они вкладываются друг в друга; у
+проекта — *репозитории* (по адресу remote) и *сервисы*: сервис compose из репозитория или внешняя
+система (база, API, Kafka). У сервиса — адреса, имена ключей, именованные *условия* («нужна
+корпоративная сеть»), заметки, словарь полей результата и *связи* с сервисами, которые он
+вызывает. Каждое пространство — git-репозиторий в `~/.practices/spaces/`; значения секретов
+лежат вне git, в `~/.practices/secrets.json`.
 
-## Layout
+**Практики.** Под сервисом живут *практики* — именованные ячейки кода («данные устройства») с
+кнопкой запуска, читаемым результатом (таблица, дерево JSON, текст), временем и историей версий;
+*цепочки* их объединяют. Практики копируются в проекты; через MCP агент читает каталог и
+присылает практики и связи как незакоммиченные правки, которые пользователь принимает сам.
 
-| Path | What |
-|---|---|
-| `PracticesCore/` | Swift package: the core, no UI, plus the `practicesctl` CLI |
-| `PracticesApp/` | SwiftUI app, generated with `xcodegen` from `project.yml` |
-| `tools/` | build helpers |
+![Обзор пространства](docs/images/window.png)
 
-## Build
+*Обзор пространства: проекты, репозитории, сервисы и связи, общие сервисы и соглашения.*
+
+![Карточка проекта](docs/images/project.png)
+
+*Карточка проекта: репозитории с локальными клонами и сервисы по ролям — фронты, API, данные.*
+
+![Карта пространства](docs/images/map.png)
+
+*Карта: проекты и связи между ними; линия — пара проектов с тремя и более связями.*
+
+План и этапы — [`PLAN.md`](PLAN.md), решения и их альтернативы — [`DECISIONS.md`](DECISIONS.md).
+
+## Установка из DMG
+
+1. Скачайте `Practices-<версия>.dmg` со страницы
+   [Releases](https://github.com/Anato-Lich/Practices/releases), откройте и перетащите Practices в
+   Applications.
+2. Приложение не подписано Developer ID и не нотаризовано, поэтому первый запуск покажет
+   *«Practices» не открыто — Apple не удалось проверить…*. Нажмите **Готово**, откройте
+   **System Settings ▸ Privacy & Security**, найдите *«Practices» заблокировано…* и нажмите
+   **Open Anyway** (один раз на установку). Или в терминале:
+   ```sh
+   xattr -d com.apple.quarantine /Applications/Practices.app
+   ```
+3. Практики на Python запускаются через `uv`: `brew install uv`.
+
+CLI `practicesctl` (он же MCP-сервер) лежит внутри приложения, в `Contents/Helpers`; отдельно его
+скачивать не нужно. При первом запуске открывается экран «Начало» — три шага (то же
+можно сделать из терминала командами `practicesctl setup …` или попросить агента в диалоге):
+
+1. **Где лежат клоны** — папки с проектами (не весь диск); каталог ищет в них git-клоны и
+   записывает их в `~/.practices/local.yaml → roots`. Пока папок нет, берётся `~/Projects`.
+2. **Своё пространство** — каталог личный: проекты, сервисы и практики, которые ведёте вы.
+3. **Агенты** — сначала **«Установить practicesctl»**: приложение копирует CLI из себя в
+   `~/.practices/bin` (по этому пути агенты запускают MCP-сервер) и ставит ссылку
+   `~/.local/bin/practicesctl`. Затем **«Настроить агентов»**: MCP-сервер в найденных инструментах
+   (Claude Code, Codex, Cursor) и блок инструкций — глобально или в каждый проект, решаете вы.
+
+![Экран «Начало»](docs/images/welcome.png)
+
+*Первый запуск: папки с клонами, своё пространство, агенты — по шагу на каждое.*
+
+Копия в `~/.practices/bin` при обновлении приложения сама не обновляется, а кнопку «Настройка» →
+«Окружение» показывает, только пока CLI не установлен: после новой версии удалите
+`~/.practices/bin/practicesctl` и нажмите «Установить practicesctl» снова.
+
+## Сборка из исходников
+
+Нужны Xcode (`sudo xcode-select -s /Applications/Xcode.app`), `xcodegen` и `uv` — `install.sh`
+ставит недостающие через Homebrew.
 
 ```sh
-./run.sh                                  # xcodegen + xcodebuild + open (Debug)
-./install.sh                              # Release app into /Applications, CLI into $PRACTICES_HOME/bin
-tools/build-dev.sh                        # Command Line Tools only, when xcodebuild is unavailable
-cd PracticesCore && swift run practicesctl spaces
+git clone https://github.com/Anato-Lich/Practices && cd Practices
+./install.sh
 ```
 
-`./install.sh` **replaces the installed app and CLI**: it quits a running Practices, puts the
-new build into `/Applications/Practices.app` and starts it, and overwrites
-`$PRACTICES_HOME/bin/practicesctl` (default `~/.practices/bin`, linked from
-`~/.local/bin/practicesctl`). It prints what it replaces first; the catalogue, secrets and
-`local.yaml` are not touched.
+`install.sh` **заменяет установленное** и сначала печатает, что именно: собирает `practicesctl` в
+Release и кладёт его в `$PRACTICES_HOME/bin` (по умолчанию `~/.practices/bin`, поверх прежнего,
+ссылка — в `~/.local/bin`), собирает приложение, закрывает запущенную копию, удаляет
+`/Applications/Practices.app`, ставит новую и открывает её. Данные в `~/.practices` (пространства,
+`local.yaml`, секреты) не трогает.
 
-Screens render offscreen for checking the layout — **Debug builds only** (a Release build
-prints an error and exits): `Practices --render-window out.png [--welcome | --settings |
---space <id> | --project <id> | --doctor | --pending | --palette …]`. With `PRACTICES_HOME`
-and `PRACTICES_AGENT_HOME` pointed at a scratch folder neither the catalogue nor the agents'
-files of the real home are read or written; the CLI and MCP honour both variables too.
+`tools/release.sh` собирает Release и упаковывает его в `dist/Practices-<версия>.dmg` — это
+единственный артефакт релиза, CLI внутри приложения. Подпись ad-hoc, без Developer ID и
+нотаризации: `spctl --assess` такое приложение отвергает, поэтому у скачавшего нужен шаг с
+карантином из раздела «Установка из DMG».
 
-Tests (Swift Testing). With full Xcode selected: `swift test`. With the Command Line
-Tools only, point the compiler at the Testing framework:
+| Команда | Что |
+|---|---|
+| `./install.sh` | Release в `/Applications` и CLI в `~/.practices/bin` |
+| `tools/release.sh` | `dist/Practices-<версия>.dmg` с CLI внутри, печатает путь и sha256 |
+| `./run.sh` | Debug-сборка и запуск, без установки |
+| `tools/build-dev.sh` | Debug-сборка одними Command Line Tools, когда `xcodebuild` недоступен |
+| `cd PracticesCore && swift run practicesctl spaces` | CLI из исходников |
+
+Только для разработки. Debug-сборка понимает флаги рендера: окно рисуется вне экрана в PNG, и
+приложение выходит; Release их отвергает («render flags are available in Debug builds only»).
+
+```sh
+xcodebuild -project PracticesApp/Practices.xcodeproj -scheme Practices -configuration Debug \
+  -derivedDataPath build build
+build/Build/Products/Debug/Practices.app/Contents/MacOS/Practices --render-window out.png \
+  [--welcome | --settings | --pending | --doctor | --space <id> | --project <id> | --map …] [--wait 2]
+```
+
+Для изолированного запуска `PRACTICES_HOME` подменяет `~/.practices`, а `PRACTICES_AGENT_HOME` —
+домашнюю папку агентских инструментов (`~/.claude`, `~/.claude.json`, `~/.codex`, `~/.cursor`),
+чтобы рендеры и тесты не трогали настоящие файлы; CLI и MCP понимают обе переменные. Скриншоты в
+`docs/images` сняты так на демо-каталоге.
+
+Тесты (Swift Testing): с выбранным Xcode — `cd PracticesCore && swift test`. С одними Command Line
+Tools укажите компилятору фреймворк Testing:
 
 ```sh
 F=/Library/Developer/CommandLineTools/Library/Developer/Frameworks
@@ -58,9 +120,64 @@ swift test -Xswiftc -F -Xswiftc $F -Xlinker -F -Xlinker $F -Xlinker -rpath -Xlin
   -Xlinker -rpath -Xlinker /Library/Developer/CommandLineTools/Library/Developer/usr/lib
 ```
 
-## `practicesctl`
+| Путь | Что |
+|---|---|
+| `PracticesCore/` | Swift-пакет: ядро без UI и CLI `practicesctl` |
+| `PracticesApp/` | приложение SwiftUI, генерируется `xcodegen` из `project.yml` |
+| `tools/` | сборка, иконка, прототип карты |
 
-The output of `practicesctl --help` (copy it again when commands change):
+## Первые шаги
+
+```sh
+practicesctl setup status                          # что уже настроено
+practicesctl roots add ~/Projects/…                # где лежат клоны (= setup roots)
+practicesctl space add <id> [--name N] [--hosting host/owner]   # своё пространство
+practicesctl project add <space>/<id> [--parent p] # проект
+practicesctl repos                                 # репозитории без проекта
+practicesctl assign <repo> <project> [--role r]    # репозиторий — в проект
+practicesctl scan <project> --write                # сервисы и связи из compose и example env
+```
+
+`scan --write` и агенты через MCP не коммитят: правки ждут приёмки — `practicesctl pending`,
+`practicesctl accept [space [path…]]`, или экран приёмки в окне (принять всё, отклонить файл).
+
+![Приёмка правок](docs/images/pending.png)
+
+*Приёмка: новая связь из `scan --write` ждёт решения — принять или отклонить файл.*
+
+Агентам — MCP-сервер и блок инструкций:
+
+```sh
+practicesctl setup agents --global     # ~/.claude/CLAUDE.md и ~/.codex/AGENTS.md
+practicesctl setup agents --projects   # CLAUDE.md и AGENTS.md каждого клона проектов каталога
+```
+
+Регистрация MCP — в `~/.claude.json`, `~/.codex/config.toml`, `~/.cursor/mcp.json` для найденных
+инструментов. Вручную для Claude Code:
+`claude mcp add --scope user practices -- ~/.practices/bin/practicesctl mcp`. Агент спрашивает,
+куда писать, прежде чем вызывать `setup_agents`. То же — в окне, в «Настройке» (шестерёнка внизу
+боковой панели).
+
+![Настройка](docs/images/settings.png)
+
+*Настройка: пространства, папки с клонами, агенты и окружение (Python, CLI).*
+
+`~/.claude.json` читается и записывается обратно целиком: содержимое сохраняется, но файл
+переформатируется (отступы, ключи по алфавиту).
+
+**Python.** Практики работают в своём окружении `~/.practices/runtime`: его файлы приходят с
+приложением и CLI, а `uv sync` собирает там `.venv` при первом запуске практики (`practicesctl
+try`, MCP `run_practice`, кнопка запуска) или по «Настройка» → «Окружение» → «Обновить»; при смене
+`pyproject.toml` в новой версии синхронизируется заново. До этого «Настройка» пишет «python: не
+установлено».
+
+Новое пространство получает `conventions.md` и `templates/` по умолчанию — правила ведения
+репозиториев, которые агенты читают через MCP `get_conventions` (`practicesctl conventions <space>
+[--templates]`). Правьте их под себя.
+
+## Справка practicesctl
+
+`--json` у команд-списков печатает машиночитаемый вывод.
 
 ```
 usage: practicesctl <command> [--json]
@@ -155,49 +272,19 @@ agent:
   practice = <service>/<name> | chains/<name>
 ```
 
-`--json` on the listing commands prints machine-readable output.
-
-**MCP.** `practicesctl setup agents` registers the server with Claude Code, Codex and Cursor;
-the command it registers is `$PRACTICES_HOME/bin/practicesctl mcp` (`~/.practices/bin/…` by
-default), where `./install.sh` puts the binary. After a manual `swift build -c release` the
-binary is `PracticesCore/.build/release/practicesctl`, with
-`PracticesCore_PracticesCore.bundle` beside it: copy both into `$PRACTICES_HOME/bin` (or run
-`./install.sh`) before registering. Claude Code's `~/.claude.json` is read and written back
-whole: its content is kept, but the file is re-serialised (pretty-printed, keys sorted).
-
-**Python.** Practices run in their own environment, `$PRACTICES_HOME/runtime`: its files
-come with the CLI and app, and `uv sync` builds the `.venv` there the first time a practice
-runs (`try`, `run_practice`, the Run button) or when «Настройка → Окружение → Обновить» is
-pressed; it is synced again when the bundled `pyproject.toml` changes. Until then «Настройка»
-shows «python: не установлено». `uv` comes from Homebrew (`./install.sh` installs it).
-
 ## Передача другому человеку
 
-Передаётся только приложение (DECISIONS 36). Каталог личный: пространства под `~/.practices/spaces`
-— локальные git-репозитории (история, приёмка правок агентов) без remote, из них ничего не
-копируется. `~/.practices/local.yaml`, секреты, регистрация MCP и блоки инструкций агентам тоже у
-каждого свои. Новый человек клонирует репозиторий приложения:
+Передаётся только приложение (DECISIONS 36: общее — в git, личное — на машине). В git — код
+приложения. Всё остальное у каждого своё и в сборку не попадает:
 
-```sh
-git clone <этот репозиторий> && cd Practices && ./install.sh   # ставит xcodegen и uv через brew, если их нет
-```
+- пространства в `~/.practices/spaces/` — локальные git-репозитории без remote (история и
+  приёмка правок агентов); между людьми не синхронизируются, из них ничего не копируется;
+- `~/.practices/local.yaml` (корни клонов), `~/.practices/secrets.json`, окружение Python,
+  история прогонов;
+- регистрация MCP и блоки инструкций агентам;
+- `conventions.md` и `templates/` пространства — личные правила владельца; новое пространство
+  получает умолчания, дальше они ваши.
 
-При первом запуске он создаёт своё пространство и добавляет папки со своими клонами — на экране
-«Начало» или командами (их же может выполнить агент в диалоге). Каталог наполняют `scan` и агенты:
-
-```
-practicesctl setup status                          # что уже настроено
-practicesctl setup roots ~/Projects/…              # где лежат клоны
-practicesctl space add <id> [--name N] [--hosting host/owner]   # своё пространство
-practicesctl project add <space>/<project>         # проект в нём
-practicesctl repos                                 # репозитории, ещё не разложенные по проектам
-practicesctl assign <repo> <project>               # репозиторий — в проект
-practicesctl scan <project> --write                # сервисы и связи из клонов, ждут `accept`
-practicesctl setup agents --global | --projects    # MCP для Claude Code, Codex, Cursor; блок инструкций — Claude Code и Codex
-```
-
-Куда писать инструкции агентам — глобально (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`) или в
-каждый проект (CLAUDE.md и AGENTS.md клонов) — решает пользователь; агент спрашивает, прежде чем
-вызывать. Блок живёт в одном месте: запись глобально убирает его из клонов, запись в проекты — из
-глобальных файлов. Новое пространство получает `conventions.md` и `templates/` по умолчанию — правила
-ведения репозиториев, которые агенты читают через `get_conventions`; правьте их под себя.
+Новый человек ставит приложение из DMG (или `./install.sh`), на экране «Начало» добавляет папки
+со своими клонами, создаёт своё пространство, ставит `practicesctl` и настраивает агентов.
+Каталог наполняют `scan` и агенты; их правки ждут `accept`.
