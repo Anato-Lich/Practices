@@ -166,7 +166,8 @@ enum MapGeometry {
 }
 
 /// Level 1: top-level projects with children as dashed frames (their cards inside, three to a
-/// row), standalone projects as cards; frames and cards wrap in rows 20 apart.
+/// row), standalone projects as cards; frames and cards wrap in rows 20 apart, with a 20pt
+/// corridor below the last row for the lines.
 struct SpaceLayout {
     static let card = CGSize(width: 170, height: 64)
     var cards: [(project: Project, rect: CGRect)] = []
@@ -201,7 +202,9 @@ struct SpaceLayout {
             rowHeight = max(rowHeight, h)
             size.width = max(size.width, x - 20)
         }
-        size.height = y + rowHeight
+        // A corridor under the last row: a line between cards that are not neighbours goes below
+        // the cards in between (rows above have their 20pt gaps).
+        size.height = y + rowHeight + 20
     }
 
     /// What lines go around: the cards and the frame labels (mono 12, about 7.3 a character).
