@@ -462,11 +462,21 @@ private struct ProjectMapView: View {
             ZoomPan(state: state, key: "project:\(id)", size: grid.size, minimum: 0.5) {
                 ZStack(alignment: .topLeading) {
                     ForEach(grid.titles.indices, id: \.self) { i in title(grid.titles[i]) }
-                    MapLines(lines: ordered(grid.edges.map { e in
-                        let pts = e.points, n = pts.count
-                        return (MapLine(path: MapGeometry.rounded(pts), tip: pts[n - 1], back: pts[n - 2], color: color(e.pair),
-                                        width: MapGeometry.width(e.pair.links.count), opacity: 0.9, dashed: e.pair.via == "build"), [e.pair.from, e.pair.to])
+                    MapLines(lines: ordered(grid.edges.flatMap { e -> [(line: MapLine, ends: [String])] in
+                        let pts = e.points, n = pts.count, ends = [e.pair.from, e.pair.to]
+                        let topics = brokerTopics(e.pair, grid)
+                        // Links to a broker: one thin line, a line per topic for the focused card.
+                        guard topics.count > 1 else {
+                            return [(MapLine(path: MapGeometry.rounded(pts), tip: pts[n - 1], back: pts[n - 2], color: color(e.pair),
+                                             width: topics.isEmpty ? MapGeometry.width(e.pair.links.count) : 1.4, opacity: 0.9, dashed: e.pair.via == "build"), ends)]
+                        }
+                        let fan = ends.contains(state.focused ?? "") ? min(topics.count, 8) : 1
+                        return (0..<fan).map { i in
+                            let d = 3 * (CGFloat(i) - CGFloat(fan - 1) / 2), q = pts.map { CGPoint(x: $0.x, y: $0.y + d) }
+                            return (MapLine(path: MapGeometry.rounded(q), tip: q[n - 1], back: q[n - 2], color: color(e.pair), width: 1.4, opacity: 0.9), ends)
+                        }
                     }, focus: state.focused))
+                    ForEach(grid.edges.indices, id: \.self) { i in badge(grid.edges[i], grid) }
                     ForEach(grid.heads.indices, id: \.self) { i in head(grid.heads[i]) }
                     ForEach(grid.cards.keys.sorted(), id: \.self) { sid in
                         let c = grid.cards[sid]!
@@ -480,6 +490,33 @@ private struct ProjectMapView: View {
                     MapLegend(note: "пунктир — сервисы других проектов; клик — закрепить, двойной клик по полю — вписать")
                 }
             }
+        }
+    }
+
+    /// The topics of a pair whose far end is a broker (kafka, rabbitmq), empty for other pairs.
+    private func brokerTopics(_ p: ServiceMap.Pair, _ grid: ProjectGrid) -> [String] {
+        guard [p.from, p.to].contains(where: { grid.cards[$0].map { ServiceMap.isBus($0.service) } ?? false }) else { return [] }
+        return Array(Set(p.links.map { $0.what ?? "—" })).sorted()
+    }
+
+    /// The count of topics at the client's end of a collapsed line (the broker's ports sit too close
+    /// for a badge each); the focused card lists them.
+    @ViewBuilder private func badge(_ e: ProjectGrid.Edge, _ grid: ProjectGrid) -> some View {
+        let topics = brokerTopics(e.pair, grid)
+        if topics.count > 1 {
+            let atEnd = grid.cards[e.pair.to].map { ServiceMap.isBus($0.service) } ?? false
+            let p = atEnd ? e.points[0] : e.points[e.points.count - 1]
+            let open = [e.pair.from, e.pair.to].contains(state.focused ?? "")
+            let shown = topics.prefix(8).joined(separator: "\n") + (topics.count > 8 ? "\n+\(topics.count - 8)" : "")
+            Text(verbatim: open ? shown : "\(topics.count)")
+                .font(Theme.mono(open ? 10 : 9.5, .semibold)).foregroundStyle(open ? Theme.Color.text : .black)
+                .multilineTextAlignment(.trailing)
+                .padding(.horizontal, 4).padding(.vertical, open ? 3 : 0)
+                .background(open ? Theme.Color.cardBg.opacity(0.95) : Theme.viaColor("topic"), in: RoundedRectangle(cornerRadius: open ? 4 : 6))
+                .fixedSize()
+                .help(topics.joined(separator: "\n"))
+                .position(x: p.x + (atEnd ? 14 : -14) * (open ? 3 : 1), y: p.y)
+                .opacity(state.focused == nil || open ? 1 : 0.25)
         }
     }
 
