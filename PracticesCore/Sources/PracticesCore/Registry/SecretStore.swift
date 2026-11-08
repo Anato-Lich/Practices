@@ -39,7 +39,16 @@ public struct SecretStore: Sendable {
 
     /// Which of the given keys have a non-empty value, per environment. Never the values.
     public func status(service: Service) throws -> [String: Set<String>] {
-        let table = try load()[service.id] ?? [:]
+        try status(of: [service])[service.id] ?? [:]
+    }
+
+    /// `status(service:)` of each, the file read once: service id → env → keys with a value.
+    public func status(of services: [Service]) throws -> [String: [String: Set<String>]] {
+        let all = try load()
+        return Dictionary(services.map { ($0.id, Self.status(of: $0, in: all[$0.id] ?? [:])) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private static func status(of service: Service, in table: [String: [String: String]]) -> [String: Set<String>] {
         var result: [String: Set<String>] = [:]
         for env in service.envs {
             let values = table[env] ?? [:]
