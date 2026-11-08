@@ -42,13 +42,13 @@ private func barycentre(_ columns: inout [[Service]], adj: [String: Set<String>]
 
 // MARK: - Project: variant E
 
-/// One project on an even grid: one-line cards 232×32 in columns «Вызывают из других проектов →
+/// One project on an even grid: one-line cards 180×32 in columns «Вызывают из других проектов →
 /// Фронты → API → Воркеры → Данные и шина → Внешние и другие проекты» (API and workers one column
-/// up to 5 cards), a column wrapping into sub-columns at 14 rows. Each link has its own ports on
+/// up to 5 cards), a column wrapping into sub-columns at 14 rows (neighbour columns at 24). Each link has its own ports on
 /// the cards' sides and its own lane in the corridor between columns; a link skipping columns
 /// crosses them in a row gap, and the gaps grow with the links they carry.
 struct ProjectGrid {
-    static let cardW: CGFloat = 232, cardH: CGFloat = 32, budget = 14, lane: CGFloat = 6, titleH: CGFloat = 40
+    static let cardW: CGFloat = 180, cardH: CGFloat = 32, budget = 14, stubBudget = 24, lane: CGFloat = 6, titleH: CGFloat = 40
 
     enum Group: Hashable { case callers, front, api, work, mid, data, ext }
     struct Card { var service: Service; var rect: CGRect; var stub: Bool }
@@ -111,8 +111,10 @@ struct ProjectGrid {
         var place: [String: (col: Int, row: Int, span: Int, stub: Bool, service: Service)] = [:]
         var headPlaces: [(project: String, count: Int, col: Int, row: Int)] = []
         var physOf: [[Int]] = [], nc = 0, rows = 0
-        for list in items {
+        for (li, list) in items.enumerated() {
             guard !list.isEmpty else { physOf.append([]); continue }
+            // Neighbour columns are one-line stubs under project heads: taller before they wrap.
+            let budget = [.callers, .ext].contains(logical[li].0) ? Self.stubBudget : Self.budget
             var row = 0, cols = [nc]
             nc += 1
             for (k, item) in list.enumerated() {
@@ -121,7 +123,7 @@ struct ProjectGrid {
                 case .head: if case .card(_, let s, _)? = list.dropFirst(k + 1).first { need = 1 + s } else { need = 1 }
                 case .card(_, let s, _): need = s
                 }
-                if row + need > Self.budget && row > 0 { row = 0; cols.append(nc); nc += 1 }
+                if row + need > budget && row > 0 { row = 0; cols.append(nc); nc += 1 }
                 switch item {
                 case .head(let p, let n): headPlaces.append((p, n, nc - 1, row)); row += 1
                 case .card(let s, let sp, let stub): place[s.id] = (nc - 1, row, sp, stub, s); row += sp

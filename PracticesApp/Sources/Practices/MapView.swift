@@ -537,11 +537,13 @@ private struct ProjectMapView: View {
 
     /// Column header and a 1 px hairline across its sub-columns; no frame.
     private func title(_ t: ProjectGrid.Title) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // Wraps to two lines over a narrow column, bottom-aligned to the hairline.
+        VStack(alignment: .leading, spacing: 4) {
             SectionTitle("\(t.text) · \(t.count)").monospacedDigit()
+                .frame(width: t.x1 - t.x0, height: 28, alignment: .bottomLeading)
             Color(hex: 0x3A3A3E).frame(width: t.x1 - t.x0, height: 1)
         }
-        .placed(t.x0, 8)
+        .placed(t.x0, 2)
     }
 
     /// A neighbour project's group: «project · N» in its colour; opens it.
