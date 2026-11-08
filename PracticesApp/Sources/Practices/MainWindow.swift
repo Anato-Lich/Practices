@@ -68,6 +68,9 @@ struct MainWindow: View {
                 pickFirstScreen()
             }
             NSApp.setActivationPolicy(.regular)
+            // An LSUIElement app's Dock tile is the blank template unless given the icon;
+            // `NSImage.applicationIconName` is that template too, so load AppIcon itself.
+            NSApp.applicationIconImage = Bundle.main.image(forResource: "AppIcon")
             Task { await registry.scanCopies() }
         }
         // Agents write to the spaces while the window is in the background: coming back to it
