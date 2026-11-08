@@ -36,25 +36,49 @@ public enum Repos {
 
     /// Repository → its clone, for every `.git` directory under the roots (at most four levels
     /// down) whose `origin` is a remote address. This finds a place, not a structure
-    /// (DECISIONS 3). A `.git` file is a worktree or a submodule and is skipped.
+    /// (DECISIONS 3). A `.git` file is a worktree or a submodule and is skipped. The walk does not
+    /// go into a clone (or a worktree): its folders are its own code, not more clones.
     public static func clones(roots: [String]) -> [RepoID: String] {
         var out: [RepoID: String] = [:]
         let fm = FileManager.default
         func walk(_ dir: URL, depth: Int) {
-            guard depth <= 4, let names = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
-            var isDir: ObjCBool = false
-            if fm.fileExists(atPath: dir.appendingPathComponent(".git").path, isDirectory: &isDir), isDir.boolValue,
-               let config = try? String(contentsOf: dir.appendingPathComponent(".git/config"), encoding: .utf8),
-               let id = origin(inGitConfig: config).flatMap(RepoID.init), out[id] == nil {
-                out[id] = dir.path
+            guard depth <= 4, let entries = folders(in: dir.path) else { return }
+            if entries.hasGit {
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: dir.appendingPathComponent(".git").path, isDirectory: &isDir), isDir.boolValue,
+                   let config = try? String(contentsOf: dir.appendingPathComponent(".git/config"), encoding: .utf8),
+                   let id = origin(inGitConfig: config).flatMap(RepoID.init), out[id] == nil {
+                    out[id] = dir.path
+                }
+                return
             }
-            for name in names.sorted() where !name.hasPrefix(".") && !Doctor.skippedDirs.contains(name) {
-                let url = dir.appendingPathComponent(name)
-                if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue { walk(url, depth: depth + 1) }
+            for name in entries.folders.sorted() where !name.hasPrefix(".") && !Doctor.skippedDirs.contains(name) && name != "site-packages" {
+                walk(dir.appendingPathComponent(name), depth: depth + 1)
             }
         }
         for root in roots { walk(URL(fileURLWithPath: root), depth: 0) }
         return out
+    }
+
+    /// The sub-folders of a folder (links to folders included) and whether it has a `.git`; nil when
+    /// it cannot be read. `readdir` gives each entry's kind: a data folder of 30 000 files costs no
+    /// `stat` per file, which `FileManager` would.
+    static func folders(in path: String) -> (folders: [String], hasGit: Bool)? {
+        guard let dir = opendir(path) else { return nil }
+        defer { closedir(dir) }
+        var folders: [String] = [], hasGit = false
+        while let entry = readdir(dir) {
+            let name = withUnsafeBytes(of: entry.pointee.d_name) { String(decoding: $0.prefix(Int(entry.pointee.d_namlen)), as: UTF8.self) }
+            if name == ".git" { hasGit = true; continue }
+            switch Int32(entry.pointee.d_type) {
+            case DT_DIR: folders.append(name)
+            case DT_LNK, DT_UNKNOWN:
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: path + "/" + name, isDirectory: &isDir), isDir.boolValue { folders.append(name) }
+            default: break
+            }
+        }
+        return (folders, hasGit)
     }
 
     /// `url` of `[remote "origin"]`, read from the file: no `git` process per repository.

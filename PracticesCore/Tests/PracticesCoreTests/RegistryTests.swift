@@ -475,10 +475,15 @@ struct TempHome {
         try clone("a/b/c/d", "git@github.com:deep/enough.git")
         try home.write("gitdir: /elsewhere/.git/worktrees/w\n", "code/worktree/.git")          // a file: skipped
         try home.write("[core]\n\tbare = false\n", "code/local-only/.git/config")               // no remote
+        try clone("vision/vendor/inner", "git@github.com:inside/a-clone.git")                    // a clone is not walked into
+        try clone("py/lib/site-packages/pkg", "git@github.com:some/pkg.git")
+        try clone("elsewhere/linked", "git@github.com:via/link.git")
+        try FileManager.default.createSymbolicLink(atPath: home.url.appendingPathComponent("code/link").path,
+                                                   withDestinationPath: home.url.appendingPathComponent("code/elsewhere").path)
         let clones = Repos.clones(roots: [home.url.appendingPathComponent("code").path])
         #expect(Set(clones.keys.map(\.description)) == ["github.com/x-keeper/device_analysis-api",
                                                          "gitlab.rnd.x-keeper.net/x-keeper-rnd/x-vision/x-vision-cloud",
-                                                         "github.com/deep/enough"])
+                                                         "github.com/deep/enough", "github.com/via/link"])
         #expect(clones[RepoID("github.com/x-keeper/device_analysis-api")!]?.hasSuffix("code/X-Keeper/device-analysis/api") == true)
     }
 
