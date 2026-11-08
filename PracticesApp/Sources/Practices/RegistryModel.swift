@@ -38,12 +38,19 @@ final class RegistryModel {
     private(set) var unassignedProblems: [String] = []
     private(set) var loadingUnassigned = false
     /// What the window shows; views set it to open a project, a service or a practice.
-    var selection: MainWindow.SidebarItem? { didSet { if selection != nil { welcomeShown = false }; reveal(); remember() } }
+    var selection: MainWindow.SidebarItem? { didSet { if selection != nil { welcomeShown = false }; reveal(); remember(); visit() } }
+    /// Back and forward (toolbar chevrons, ⌘[ ⌘], a swipe): the selection, and on the map its level.
+    private(set) var history = NavigationHistory<Place>()
+    /// How far a two-finger swipe has gone, −1…1 (positive: back), for the edge arrow.
+    var swipe: CGFloat = 0
+    @ObservationIgnored private var restoring = false
     /// The last three cards opened (sidebar «Недавние»); kept between launches.
     private(set) var recent: [MainWindow.SidebarItem] =
         (UserDefaults.standard.data(forKey: "recent")).flatMap { try? JSONDecoder().decode([MainWindow.SidebarItem].self, from: $0) } ?? []
     /// Where the map is; kept across visits, so «Карта» returns to the last level shown.
     let map = MapState()
+
+    init() { map.onMove = { [weak self] in self?.visit() } }
     /// space id → `git status` of the space's own repository (status bar).
     private(set) var spaceGit: [String: GitState] = [:]
     /// Projects and services whose rows are open in the sidebar.
@@ -183,6 +190,33 @@ final class RegistryModel {
         default: return
         }
         for ancestor in project.map(path(of:)) ?? [] { expanded.insert(.project(ancestor.id)) }
+    }
+
+    struct Place: Hashable {
+        let selection: MainWindow.SidebarItem
+        /// Only for `.map`: where the map was.
+        var level: MapState.Level?
+        var space, project, service: String?
+    }
+
+    private func visit() {
+        guard !restoring, let selection else { return }
+        if selection == .map, map.space.isEmpty || !spaces.contains(where: { $0.id == map.space }) { map.space = spaces.first?.id ?? "" }
+        history.visit(selection == .map ? Place(selection: .map, level: map.level, space: map.space, project: map.project, service: map.service)
+                                        : Place(selection: selection))
+    }
+
+    func goBack() { history.back().map(go) }
+    func goForward() { history.forward().map(go) }
+
+    private func go(to place: Place) {
+        restoring = true
+        defer { restoring = false }
+        if let level = place.level {
+            map.level = level; map.space = place.space ?? map.space; map.project = place.project; map.service = place.service
+            map.pinned = nil; map.hover = nil
+        }
+        selection = place.selection
     }
 
     private func remember() {

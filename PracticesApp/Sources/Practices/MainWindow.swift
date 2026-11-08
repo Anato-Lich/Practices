@@ -43,6 +43,7 @@ struct MainWindow: View {
         .background(Theme.Color.windowBg)
         .foregroundStyle(Theme.Color.text)
         .ignoresSafeArea(.container, edges: .top)
+        .overlay { SwipeArrow() }
         .overlay { Palette() }
         .preferredColorScheme(.dark)
         .overlay(alignment: .top) {
@@ -136,6 +137,7 @@ struct MainWindow: View {
     private func toolbar(_ slots: ShellToolbar) -> some View {
         HStack(spacing: 10) {
             if !sidebarShown { SidebarToggle(shown: $sidebarShown) }
+            NavigationButtons()
             if let leading = slots.leading { leading } else { breadcrumb }
             Spacer(minLength: 10)
             HStack(spacing: 6) {

@@ -92,20 +92,26 @@ final class MapState {
     func lookup(_ id: String) -> Service? { catalogue.services.first { $0.id == id } }
     func role(of id: String) -> Service.Role? { roles[id] }
 
+    /// A move between levels or spaces: the registry's back/forward history records it.
+    @ObservationIgnored var onMove: (() -> Void)?
+
     func show(space id: String) {
         space = id; level = .space; pinned = nil; hover = nil
+        onMove?()
     }
 
     func open(project id: String) {
         project = id
         space = catalogue.projects.first { $0.id == id }?.space ?? space
         level = .project; pinned = nil; hover = nil
+        onMove?()
     }
 
     func focus(_ id: String) {
         service = id
         if let s = lookup(id) { project = s.project; space = s.space }
         level = .service; pinned = nil; hover = nil
+        onMove?()
     }
 
     /// Click on a card: pin it (the side panel), or unpin it.

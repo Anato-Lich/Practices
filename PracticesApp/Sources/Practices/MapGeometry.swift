@@ -148,7 +148,7 @@ private struct EventCatcher: NSViewRepresentable {
     func makeNSView(context: Context) -> CatcherView { CatcherView() }
     func updateNSView(_ view: CatcherView, context: Context) { view.handler = handler }
 
-    final class CatcherView: NSView {
+    final class CatcherView: NSView, PansSideways {
         var handler: ((NSEvent, CGPoint) -> Void)?
         private var monitor: Any?
         override var isFlipped: Bool { true }
