@@ -421,6 +421,24 @@ struct TempHome {
 }
 
 @Suite struct SpaceGitTests {
+    /// DECISIONS 23: MCP notes and field descriptions commit at once; links wait in pending.
+    @Test func mcpNotesCommitAndLinksWait() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        try await registry.add(Space(id: "sp", name: "sp"))
+        try await registry.add(Project(id: "pr", space: "sp", name: "pr"))
+        try await registry.add(Service(id: "s", name: "s", kind: "x"), to: "pr")
+        let server = MCPServer(registry: registry)
+
+        _ = try await server.call("add_note", ["service": "s", "text": "осторожно"])
+        _ = try await server.call("describe_field", ["service": "s", "path": "a.b", "meaning": "m"])
+        #expect(await registry.pending().isEmpty)
+
+        _ = try await server.call("add_link", ["from": "s", "to": "s"])
+        let pending = await registry.pending()
+        #expect(pending.map(\.path) == ["projects/pr/services/s/links.yaml"])
+    }
+
     /// DECISIONS 19: an agent's practice edit waits for the user; a note saved meanwhile must
     /// not commit it.
     @Test func aNoteCommitLeavesAnUncommittedPracticeEditAlone() async throws {
