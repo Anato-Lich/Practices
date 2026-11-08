@@ -75,7 +75,7 @@ enum DevRender {
                 if args.contains("--flow") { registry.map.spaceMode = .flow }
                 if let j = args.firstIndex(of: "--zoom"), j + 1 < args.count { registry.map.renderZoom = Double(args[j + 1]).map { CGFloat($0) } }
                 if let j = args.firstIndex(of: "--pin"), j + 1 < args.count { registry.map.pinned = args[j + 1] }
-                if let j = args.firstIndex(of: "--hops"), j + 1 < args.count { registry.map.hops = Int(args[j + 1]) ?? 3 }
+                if let j = args.firstIndex(of: "--hops"), j + 1 < args.count { registry.map.hops = Int(args[j + 1]) ?? 1 }
             }
             // `--welcome`: «Начало» (with an empty `PRACTICES_HOME` it shows anyway); `--settings`: «Настройка».
             if args.contains("--welcome") {

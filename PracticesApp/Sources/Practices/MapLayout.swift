@@ -488,14 +488,24 @@ struct SpaceFlow {
 // MARK: - Service: the thread
 
 /// The service in the middle, where its data comes from to the left (nearest first) and where it
-/// goes to the right, a column per step; a broker crossed gets a column of its own between two
-/// steps. Cards are keyed by `ServiceMap.Thread.Node.key`.
+/// goes to the right, a column per step; a broker crossed gets a narrow column of its own between
+/// two steps. Compact: fixed gaps, not the window's width. Each column is split into «данные»
+/// (reached through a topic or a db, and brokers) on top and «вызовы» (other links) below, the
+/// split shared across columns. Cards are keyed by `ServiceMap.Thread.Node.key`.
 struct ThreadLayout {
-    static let chipW: CGFloat = 228, chipH: CGFloat = 22, row: CGFloat = 30, gap: CGFloat = 120, brokerGap: CGFloat = 150
-    static let centre = CGSize(width: 260, height: 48)
+    static let chipW: CGFloat = 196, chipH: CGFloat = 24, row: CGFloat = 40, gap: CGFloat = 110, brokerGap: CGFloat = 130, brokerW: CGFloat = 92
+    static let centre = CGSize(width: 236, height: 48)
+    /// Column titles at the top, the bands below them; a band's label sits over its first card.
+    static let titleY: CGFloat = 8, bandTop: CGFloat = 56, bandGap: CGFloat = 32
 
     var chips: [String: CGRect] = [:]
-    var columns: [(title: String, x: CGFloat, top: CGFloat)] = []
+    var brokers: Set<String> = []
+    /// Each card's column, left to right.
+    var column: [String: Int] = [:]
+    var columns: [(title: String, x: CGFloat)] = []
+    var groups: [(title: String, x: CGFloat, y: CGFloat)] = []
+    /// The gap right of each column's x, for the topic labels on its lines.
+    var gapAfter: [CGFloat: CGFloat] = [:]
     var size = CGSize.zero
 
     init(_ thread: ServiceMap.Thread, centre: Service) {
@@ -507,26 +517,46 @@ struct ThreadLayout {
         barycentre(&keyed, adj: adjacency(thread.pairs), sweeps: 8, centred: true)
         let byKey = Dictionary(cols.flatMap { $0 }.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         cols = keyed.map { $0.map { byKey[$0.id]! } }
-        let tallest = CGFloat(cols.map(\.count).max() ?? 1)
-        let height = tallest * Self.row
+        brokers = Set(byKey.values.filter(\.broker).map(\.key))
+        var stepOf: [String: Int] = [:]
+        for (k, list) in cols.enumerated() { for n in list { stepOf[n.key] = steps[k]; column[n.key] = k } }
+
+        // Data or call: by the links toward the centre (a node with none counts as data).
+        func isData(_ n: ServiceMap.Thread.Node, _ d: Int) -> Bool {
+            if n.broker { return true }
+            let inner = thread.pairs.filter { d < 0 ? $0.from == n.key && stepOf[$0.to]! > d : $0.to == n.key && stepOf[$0.from]! < d }
+            return inner.isEmpty || inner.contains { p in
+                brokers.contains(d < 0 ? p.to : p.from) || p.links.contains { ["topic", "db"].contains($0.via ?? "") }
+            }
+        }
+        let split = cols.enumerated().map { k, list in
+            steps[k] == 0 ? (data: list, calls: []) : (data: list.filter { isData($0, steps[k]) }, calls: list.filter { !isData($0, steps[k]) })
+        }
+        let labelled = split.contains { !$0.calls.isEmpty }
+        let hd = CGFloat(split.map(\.data.count).max() ?? 0), hc = CGFloat(split.map(\.calls.count).max() ?? 0)
+        let callsTop = Self.bandTop + hd * Self.row + (hd > 0 && hc > 0 ? Self.bandGap : 0)
+        let bottom = callsTop + hc * Self.row
         var x: CGFloat = 0
-        for (k, list) in cols.enumerated() {
-            let d = steps[k], nextBroker = k + 1 < steps.count && (steps[k + 1] % 2 != 0 || d % 2 != 0)
-            let gap = nextBroker ? Self.brokerGap : Self.gap
+        for (k, list) in split.enumerated() {
+            let d = steps[k], broker = d % 2 != 0
+            let gap = k + 1 < steps.count && (broker || steps[k + 1] % 2 != 0) ? Self.brokerGap : Self.gap
             if d == 0 {
-                let r = CGRect(x: x, y: 44 + (height - Self.centre.height) / 2, width: Self.centre.width, height: Self.centre.height)
-                chips[centre.id] = r
-                columns.append(("", x, r.minY))
+                chips[centre.id] = CGRect(x: x, y: ((Self.bandTop + bottom - Self.row + Self.chipH) / 2 - Self.centre.height / 2).rounded(),
+                                          width: Self.centre.width, height: Self.centre.height)
+                columns.append(("", x)); gapAfter[x] = gap
                 x += Self.centre.width + gap
                 continue
             }
-            let top = 44 + (tallest - CGFloat(list.count)) / 2 * Self.row
-            for (i, n) in list.enumerated() { chips[n.key] = CGRect(x: x, y: top + CGFloat(i) * Self.row, width: Self.chipW, height: Self.chipH) }
-            let h = abs(d) / 2
-            let title = d % 2 != 0 ? "" : d == -2 ? "Откуда приходит" : d == 2 ? "Куда уходит" : ru(h, "шаг", "шага", "шагов") + (d < 0 ? " вверх" : " вниз")
-            columns.append((title, x, top))
-            x += Self.chipW + gap
+            let w = broker ? Self.brokerW : Self.chipW
+            for (band, nodes, h, top) in [("данные", list.data, hd, Self.bandTop), ("вызовы", list.calls, hc, callsTop)] where !nodes.isEmpty {
+                let y0 = top + ((h - CGFloat(nodes.count)) / 2).rounded(.down) * Self.row
+                for (i, n) in nodes.enumerated() { chips[n.key] = CGRect(x: x, y: y0 + CGFloat(i) * Self.row, width: w, height: Self.chipH) }
+                if labelled && !broker { groups.append((band, x, y0 - 18)) }
+            }
+            let title = broker ? "" : d == -2 ? "Откуда приходит" : d == 2 ? "Куда уходит" : ru(abs(d) / 2, "шаг", "шага", "шагов") + (d < 0 ? " вверх" : " вниз")
+            columns.append((title, x)); gapAfter[x] = gap
+            x += w + gap
         }
-        size = CGSize(width: x - Self.gap, height: max(height, Self.centre.height) + 60)
+        size = CGSize(width: max(x - Self.gap, 1), height: max(bottom, chips[centre.id]!.maxY) + 24)
     }
 }

@@ -573,21 +573,29 @@ private struct ServiceMapView: View {
             // Hover and pin go by service id: a broker crossed twice lights up on both sides.
             let lit = litSet(state, thread.pairs.map { var p = $0; p.from = sid(p.from); p.to = sid(p.to); return p })
             let mid = layout.chips[id].map { CGPoint(x: $0.midX, y: $0.midY) }
-            ZoomPan(state: state, key: key, size: layout.size, anchor: mid) {
+            ZoomPan(state: state, key: key, size: layout.size, minimum: 0.75, anchor: mid) {
                 ZStack(alignment: .topLeading) {
                     ForEach(layout.columns.indices, id: \.self) { i in
-                        if !layout.columns[i].title.isEmpty { SectionTitle(layout.columns[i].title).placed(layout.columns[i].x, layout.columns[i].top - 24) }
+                        if !layout.columns[i].title.isEmpty { SectionTitle(layout.columns[i].title).placed(layout.columns[i].x, ThreadLayout.titleY) }
+                    }
+                    ForEach(layout.groups.indices, id: \.self) { i in
+                        let g = layout.groups[i]
+                        Text(verbatim: g.title).font(Theme.ui(11)).foregroundStyle(Theme.Color.textMuted).placed(g.x + 2, g.y)
                     }
                     MapLines(lines: ordered(thread.pairs.compactMap { p in
                         guard let a = layout.chips[p.from], let b = layout.chips[p.to] else { return nil }
-                        let t = MapGeometry.thread(a, b)
+                        let t = MapGeometry.thread(a, b), ends = [sid(p.from), sid(p.to)]
+                        // A call between two cards columns apart crosses the thread: faint unless focused.
+                        let far = !ends.contains(id) && abs(layout.column[p.from, default: 0] - layout.column[p.to, default: 0]) > 1
+                            && !ends.contains(state.focused ?? "")
                         return (MapLine(path: t.path, tip: t.tip, back: t.back, color: color(p), width: MapGeometry.width(p.links.count),
-                                        opacity: 0.8, dashed: p.via == "build"), [sid(p.from), sid(p.to)])
+                                        opacity: far ? 0.3 : 0.8, dashed: p.via == "build"), ends)
                     }, focus: state.focused))
-                    ForEach(thread.pairs.indices, id: \.self) { i in topics(thread.pairs[i], layout) }
+                    ForEach(thread.pairs.indices, id: \.self) { i in topics(thread.pairs[i], layout, centre: id) }
                     ForEach(nodes.keys.sorted(), id: \.self) { k in
-                        MapChip(state: state, service: nodes[k]!, size: CGSize(width: ThreadLayout.chipW, height: ThreadLayout.chipH),
-                                lit: lit, bar: true, projectDot: true, radius: 5)
+                        let broker = layout.brokers.contains(k)
+                        MapChip(state: state, service: nodes[k]!, size: layout.chips[k]!.size,
+                                lit: lit, bar: !broker, projectDot: !broker, radius: broker ? ThreadLayout.chipH / 2 : 5)
                             .placed(layout.chips[k]!)
                     }
                     centre(s).placed(layout.chips[id]!)
@@ -598,20 +606,28 @@ private struct ServiceMapView: View {
         }
     }
 
-    /// The topics of a line to or from a broker, at the line's middle.
-    @ViewBuilder private func topics(_ p: ServiceMap.Pair, _ layout: ThreadLayout) -> some View {
+    /// The topics of a line to or from a broker, just above the line at its card's end (the
+    /// broker's end when the card is the centre): cards stand a row apart, so labels never meet.
+    @ViewBuilder private func topics(_ p: ServiceMap.Pair, _ layout: ThreadLayout, centre: String) -> some View {
         let names = Array(Set(p.links.filter { $0.via == "topic" }.compactMap(\.what))).sorted()
         if !names.isEmpty, let a = layout.chips[p.from], let b = layout.chips[p.to] {
-            let text = names.count > 2 ? "\(names[0]) +\(names.count - 1)" : names.joined(separator: ", ")
-            Text(verbatim: text).font(Theme.mono(10)).foregroundStyle(Theme.Color.textSecondary)
-                .padding(.horizontal, 3).background(Theme.Color.windowBg.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
-                .fixedSize()
+            let text = names.count > 1 ? "\(names[0]) +\(names.count - 1)" : names[0]
+            // A broker in the middle is the centre itself.
+            let broker = layout.brokers.contains(p.from) ? p.from : layout.brokers.contains(p.to) ? p.to : centre
+            let other = broker == p.from ? p.to : p.from
+            let atFrom = (other == centre ? broker : other) == p.from
+            let gap = (layout.gapAfter[a.minX] ?? ThreadLayout.gap) - 10, end = atFrom ? a : b
+            Text(verbatim: text).font(Theme.mono(9.5)).foregroundStyle(Theme.Color.textSecondary)
+                .lineLimit(1).truncationMode(.head)
+                .padding(.horizontal, 2).background(Theme.Color.windowBg.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+                .frame(maxWidth: gap, alignment: atFrom ? .leading : .trailing)
+                .frame(width: gap, alignment: atFrom ? .leading : .trailing)
                 .help(names.joined(separator: "\n"))
-                .position(x: (a.maxX + b.minX) / 2, y: (a.midY + b.midY) / 2)
+                .position(x: atFrom ? end.maxX + 4 + gap / 2 : end.minX - 4 - gap / 2, y: end.midY - 9)
         }
     }
 
-    /// The service: 260×48, 2 pt border in its kind colour, id and `name · project`.
+    /// The service: 236×48, 2 pt border in its kind colour, id and `name · project`.
     private func centre(_ s: Service) -> some View {
         let cls = ServiceClass(for: s)
         return VStack(alignment: .leading, spacing: 2) {

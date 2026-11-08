@@ -15,7 +15,7 @@ final class MapState {
     var service: String?
     var spaceMode = SpaceMode.frames
     /// How far the service level follows the thread up and down.
-    var hops = 3
+    var hops = 1
     var catalogue = Catalogue(projects: [], services: [], links: []) {
         didSet {
             roles = ServiceMap.roles(in: catalogue)
@@ -73,6 +73,7 @@ final class MapState {
         scale = k
         pan = CGSize(width: max(pad, (viewSize.width - contentSize.width * k) / 2), height: max(pad, (viewSize.height - contentSize.height * k) / 2))
         if let a = anchor, contentSize.width * k > viewSize.width - 2 * pad { pan.width = viewSize.width / 2 - a.x * k }
+        if let a = anchor, contentSize.height * k > viewSize.height - 2 * pad { pan.height = viewSize.height / 2 - a.y * k }
         if let z = renderZoom { zoom(to: k * z, around: CGPoint(x: viewSize.width / 2, y: viewSize.height / 2)) }
     }
 
