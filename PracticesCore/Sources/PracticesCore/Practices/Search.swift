@@ -1,9 +1,18 @@
 import Foundation
 
-/// Search by meaning, not by name (DECISIONS 25): a field in a dictionary, practices whose
-/// result holds it, documents and notes that mention it, practices whose code does. The same
+/// Search by meaning, not by name (DECISIONS 25): services by id, name, kind, alias or
+/// description, a field in a dictionary, practices whose result holds it, documents and notes
+/// that mention it, practices whose code does. The same
 /// groups serve the window and the MCP `search` tool.
 public struct SearchResults: Sendable, Codable {
+    public struct ServiceHit: Hashable, Sendable, Codable {
+        public let id: String
+        public let name: String
+        public let kind: String
+        public let project: String
+        /// What matched: id, name, kind, alias or description.
+        public let match: String
+    }
     public struct FieldHit: Hashable, Sendable, Codable {
         public let service: String
         public let field: FieldDoc
@@ -25,6 +34,7 @@ public struct SearchResults: Sendable, Codable {
         public let excerpt: String
     }
 
+    public var services: [ServiceHit] = []
     public var fields: [FieldHit] = []
     public var results: [ResultHit] = []
     public var docs: [TextHit] = []
@@ -32,7 +42,7 @@ public struct SearchResults: Sendable, Codable {
 
     public init() {}
 
-    public var isEmpty: Bool { fields.isEmpty && results.isEmpty && docs.isEmpty && code.isEmpty }
+    public var isEmpty: Bool { services.isEmpty && fields.isEmpty && results.isEmpty && docs.isEmpty && code.isEmpty }
 }
 
 public enum Search {
@@ -43,6 +53,14 @@ public enum Search {
         guard q.count >= 2 else { return SearchResults() }
         let store = store ?? PracticeStore(registry: registry)
         var out = SearchResults()
+
+        for service in (try? registry.services()) ?? [] {
+            let candidates = [("id", service.id), ("name", service.name), ("kind", service.kind)]
+                + service.aliases.map { ("alias", $0) } + [("description", service.description ?? "")]
+            if let match = candidates.first(where: { $0.1.lowercased().contains(q) })?.0 {
+                out.services.append(.init(id: service.id, name: service.name, kind: service.kind, project: service.project, match: match))
+            }
+        }
 
         // Fields: path, last path component or meaning.
         let services = registry.serviceDirs()

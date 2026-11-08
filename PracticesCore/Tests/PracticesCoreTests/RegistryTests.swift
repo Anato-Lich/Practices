@@ -724,3 +724,17 @@ struct TempHome {
         #expect((attrs[.posixPermissions] as? Int) == 0o600)
     }
 }
+
+@Suite struct ServiceSearchTests {
+    @Test func servicesMatchByIdNameKindAliasDescription() throws {
+        let home = TempHome()
+        try home.place(Service(id: "xkdb", name: "Main DB", kind: "postgres"))
+        try home.place(Service(id: "api", name: "API", kind: "http", description: "talks to Postgres", aliases: ["gateway"]))
+        try home.place(Service(id: "cache", name: "Redis", kind: "redis"))
+        let pg = Search.run("postgres", registry: home.registry, runs: nil)
+        #expect(pg.services.map(\.id) == ["api", "xkdb"] && pg.services.map(\.match) == ["description", "kind"])
+        #expect(Search.run("gateway", registry: home.registry, runs: nil).services.map(\.match) == ["alias"])
+        #expect(Search.run("main", registry: home.registry, runs: nil).services.first?.project == "pr")
+        #expect(!pg.isEmpty && Search.run("nothing", registry: home.registry, runs: nil).isEmpty)
+    }
+}

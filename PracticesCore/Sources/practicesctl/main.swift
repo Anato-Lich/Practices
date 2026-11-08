@@ -73,7 +73,8 @@ let usage = """
       try <practice> [k=v…] [--env service=env…] [--rows N]
                                     run it and print the result (a table, a tree or text)
       runs <practice>               its run history: version, time, rows
-      search <text>                 fields, practices whose result has it, docs, code
+      search <text>                 services (id, name, kind, alias, description), fields, practices
+                                    whose result has it, docs, code
       copies [practice]             copies under the search roots found by their marker: current / outdated / modified
 
     this machine (~/.practices/local.yaml, agents' settings; never in git):
@@ -904,7 +905,9 @@ case "search":
     let results = Search.run(positional.dropFirst().joined(separator: " "))
     if json { printJSON(results); break }
     if results.isEmpty { print("nothing found"); break }
-    if !results.fields.isEmpty { print("FIELDS") }
+    if !results.services.isEmpty { print("SERVICES") }
+    for hit in results.services { print("  " + pad(hit.id, 26) + pad(hit.kind, 12) + pad(hit.project, 20) + hit.name + (hit.match == "id" || hit.match == "name" || hit.match == "kind" ? "" : "  (\(hit.match))")) }
+    if !results.fields.isEmpty { print(results.services.isEmpty ? "FIELDS" : "\nFIELDS") }
     for hit in results.fields {
         var line = "  " + pad("\(hit.service) · \(hit.field.path)", 40) + pad(hit.field.type ?? "", 8)
         line += hit.field.meaning ?? "(no description)"

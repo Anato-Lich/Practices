@@ -468,7 +468,7 @@ public final class MCPServer: @unchecked Sendable {
         tool("get_practice", "A practice's code to copy (first line marks the copy — keep it), the env variable names it reads, conditions of its services, practices it uses, fields of its result, history.",
              ["ref": ["type": "string", "description": "service/name or chains/name"],
               "version": ["type": "integer", "description": "defaults to the latest"]], required: ["ref"]),
-        tool("search", "Search by meaning: a field (e.g. acc_motion) in the service dictionaries, practices whose result has it, documents, notes and practice code.",
+        tool("search", "Search by meaning: services by id, name, kind, alias or description (`services`), a field (e.g. acc_motion) in the service dictionaries, practices whose result has it, documents, notes and practice code.",
              ["query": ["type": "string"]], required: ["query"]),
         tool("run_practice", "Run a practice with the credentials of its services and get the result: shape, first rows, fields, steps of a chain, timing. Fails with the condition's hint when a condition does not hold; a failed run comes with `conditions` — the declared, unchecked conditions of its services (an authorisation, a network) and their hints.",
              ["ref": ["type": "string"],
