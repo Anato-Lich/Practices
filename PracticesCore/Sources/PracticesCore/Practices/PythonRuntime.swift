@@ -33,12 +33,18 @@ public enum PythonRuntime {
             }
         }
         if dependenciesChanged || !fm.isExecutableFile(atPath: python.path) {
-            do {
-                _ = try await Shell.run("uv", ["sync", "--project", directory.path, "--quiet"])
-            } catch let failure as Shell.NotFound {
-                throw Failure(description: "\(failure) — install it with `brew install uv`")
-            }
+            guard let uv = uv() else { throw Failure(description: "uv not found: reinstall Practices, it carries uv in Contents/Helpers") }
+            _ = try await Shell.run(uv, ["sync", "--project", directory.path, "--quiet"])
         }
         return python
+    }
+
+    /// uv (DECISIONS 40): the copy installed beside practicesctl, the running app's, the one in
+    /// /Applications, then any on the usual paths.
+    public static func uv(home: URL = PracticesHome.url, app: URL = Bundle.main.bundleURL) -> String? {
+        let candidates: [String?] = [home.appendingPathComponent("bin/uv").path,
+                          app.pathExtension == "app" ? app.appendingPathComponent("Contents/Helpers/uv").path : nil,
+                          "/Applications/Practices.app/Contents/Helpers/uv"]
+        return candidates.compactMap { $0 }.first { FileManager.default.isExecutableFile(atPath: $0) } ?? Shell.locate("uv")
     }
 }

@@ -108,8 +108,7 @@ import Foundation
 
         let status = try await Setup.status(registry: home.registry, home: agents)
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(status)) as! [String: Any]
-        #expect(Set(json.keys) == ["roots", "defaultRoots", "spaces", "command", "commandInstalled", "commandState", "tools", "projectBlocks"])     // scope nil: no block anywhere
-        #expect(json["defaultRoots"] as? Bool == false)
+        #expect(Set(json.keys) == ["roots", "spaces", "command", "commandInstalled", "commandState", "tools", "projectBlocks"])     // scope nil: no block anywhere
         let root = (json["roots"] as! [[String: Any]])[0]
         #expect(root["clones"] as? Int == 0 && root["exists"] as? Bool == true)
         let space = (json["spaces"] as! [[String: Any]])[0]
@@ -205,9 +204,9 @@ import Foundation
         try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: helper.path)
         let home = temp.appendingPathComponent(".practices"), links = temp.appendingPathComponent("local-bin")
 
-        try await Setup.installCommand(from: helper, home: home, links: links)
+        try await Setup.installCommand(from: helper, home: home, links: links, fallbackUV: nil)
         try "#!/bin/sh\necho newer\n".write(to: helper, atomically: true, encoding: .utf8)
-        let written = try await Setup.installCommand(from: helper, home: home, links: links)       // over an installed copy
+        let written = try await Setup.installCommand(from: helper, home: home, links: links, fallbackUV: nil)       // over an installed copy
 
         let command = home.appendingPathComponent("bin/practicesctl")
         #expect(written.map(\.lastPathComponent) == ["practicesctl", "PracticesCore_PracticesCore.bundle", "practicesctl"])
@@ -215,6 +214,16 @@ import Foundation
         #expect(fm.isExecutableFile(atPath: command.path))
         #expect(fm.fileExists(atPath: home.appendingPathComponent("bin/PracticesCore_PracticesCore.bundle/AgentInstructions.md").path))
         #expect(try fm.destinationOfSymbolicLink(atPath: links.appendingPathComponent("practicesctl").path) == command.path)
+
+        // uv beside the helper goes too; the installed copy installing itself keeps its files.
+        let uv = helpers.appendingPathComponent("uv")
+        try "#!/bin/sh\necho uv\n".write(to: uv, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: uv.path)
+        let withUV = try await Setup.installCommand(from: helper, home: home, links: links, fallbackUV: nil)
+        #expect(withUV.map(\.lastPathComponent) == ["practicesctl", "PracticesCore_PracticesCore.bundle", "uv", "practicesctl"])
+        try await Setup.installCommand(from: command, home: home, links: links, fallbackUV: nil)
+        #expect(try String(contentsOf: command, encoding: .utf8).contains("newer"))
+        #expect(fm.isExecutableFile(atPath: home.appendingPathComponent("bin/uv").path))
 
         try fm.removeItem(at: bundle)
         await #expect(throws: Registry.Failure.self) { try await Setup.installCommand(from: helper, home: home, links: links) }
@@ -232,5 +241,21 @@ import Foundation
         #expect(Setup.commandState(helper: helper, home: home.url) == .outdated)
         try home.write("#!/bin/sh\necho v2\n", "bin/practicesctl")
         #expect(Setup.commandState(helper: helper, home: home.url) == .current)
+        // The app's uv counts too: missing or different beside the installed CLI is outdated.
+        try home.write("uv 2", "Helpers/uv")
+        #expect(Setup.commandState(helper: helper, home: home.url) == .outdated)
+        try home.write("uv 2", "bin/uv")
+        #expect(Setup.commandState(helper: helper, home: home.url) == .current)
+    }
+
+    @Test func uvIsTheInstalledOneFirst() throws {
+        let home = TempHome(), fm = FileManager.default
+        let app = home.url.appendingPathComponent("Practices.app")
+        try home.write("#!/bin/sh\n", "Practices.app/Contents/Helpers/uv")
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: app.appendingPathComponent("Contents/Helpers/uv").path)
+        #expect(PythonRuntime.uv(home: home.url, app: app) == app.appendingPathComponent("Contents/Helpers/uv").path)
+        try home.write("#!/bin/sh\n", "bin/uv")
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: home.url.appendingPathComponent("bin/uv").path)
+        #expect(PythonRuntime.uv(home: home.url, app: app) == home.url.appendingPathComponent("bin/uv").path)
     }
 }

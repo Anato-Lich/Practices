@@ -108,7 +108,7 @@ struct SearchView: View {
                     }
                     if hits.isEmpty { Text("No project code mentions it").foregroundStyle(.secondary) }
                 } else {
-                    HStack { ProgressView().controlSize(.small); Text("Reading ~/Projects…").foregroundStyle(.secondary) }
+                    HStack { ProgressView().controlSize(.small); Text("Reading the clone folders…").foregroundStyle(.secondary) }
                 }
             } header: {
                 Text(projectHits == nil ? "In project code" : "In project code · \(projectFiles) files · not practices yet")

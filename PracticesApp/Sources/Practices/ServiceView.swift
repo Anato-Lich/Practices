@@ -328,7 +328,7 @@ struct ServiceView: View {
                     }
                 }
                 if mine.isEmpty {
-                    empty("Отмеченных копий в ~/Projects нет. get_practice отдаёт код со строкой-меткой.")
+                    empty("Отмеченных копий в папках с клонами нет. get_practice отдаёт код со строкой-меткой.")
                 }
             } else {
                 ProgressView().controlSize(.small)

@@ -206,9 +206,8 @@ public struct SetupStatus: Codable, Sendable {
         public let file: String
         public let state: String
     }
-    /// Roots from `local.yaml`; when it lists none, the default one, with `defaultRoots`.
+    /// Roots from `local.yaml`.
     public let roots: [Root]
-    public let defaultRoots: Bool
     public let spaces: [SpaceState]
     public let command: String
     public let commandInstalled: Bool
@@ -234,14 +233,18 @@ public enum Setup {
             : URL(fileURLWithPath: "/Applications/Practices.app/Contents/Helpers/practicesctl")
     }
 
-    /// SHA-256 of both files (about 12 ms for the two, 2–5 MB each). Without a helper to compare
-    /// with (CLI from source, no app), an installed copy counts as current.
+    /// SHA-256 of `practicesctl` and of `uv` beside it, installed against the helper's (about 12 ms
+    /// a pair of 2–5 MB files; uv is bigger). Without a helper to compare with (CLI from source, no
+    /// app), an installed copy counts as current; a helper without uv compares the CLI only.
     public static func commandState(helper: URL = appHelper, home: URL = PracticesHome.url) -> CommandState {
         let installed = home.appendingPathComponent("bin/practicesctl")
         guard FileManager.default.isExecutableFile(atPath: installed.path) else { return .missing }
         func hash(_ url: URL) -> SHA256.Digest? { (try? Data(contentsOf: url, options: .mappedIfSafe)).map { SHA256.hash(data: $0) } }
         guard let new = hash(helper) else { return .current }
-        return hash(installed) == new ? .current : .outdated
+        guard hash(installed) == new else { return .outdated }
+        let uv = helper.deletingLastPathComponent().appendingPathComponent("uv")
+        guard let newUV = hash(uv) else { return .current }
+        return hash(installed.deletingLastPathComponent().appendingPathComponent("uv")) == newUV ? .current : .outdated
     }
 
     public static func status(registry: Registry = Registry(), home: AgentHome = AgentHome()) async throws -> SetupStatus {
@@ -260,7 +263,7 @@ public enum Setup {
                 if state != "absent" { blocks.append(.init(project: project, clone: clone, file: name, state: state)) }
             }
         }
-        return SetupStatus(roots: roots, defaultRoots: registry.local.roots.isEmpty, spaces: try await registry.spaceStates(),
+        return SetupStatus(roots: roots, spaces: try await registry.spaceStates(),
                            command: home.command, commandInstalled: fm.isExecutableFile(atPath: home.command),
                            commandState: commandState(home: home.practices),
                            tools: tools, projectBlocks: blocks,
@@ -330,32 +333,39 @@ public enum Setup {
         return SetupWrite(target: target, file: file.path, state: before == "absent" ? "written" : "updated")
     }
 
-    /// Copies the CLI the app carries (`Contents/Helpers/practicesctl` and the resource bundle next
-    /// to it) into `<home>/bin` and links it from `links/practicesctl`; returns the paths written.
-    /// `links` is `~/.local/bin` unless a test passes a temp dir.
+    /// Copies the CLI the app carries (`Contents/Helpers/practicesctl`, the resource bundle and `uv`
+    /// next to it) into `<home>/bin` and links it from `links/practicesctl`; returns the paths written.
+    /// `uv` is taken from next to the helper, else from `fallbackUV` (the app's), else skipped;
+    /// `links` is `~/.local/bin` unless a test passes a temp dir. A file already in place (the
+    /// installed CLI running `setup install`) is left as it is.
     @discardableResult
     public static func installCommand(from helper: URL, home: URL = PracticesHome.url,
-                                      links: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".local/bin")) async throws -> [URL] {
+                                      links: URL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".local/bin"),
+                                      fallbackUV: URL? = appHelper.deletingLastPathComponent().appendingPathComponent("uv")) async throws -> [URL] {
         let fm = FileManager.default
         let bundle = helper.deletingLastPathComponent().appendingPathComponent("PracticesCore_PracticesCore.bundle")
         guard fm.isExecutableFile(atPath: helper.path) else { throw Registry.Failure("\(helper.path) is not an executable") }
         guard fm.fileExists(atPath: bundle.path) else { throw Registry.Failure("\(bundle.path) is missing") }
+        let uv = [helper.deletingLastPathComponent().appendingPathComponent("uv"), fallbackUV].compactMap { $0 }
+            .first { fm.isExecutableFile(atPath: $0.path) }
         let bin = home.appendingPathComponent("bin")
         let command = bin.appendingPathComponent("practicesctl"), resources = bin.appendingPathComponent(bundle.lastPathComponent)
         let link = links.appendingPathComponent("practicesctl")
         try fm.createDirectory(at: bin, withIntermediateDirectories: true)
         try fm.createDirectory(at: links, withIntermediateDirectories: true)
+        var pairs = [(helper, command), (bundle, resources)]
+        if let uv { pairs.append((uv, bin.appendingPathComponent("uv"))) }
         // Remove, then copy: overwriting a signed binary in place keeps the kernel's cached signature
         // of the old file, and macOS kills the new one at launch (exit 137).
-        for (source, target) in [(helper, command), (bundle, resources)] {
+        for (source, target) in pairs where source.resolvingSymlinksInPath().path != target.resolvingSymlinksInPath().path {
             if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
             try fm.copyItem(at: source, to: target)
         }
         if (try? fm.destinationOfSymbolicLink(atPath: link.path)) != nil || fm.fileExists(atPath: link.path) { try fm.removeItem(at: link) }
         try fm.createSymbolicLink(at: link, withDestinationURL: command)
         // A downloaded app's files carry the quarantine flag, which copies keep; exit 1 is «no such xattr».
-        _ = try await Shell.run("xattr", ["-dr", "com.apple.quarantine", command.path, resources.path], allowedStatuses: [0, 1])
-        return [command, resources, link]
+        _ = try await Shell.run("xattr", ["-dr", "com.apple.quarantine"] + pairs.map(\.1.path), allowedStatuses: [0, 1])
+        return pairs.map(\.1) + [link]
     }
 
     public static func projectClones(registry: Registry) throws -> [(project: String, clone: String)] {

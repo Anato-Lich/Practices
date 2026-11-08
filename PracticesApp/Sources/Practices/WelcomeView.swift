@@ -194,7 +194,7 @@ struct StepCard<Trailing: View, Content: View>: View {
 
 // MARK: - Shared with «Настройка»
 
-/// The roots from `local.yaml` with their clone counts; the default `~/Projects` has no ✕ — it is not in the file.
+/// The roots from `local.yaml` with their clone counts.
 struct RootsList: View {
     @Environment(RegistryModel.self) private var registry
     let status: SetupStatus?
@@ -206,12 +206,10 @@ struct RootsList: View {
                 HStack(spacing: 10) {
                     Text(verbatim: tilde(root.path)).font(Theme.mono(12)).lineLimit(1).truncationMode(.middle)
                     Text(verbatim: !root.exists ? "нет такой папки"
-                         : ru(root.clones, "клон", "клона", "клонов") + (status?.defaultRoots == true ? " · по умолчанию" : "") + (note.map { " · " + $0 } ?? ""))
+                         : ru(root.clones, "клон", "клона", "клонов") + (note.map { " · " + $0 } ?? ""))
                         .font(Theme.mono(11)).foregroundStyle(root.exists ? Theme.Color.textMuted : Theme.Color.warn).fixedSize()
                     Spacer()
-                    if status?.defaultRoots == false {
-                        RemoveButton { Task { await registry.setup.removeRoot(root.path) } }
-                    }
+                    RemoveButton { Task { await registry.setup.removeRoot(root.path) } }
                 }
                 .frame(height: 28)
             }

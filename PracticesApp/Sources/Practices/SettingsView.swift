@@ -243,7 +243,9 @@ struct SettingsView: View {
         let setup = registry.setup
         let runtime = SetupModel.runtime
         let home = registry.registry.home
-        let ready = runtime.version != nil && status?.commandState == .current
+        // uv comes with the app (DECISIONS 40): without a venv yet, python is only missing when uv is too.
+        let hasUV = PythonRuntime.uv() != nil
+        let ready = (runtime.version != nil || hasUV) && status?.commandState == .current
         return card("Окружение") {
             Text(verbatim: ready ? "всё на месте" : "не всё на месте").font(Theme.mono(10.5)).foregroundStyle(ready ? Theme.Color.ok : Theme.Color.warn)
         } content: {
@@ -251,8 +253,8 @@ struct SettingsView: View {
                 GridRow {
                     label("python")
                     Text(verbatim: runtime.version.map { [$0, tilde(PythonRuntime.directory.path), "установлено " + shortDate(runtime.date)].joined(separator: " · ") }
-                         ?? "не установлено · " + tilde(PythonRuntime.directory.path))
-                        .foregroundStyle(runtime.version == nil ? Theme.Color.warn : Theme.Color.text)
+                         ?? (hasUV ? "будет установлен при первом запуске практики · " : "не установлено, нет uv · ") + tilde(PythonRuntime.directory.path))
+                        .foregroundStyle(runtime.version == nil && !hasUV ? Theme.Color.warn : Theme.Color.text)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button { Task { await setup.ensureRuntime() } } label: { Text(verbatim: setup.runtimeBusy ? "Обновляется…" : "Обновить") }
                         .disabled(setup.runtimeBusy)

@@ -83,6 +83,8 @@ let usage = """
       setup status [--json]         roots, spaces, agents: MCP registered,
                                     instruction block absent / current / outdated, project clones with it
       setup roots <path>…           = roots add, for the first run
+      setup install                 copy this practicesctl (with its bundle, and uv from beside it or
+                                    the app) into ~/.practices/bin, linked from ~/.local/bin
       setup agents --global | --projects [--tools claude,codex,cursor] [--no-mcp] [--no-instructions]
                                     register the MCP server for the tools found (~/.claude, ~/.codex,
                                     ~/.cursor) and write the instruction block: --global into
@@ -176,6 +178,9 @@ func linkLine(_ other: String, _ l: Link, incoming: Bool = false) -> String {
     return line + (l.why.map { " — \($0)" } ?? "")
 }
 
+/// `1 clone`, `3 clones`.
+func clones(_ n: Int) -> String { "\(n) clone" + (n == 1 ? "" : "s") }
+
 func home(_ path: String?) -> String {
     guard let path else { return "" }
     let h = NSHomeDirectory()
@@ -188,8 +193,21 @@ func spaceLine(_ s: SpaceState) -> String {
         + (s.uncommitted.map { "\($0) uncommitted" } ?? "")
 }
 
+/// The usage lines of one command: those starting with the word, with their continuation lines;
+/// all of it for no command or an unknown one.
+func usage(of command: String?) -> String {
+    guard let command else { return usage }
+    var lines: [Substring] = [], inside = false
+    for line in usage.split(separator: "\n", omittingEmptySubsequences: false) {
+        if line.hasPrefix("  " + command + " ") || line == "  " + command { inside = true }
+        else if !(inside && line.hasPrefix("    ")) { inside = false }
+        if inside { lines.append(line) }
+    }
+    return lines.isEmpty ? usage : "usage: practicesctl\n" + lines.joined(separator: "\n")
+}
+
 // `<command> --help` prints the usage instead of running the command; after `--` it belongs to the wrapped command.
-if args.prefix(while: { $0 != "--" }).contains(where: { $0 == "--help" || $0 == "-h" }) { print(usage); exit(0) }
+if args.prefix(while: { $0 != "--" }).contains(where: { $0 == "--help" || $0 == "-h" }) { print(usage(of: positional.first)); exit(0) }
 
 switch positional.first {
 case "spaces":
@@ -222,8 +240,8 @@ case "roots":
     do {
         switch (rest.count > 1 ? rest[1] : "", rest.count) {
         case ("", 1):
-            if registry.local.roots.isEmpty { print("no roots in local.yaml — looking in the default one") }
-            for root in registry.searchRoots { print(pad(home(root), 40) + "  \(Repos.clones(roots: [root]).count) clones") }
+            if registry.searchRoots.isEmpty { print("roots: none — practicesctl roots add <dir>") }
+            for root in registry.searchRoots { print(pad(home(root), 40) + "  " + clones(Repos.clones(roots: [root]).count)) }
         case ("add", 3...): for path in rest.dropFirst(2) { print("root \(try Registry().addRoot(path)) added") }
         case ("remove", 3): try registry.removeRoot(rest[2]); print("root \(rest[2]) removed")
         default: print(usage); exit(2)
@@ -237,9 +255,9 @@ case "setup":
         case "status":
             let status = try await Setup.status()
             if json { printJSON(status); break }
-            print("roots" + (status.defaultRoots ? " (none in local.yaml — the default; `practicesctl setup roots <path>…`)" : ""))
+            print("roots" + (status.roots.isEmpty ? ": none — practicesctl roots add <dir>" : ""))
             let rootWidth = status.roots.map { home($0.path).count }.max() ?? 0
-            for r in status.roots { print("  " + pad(home(r.path), rootWidth) + "  " + (r.exists ? "\(r.clones) clones" : "missing")) }
+            for r in status.roots { print("  " + pad(home(r.path), rootWidth) + "  " + (r.exists ? clones(r.clones) : "missing")) }
             print("\nspaces" + (status.spaces.isEmpty ? " — none; `practicesctl space add <id>`" : ""))
             for s in status.spaces { print("  " + spaceLine(s)) }
             print("\ncommand: \(status.commandState.rawValue)" + (status.commandState == .outdated ? " — the app carries a newer one; it reinstalls at launch, or «Переустановить» in «Настройка»" : ""))
@@ -252,7 +270,15 @@ case "setup":
             let fileWidth = status.projectBlocks.map { home($0.clone).count + 1 + $0.file.count }.max() ?? 0
             for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, fileWidth) + "  " + b.state) }
             if let scope = status.scope { print("\nscope: \(scope.rawValue)" + (scope == .both ? " — `setup agents --global` or `--projects` keeps one" : "")) }
+        case "install":
+            guard let me = Bundle.main.executableURL?.resolvingSymlinksInPath() else { fail("practices: where is this binary?") }
+            try await Setup.installCommand(from: me).forEach { print("installed " + home($0.path)) }
         case "agents":
+            // MCP would point at a command that is not there; nothing is written.
+            guard FileManager.default.isExecutableFile(atPath: AgentHome().command) else {
+                FileHandle.standardError.write(Data("practices: MCP указывает на несуществующую команду \(home(AgentHome().command)): сначала `practicesctl setup install`\n".utf8))
+                exit(1)
+            }
             if let project = options["--project"]?.last {
                 try Setup.project(project).forEach { print(pad($0.target, 10) + pad($0.state, 12) + home($0.file)) }
                 break
@@ -262,6 +288,10 @@ case "setup":
                     guard let tool = AgentTool(rawValue: String(name)) else { throw Registry.Failure("--tools is a list of claude, codex, cursor") }
                     return tool
                 }
+            }
+            guard (tools ?? AgentTool.allCases).contains(where: AgentHome().found) else {
+                FileHandle.standardError.write(Data("practices: инструменты не найдены: нужны ~/.claude, ~/.codex или ~/.cursor\n".utf8))
+                exit(1)
             }
             let scope: InstructionScope
             if args.contains("--global") != args.contains("--projects") {
@@ -940,7 +970,7 @@ case "mcp":
 case "copies":
     let copies = await Copies.scan().filter { c in positional.count < 2 || c.ref == positional[1] }
     if json { printJSON(copies); break }
-    if copies.isEmpty { print("no marked copies in ~/Projects"); break }
+    if copies.isEmpty { print("no marked copies under the roots"); break }
     for c in copies {
         print(pad(c.state.rawValue, 10) + pad(c.ref + (c.version.map { "@v\($0)" } ?? ""), 36)
               + pad("latest v\(c.latest)", 11) + home(c.path) + ":\(c.line)")
@@ -948,5 +978,5 @@ case "copies":
 
 default:
     print(usage)
-    exit(positional.isEmpty ? 0 : 2)
+    exit(positional.isEmpty || positional.first == "help" ? 0 : 2)
 }

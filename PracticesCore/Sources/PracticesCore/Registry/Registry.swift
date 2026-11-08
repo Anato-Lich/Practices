@@ -84,12 +84,8 @@ public struct Registry: Sendable {
         id.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]*$"#, options: .regularExpression) != nil
     }
 
-    public static var projectsRoot: String { NSHomeDirectory() + "/Projects" }
-
-    /// Where clones of repositories are looked for.
-    public var searchRoots: [String] {
-        local.roots.isEmpty ? [Registry.projectsRoot] : local.roots.map(LocalConfig.expand)
-    }
+    /// Where clones of repositories are looked for: only the roots in `local.yaml`, none guessed.
+    public var searchRoots: [String] { local.roots.map(LocalConfig.expand) }
 
     // MARK: Spaces
 

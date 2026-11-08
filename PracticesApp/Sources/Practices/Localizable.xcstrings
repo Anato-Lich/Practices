@@ -1212,12 +1212,12 @@
         }
       }
     },
-    "Reading ~/Projects…": {
+    "Reading the clone folders…": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Читаю ~/Projects…"
+            "value": "Читаю папки с клонами…"
           }
         }
       }

@@ -225,7 +225,7 @@ struct TempHome {
         #expect(try registry.space("xk").name == "X")
         #expect(registry.searchRoots == [home.url.path + "/code"])
         #expect(registry.local.folders == ["export_engine": "/tmp/ee"])
-        #expect(Registry(home: TempHome().url).searchRoots == [Registry.projectsRoot])
+        #expect(Registry(home: TempHome().url).searchRoots.isEmpty)
     }
 
     @Test func aRepositoryIsInOneProject() async throws {
