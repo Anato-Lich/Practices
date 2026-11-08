@@ -390,7 +390,9 @@ public enum Scanner {
                 // card this is another name of where the caller may mean it (`hyper-kafka` is `kafka`,
                 // `imu-sphere-tiles` is the shared `ble-panels-tiles`) — for a build only by a name
                 // that is not generic: two repositories may each build an `api`.
-                let prefixed = "\(repo.description.split(separator: "/").last!)-\(name)"
+                // `api` of shop-api is shop-api, not shop-api-api.
+                let repoName = String(repo.description.split(separator: "/").last!)
+                let prefixed = repoName.hasSuffix("-" + name) ? repoName : "\(repoName)-\(name)"
                 let mine = [name] + service.names
                 if let same = catalog.first(where: { $0.repo == repo && (mine.contains($0.id) || !Set($0.aliases).isDisjoint(with: mine)) })
                     ?? catalog.first(where: { $0.space == clone.space && ($0.id == prefixed || $0.aliases.contains(prefixed)) })
@@ -403,7 +405,7 @@ public enum Scanner {
                     continue
                 }
                 func free(_ id: String) -> Bool { !known.contains { $0.id == id } }
-                let id = !genericNames.contains(name.lowercased()) && free(name) ? name : "\(repo.description.split(separator: "/").last!)-\(name)"
+                let id = !genericNames.contains(name.lowercased()) && free(name) ? name : prefixed
                 guard free(id), Registry.isValidID(id) else {
                     clone.report.problems.append("\(name): its id \(id) is taken — if it is that service, add \(name) to its aliases")
                     continue

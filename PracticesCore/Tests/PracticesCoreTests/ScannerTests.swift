@@ -116,6 +116,13 @@ import Yams
         #expect(services.map { "\($0.id) \($0.kind)" } == ["shop-api http", "shop-web frontend"])
     }
 
+    @Test func aRepoNamedAfterItsServiceKeepsItsName() throws {
+        let home = try catalogue(["github.com/acme/shop-api"])
+        try home.write("services:\n  api: {build: .}\n  db: {image: postgres:16}\n", "code/shop-api/docker-compose.yml")
+        let services = try Scanner.scan(registry: home.registry, store: home.store).repos[0].services
+        #expect(services.map(\.id) == ["shop-api", "shop-api-db"])
+    }
+
     @Test func variablesBecomeLinksAndEnvIsNeverRead() throws {
         let home = try catalogue(["github.com/acme/shop", "github.com/acme/lone", "github.com/acme/tiles"])
         try card(home, Service(id: "kafka", name: "Kafka", kind: "kafka", aliases: ["hyper-kafka"],
