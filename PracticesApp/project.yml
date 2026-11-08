@@ -32,7 +32,9 @@ targets:
           cp "${BUILT_PRODUCTS_DIR}/practicesctl" "$HELPERS/"
           # Next to the binary: the CLI finds its resources there, here and once copied to ~/.practices/bin.
           cp -R "${BUILT_PRODUCTS_DIR}/PracticesCore_PracticesCore.bundle" "$HELPERS/"
-          codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$HELPERS/PracticesCore_PracticesCore.bundle" "$HELPERS/practicesctl"
+          # uv runs practices' Python (DECISIONS 40): pinned, cached in build/uv.
+          "${PROJECT_DIR}/../tools/fetch-uv.sh" "$HELPERS"
+          codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$HELPERS/PracticesCore_PracticesCore.bundle" "$HELPERS/practicesctl" "$HELPERS/uv"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.practices.app
