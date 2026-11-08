@@ -256,10 +256,11 @@ private struct MapLegend: View {
                 }
                 HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(Theme.viaColor("db", access: "write")).frame(width: 14, height: 3); Text(verbatim: "db write") }
             }
-            if !projects.isEmpty {
+            // Projects in rows of 6, so a big space (x-keeper: 17) does not run past the window.
+            ForEach(Array(stride(from: 0, to: projects.count, by: 6)), id: \.self) { start in
                 HStack(spacing: 10) {
-                    Text(verbatim: "проект")
-                    ForEach(projects.indices, id: \.self) { i in
+                    Text(verbatim: "проект").opacity(start == 0 ? 1 : 0)
+                    ForEach(start..<min(start + 6, projects.count), id: \.self) { i in
                         HStack(spacing: 4) { Circle().fill(projects[i].1).frame(width: 8, height: 8); Text(verbatim: projects[i].0) }
                     }
                 }
