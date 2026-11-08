@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 /// `Practices --render-window out.png [--space id | --project id | --service id | --practice ref |
-/// --pending | --unassigned | --map [--flow] [--zoom k] [--pin id] [--hops n] | --search text | --palette text | --doctor | --welcome | --settings] [--expand project,…] [--wait seconds]`:
+/// --conventions space [--template path] [--edit] | --pending | --unassigned | --map [--flow] [--zoom k] [--pin id] [--hops n] | --search text | --palette text | --doctor | --welcome | --settings] [--expand project,…] [--wait seconds] [--height h]`:
 /// renders the main window offscreen and exits. Lets the layout be checked without clicking.
 @MainActor
 enum DevRender {
@@ -46,6 +46,8 @@ enum DevRender {
             }
             if let j = args.firstIndex(of: "--service"), j + 1 < args.count { registry.selection = .service(args[j + 1]) }
             if let j = args.firstIndex(of: "--space"), j + 1 < args.count { registry.selection = .space(args[j + 1]) }
+            // `--conventions <space> [--template path] [--edit]`: the space's conventions page; `--edit-notes`: a service's notes editor.
+            if let j = args.firstIndex(of: "--conventions"), j + 1 < args.count { registry.selection = .conventions(args[j + 1]) }
             if let j = args.firstIndex(of: "--project"), j + 1 < args.count, let project = registry.project(args[j + 1]) {
                 registry.selection = .project(project.id)
                 await registry.loadGitStates(of: project)
@@ -91,7 +93,9 @@ enum DevRender {
             if args.contains("--remove"), case .project(let id)? = registry.selection { registry.removalCandidate = id }
             if let j = args.firstIndex(of: "--failed"), j + 1 < args.count { registry.failed = (args[j + 1], "git commit: exit 128 · .git/index.lock exists", Date()) }
             // The design's size; the traffic lights a real window draws, so the PNG compares with it.
-            let view = MainWindow().environment(registry).frame(width: 1280, height: 860)
+            // `--height h`: a taller window, to see a long page whole.
+            let height = args.firstIndex(of: "--height").flatMap { $0 + 1 < args.count ? Double(args[$0 + 1]) : nil } ?? 860
+            let view = MainWindow().environment(registry).frame(width: 1280, height: height)
                 .overlay(alignment: .topLeading) {
                     HStack(spacing: 8) {
                         ForEach([0xFF5F57, 0xFEBC2E, 0x28C840] as [UInt32], id: \.self) { Circle().fill(Color(hex: $0)).frame(width: 12, height: 12) }

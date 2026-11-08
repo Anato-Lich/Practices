@@ -249,6 +249,16 @@ private struct PaletteDialog: View {
                             copy: "practicesctl setup status", open: go(.settings)))
             actions += 1
         }
+        // «Соглашения <space>»: the query starts the label or one of its words («согл», «conv», «spheretele»).
+        if scope == nil, !term.isEmpty {
+            for s in registry.spaces where registry.registry.conventions(of: s.id) != nil
+                && ["соглашения \(s.id)", "conventions \(s.id)"].contains(where: { label in label.hasPrefix(term) || label.split(separator: " ").contains { $0.hasPrefix(term) } }) {
+                if actions == 0 { rows.append(Row(header: true, id: "Действия")) }
+                rows.append(Row(badge: "act", color: Theme.Color.warn, id: "Соглашения \(s.id)", name: "conventions.md и шаблоны",
+                                copy: "practicesctl conventions \(s.id)", open: go(.conventions(s.id))))
+                actions += 1
+            }
+        }
         var counts = [ru(services.count, "сервис", "сервиса", "сервисов")]
         if !projects.isEmpty { counts.append(ru(projects.count, "проект", "проекта", "проектов")) }
         counts.append(ru(practices.count, "практика", "практики", "практик"))

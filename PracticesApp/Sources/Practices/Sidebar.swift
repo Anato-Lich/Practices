@@ -364,7 +364,7 @@ extension MainWindow.SidebarItem {
     /// The row's id in the sidebar, for scrolling to it.
     var rowID: String {
         switch self {
-        case .space(let id): "space:" + id
+        case .space(let id), .conventions(let id): "space:" + id
         case .project(let id): "project:" + id
         case .service(let id): "service:" + id
         case .practice(let ref): "practice:" + ref

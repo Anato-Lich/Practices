@@ -9,6 +9,8 @@ struct ServiceView: View {
     @State private var editing: KeyEdit?
     @State private var connecting = false
     @State private var env: String?
+    /// notes.md being edited in place.
+    @State private var notesDraft: String?
 
     struct KeyEdit: Identifiable {
         let key: String
@@ -55,6 +57,10 @@ struct ServiceView: View {
             Button { registry.revealService(service.id) } label: { Text(verbatim: "Finder") }
         }
         .sheet(isPresented: $connecting) { ConnectSheet(service: service) }
+        .onChange(of: service.id) { notesDraft = nil }
+        #if DEBUG
+        .onAppear { if CommandLine.arguments.contains("--edit-notes") { notesDraft = registry.notes(of: service.id) ?? "" } }
+        #endif
         .sheet(item: $editing) { edit in
             SecretSheet(service: service, key: edit.key, env: edit.env)
         }
@@ -369,12 +375,14 @@ struct ServiceView: View {
     }
 
     private var notes: some View {
-        SectionCard("Заметки", spacing: 6) {
-            if let text = registry.notes(of: service.id), !text.isEmpty,
-               let attributed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-                Text(attributed).font(Theme.ui(12)).foregroundStyle(Theme.Color.text).textSelection(.enabled)
+        let text = registry.notes(of: service.id) ?? ""
+        let shown = !MarkdownBlock.parse(text).isEmpty
+        return SectionCard("Заметки", spacing: 8) {
+            if notesDraft != nil {
+                MarkdownEditor(draft: $notesDraft, original: text, what: "заметки") { await registry.saveNotes($0, of: service.id) }
             } else {
-                empty("Заметок нет")
+                if shown { MarkdownView(text: text, size: 12) } else { empty("Заметок нет") }
+                StateButton(shown ? "Править" : "Добавить") { notesDraft = text }
             }
         }
     }

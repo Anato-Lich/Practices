@@ -13,6 +13,8 @@ struct MainWindow: View {
 
     enum SidebarItem: Hashable, Codable {
         case space(String)
+        /// The space's `conventions.md` and templates.
+        case conventions(String)
         case project(String)
         case service(String)
         case practice(String)
@@ -113,6 +115,8 @@ struct MainWindow: View {
             switch registry.selection {
             case .space(let id):
                 if let space = registry.spaces.first(where: { $0.id == id }) { SpaceView(space: space) } else { placeholder }
+            case .conventions(let id):
+                ConventionsView(space: id).id(id)
             case .project(let id):
                 if let project = registry.project(id) { ProjectView(project: project) } else { placeholder }
             case .service(let id):
@@ -181,6 +185,7 @@ struct MainWindow: View {
                     let project = registry.chains.first { $0.value.contains(practice) }?.key
                     Breadcrumb(crumbs: crumbs(space: project.flatMap(registry.project)?.space, project: project), title: practice.name)
                 }
+            case .conventions(let id): Breadcrumb(crumbs: crumbs(space: id, project: nil), title: "Соглашения", monoTitle: false)
             case .pending: Breadcrumb(title: "Ждут приёмки", monoTitle: false)
             case .unassigned: Breadcrumb(title: "Не распределено", monoTitle: false)
             case .map: Breadcrumb(title: "Карта", monoTitle: false)
@@ -219,6 +224,7 @@ struct MainWindow: View {
         }
         let (path, space): (String?, String?) = switch registry.selection {
         case .space(let id): (abbreviated(r.dir(ofSpace: id)), id)
+        case .conventions(let id): (abbreviated(r.dir(ofSpace: id).appendingPathComponent("conventions.md")), id)
         case .project(let id): (r.dir(ofProject: id).map(abbreviated), registry.project(id)?.space)
         case .service(let id):
             (registry.service(id).flatMap { underSpace(r.dir(of: $0.id)?.appendingPathComponent("service.yaml"), $0.space) }, registry.service(id)?.space)

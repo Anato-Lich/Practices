@@ -219,7 +219,6 @@ struct SpaceView: View {
 
     /// The first lines of the space's `conventions.md`: the owner's rules agents read through `get_conventions`.
     private var conventionsCard: some View {
-        let file = registry.registry.dir(ofSpace: space.id).appendingPathComponent("conventions.md")
         let lines = registry.registry.conventions(of: space.id).map { text in
             // The card is titled already: the `# …` title goes, and the preview is plain text.
             text.split(separator: "\n").drop { $0.hasPrefix("# ") }
@@ -231,7 +230,7 @@ struct SpaceView: View {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                     Text(verbatim: line).font(Theme.ui(12)).foregroundStyle(Theme.Color.textSecondary).lineLimit(1).truncationMode(.tail)
                 }
-                StateButton("Открыть") { NSWorkspace.shared.open(file) }.padding(.top, 2)
+                StateButton("Открыть") { registry.selection = .conventions(space.id) }.padding(.top, 2)
             } else {
                 empty("нет — practicesctl conventions \(space.id)")
             }

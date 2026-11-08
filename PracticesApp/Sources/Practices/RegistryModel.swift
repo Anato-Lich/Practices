@@ -38,7 +38,14 @@ final class RegistryModel {
     private(set) var unassignedProblems: [String] = []
     private(set) var loadingUnassigned = false
     /// What the window shows; views set it to open a project, a service or a practice.
-    var selection: MainWindow.SidebarItem? { didSet { if selection != nil { welcomeShown = false }; reveal(); remember(); visit() } }
+    var selection: MainWindow.SidebarItem? {
+        didSet {
+            guard selection == oldValue || mayLeave() else { selection = oldValue; return }
+            if selection != nil { welcomeShown = false }; reveal(); remember(); visit()
+        }
+    }
+    /// What an open editor (notes, conventions) would lose: leaving the screen asks first.
+    var unsavedEdit: String?
     /// Back and forward (toolbar chevrons, ⌘[ ⌘], a swipe): the selection, and on the map its level.
     private(set) var history = NavigationHistory<Place>()
     /// How far a two-finger swipe has gone, −1…1 (positive: back), for the edge arrow.
@@ -206,8 +213,21 @@ final class RegistryModel {
                                         : Place(selection: selection))
     }
 
-    func goBack() { history.back().map(go) }
-    func goForward() { history.forward().map(go) }
+    func goBack() { if mayLeave() { history.back().map(go) } }
+    func goForward() { if mayLeave() { history.forward().map(go) } }
+
+    /// True when nothing is being edited, or the owner agrees to drop the edit.
+    private func mayLeave() -> Bool {
+        guard let what = unsavedEdit else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Не сохранены \(what)"
+        alert.informativeText = "Уйти с экрана без сохранения?"
+        alert.addButton(withTitle: "Остаться")
+        alert.addButton(withTitle: "Не сохранять")
+        guard alert.runModal() == .alertSecondButtonReturn else { return false }
+        unsavedEdit = nil
+        return true
+    }
 
     private func go(to place: Place) {
         restoring = true
@@ -410,6 +430,17 @@ final class RegistryModel {
     }
 
     func notes(of id: String) -> String? { registry.notes(of: id) }
+
+    /// The owner's edit from the app, committed like an agent's note (no «Ждут приёмки»).
+    func saveNotes(_ text: String, of id: String) async -> Bool {
+        do { try await registry.commit("\(id): notes", [try registry.saveNotes(text, of: id)]); return true }
+        catch { fail("сохранить заметки \(id)", error); return false }
+    }
+
+    func saveConventions(_ text: String, of space: String) async -> Bool {
+        do { try await registry.commit("\(space): conventions", [try registry.saveConventions(text, of: space)]); return true }
+        catch { fail("сохранить соглашения \(space)", error); return false }
+    }
     func docs(of id: String) -> [ServiceDoc] { registry.docs(of: id) }
     func fields(of id: String) -> [FieldDoc] { registry.fields(of: id) }
     func condition(_ id: String) -> Condition? { conditions.values.lazy.flatMap { $0 }.first { $0.id == id } }
