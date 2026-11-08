@@ -234,7 +234,8 @@ case "setup":
             let status = try await Setup.status()
             if json { printJSON(status); break }
             print("roots" + (status.defaultRoots ? " (none in local.yaml — the default; `practicesctl setup roots <path>…`)" : ""))
-            for r in status.roots { print("  " + pad(home(r.path), 40) + "  " + (r.exists ? "\(r.clones) clones" : "missing")) }
+            let rootWidth = status.roots.map { home($0.path).count }.max() ?? 0
+            for r in status.roots { print("  " + pad(home(r.path), rootWidth) + "  " + (r.exists ? "\(r.clones) clones" : "missing")) }
             print("\nspaces" + (status.spaces.isEmpty ? " — none; `practicesctl space add <id>`" : ""))
             for s in status.spaces { print("  " + spaceLine(s)) }
             print("\nagents (MCP command \(home(status.command))" + (status.commandInstalled ? ")" : " — not installed: ./install.sh)"))
@@ -243,7 +244,9 @@ case "setup":
                       + (t.instructions.map { "instructions " + $0 } ?? "") : "not found"))
             }
             if !status.projectBlocks.isEmpty { print("\nproject clones with the block") }
-            for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, 60) + b.state) }
+            let fileWidth = status.projectBlocks.map { home($0.clone).count + 1 + $0.file.count }.max() ?? 0
+            for b in status.projectBlocks { print("  " + pad(b.project, 24) + pad(home(b.clone) + "/" + b.file, fileWidth) + "  " + b.state) }
+            if let scope = status.scope { print("\nscope: \(scope.rawValue)" + (scope == .both ? " — `setup agents --global` or `--projects` keeps one" : "")) }
         case "agents":
             if let project = options["--project"]?.last {
                 try Setup.project(project).forEach { print(pad($0.target, 10) + pad($0.state, 12) + home($0.file)) }

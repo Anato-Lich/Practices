@@ -135,7 +135,7 @@ struct SettingsView: View {
 
     private func agents(_ status: SetupStatus?) -> some View {
         let setup = registry.setup
-        let home = SetupModel.agentHome
+        let home = AgentHome()
         let withRepos = registry.projects.filter { !$0.repos.isEmpty }
         return card("Агенты", note: "practicesctl setup agents") {
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 0) {
@@ -184,12 +184,12 @@ struct SettingsView: View {
             }
             HStack(spacing: 10) {
                 SectionTitle("Инструкции")
-                Text(verbatim: status?.scope.map { $0 == .global ? "сейчас: глобально" : "сейчас: в проектах" } ?? "не настроено")
+                Text(verbatim: status?.scope.map { $0 == .global ? "сейчас: глобально" : $0 == .projects ? "сейчас: в проектах" : "сейчас: и глобально, и в проектах" } ?? "не настроено")
                     .font(Theme.mono(11)).foregroundStyle(status?.scope == nil ? Theme.Color.textMuted : Theme.Color.ok)
                 Spacer()
             }
             .padding(.top, 4)
-            let chosen = scope ?? status?.scope ?? .global
+            let chosen = scope ?? setup.scope ?? .global
             let found = (status?.tools ?? []).filter(\.found).map(\.tool)
             ScopeSegments(scope: Binding(get: { chosen }, set: { scope = $0 }), clones: setup.projectClones)
             Button { Task { await setup.setupAgents(found, scope: chosen) } } label: { Text(verbatim: "Настроить агентов") }

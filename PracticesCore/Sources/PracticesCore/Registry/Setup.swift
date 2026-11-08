@@ -5,13 +5,19 @@ public enum AgentTool: String, CaseIterable, Codable, Sendable {
     case claude, codex, cursor
 }
 
-/// Where each agent tool keeps its files. `base` is the user's home; tests point it at a temp dir.
+/// Where each agent tool keeps its files. `base` is the user's home, or `PRACTICES_AGENT_HOME`
+/// when set: renders and dry runs read and write there, not in `~/.claude*`; tests pass a temp dir.
 public struct AgentHome: Sendable {
     public let base: URL
     /// The `~/.practices` whose `bin/practicesctl` the agents are told to run.
     public let practices: URL
 
-    public init(base: URL = URL(fileURLWithPath: NSHomeDirectory()), practices: URL = PracticesHome.url) {
+    public static var defaultBase: URL {
+        ProcessInfo.processInfo.environment["PRACTICES_AGENT_HOME"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+    }
+
+    public init(base: URL = AgentHome.defaultBase, practices: URL = PracticesHome.url) {
         self.base = base
         self.practices = practices
     }
@@ -54,10 +60,10 @@ public enum AgentInstructions {
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? ""
     }
 
-    /// `{{spaces}}` names the spaces at the time of writing: «пространств X-Keeper и SphereTele».
+    /// `{{spaces}}` names the spaces at the time of writing: «пространства demo», «пространств X-Keeper и SphereTele».
     public static func block(spaces: [String]) -> String {
-        let names = spaces.isEmpty ? "ваших пространств"
-            : "пространств " + (spaces.count == 1 ? spaces[0] : spaces.dropLast().joined(separator: ", ") + " и " + spaces.last!)
+        let names = spaces.isEmpty ? "ваших пространств" : spaces.count == 1 ? "пространства " + spaces[0]
+            : "пространств " + spaces.dropLast().joined(separator: ", ") + " и " + spaces.last!
         return "<!-- practices:begin v\(version) -->\n" + text.trimmingCharacters(in: .newlines).replacingOccurrences(of: "{{spaces}}", with: names)
             + "\n<!-- practices:end -->\n"
     }
@@ -85,6 +91,20 @@ public enum AgentInstructions {
         }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try text.write(to: file, atomically: true, encoding: .utf8)
+    }
+
+    /// Takes the block out; a file left with nothing else is deleted. False when there was no block.
+    public static func remove(from file: URL) throws -> Bool {
+        guard var text = try? String(contentsOf: file, encoding: .utf8),
+              let match = pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range, in: text) else { return false }
+        text.removeSubrange(range)
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            try FileManager.default.removeItem(at: file)
+        } else {
+            try (text.hasSuffix("\n\n") ? String(text.dropLast()) : text).write(to: file, atomically: true, encoding: .utf8)
+        }
+        return true
     }
 }
 
@@ -149,12 +169,16 @@ public enum MCPRegistration {
 
 /// Where `setup agents` writes the instruction block: the tools' global files, or CLAUDE.md and
 /// AGENTS.md of every clone of the catalogue's projects. The MCP server is registered globally either way.
+/// `both` is only ever found (`setup status`), never written: writing one scope clears the other.
 public enum InstructionScope: String, CaseIterable, Codable, Sendable {
-    case global, projects
+    case global, projects, both
+
+    public static let allCases: [InstructionScope] = [.global, .projects]
 }
 
 /// A thing `setup agents` did: `target` is a tool or a project id; `state` is `registered` (MCP),
-/// `written` (the file had no block), `updated` (a block was replaced) or `not found` (tool skipped).
+/// `written` (the file had no block), `updated` (a block was replaced), `removed` (the other scope's
+/// block was taken out) or `not found` (tool skipped).
 public struct SetupWrite: Codable, Sendable {
     public let target: String
     public let file: String
@@ -189,7 +213,7 @@ public struct SetupStatus: Codable, Sendable {
     public let commandInstalled: Bool
     public let tools: [Tool]
     public let projectBlocks: [ProjectBlock]
-    /// Inferred from the blocks there are: global ones → `global`, only project ones → `projects`, none → nil.
+    /// Inferred from the blocks there are: global ones → `global`, project ones → `projects`, both → `both`, none → nil.
     public let scope: InstructionScope?
 }
 
@@ -214,15 +238,22 @@ public enum Setup {
         return SetupStatus(roots: roots, defaultRoots: registry.local.roots.isEmpty, spaces: try await registry.spaceStates(),
                            command: home.command, commandInstalled: fm.isExecutableFile(atPath: home.command),
                            tools: tools, projectBlocks: blocks,
-                           scope: tools.contains { ($0.instructions ?? "absent") != "absent" } ? .global : blocks.isEmpty ? nil : .projects)
+                           scope: scope(global: tools.contains { ($0.instructions ?? "absent") != "absent" }, projects: !blocks.isEmpty))
+    }
+
+    static func scope(global: Bool, projects: Bool) -> InstructionScope? {
+        global && projects ? .both : global ? .global : projects ? .projects : nil
     }
 
     /// Registers the MCP server for each found tool (all of them unless `tools` names some) and
     /// writes the instruction block: into the tools' global files, or with `.projects` into every
     /// clone of every project (whatever `tools` says — the files are CLAUDE.md and AGENTS.md).
+    /// The block of the other scope is removed: global files of every tool, or every project clone.
     public static func agents(home: AgentHome = AgentHome(), registry: Registry = Registry(), tools: [AgentTool]? = nil,
                               mcp: Bool = true, instructions: Bool = true, scope: InstructionScope = .global) throws -> [SetupWrite] {
-        let clones = instructions && scope == .projects ? try projectClones(registry: registry) : []
+        guard scope != .both else { throw Registry.Failure("scope is global or projects") }
+        let all = instructions ? try projectClones(registry: registry) : []
+        let clones = scope == .projects ? all : []
         if instructions && scope == .projects && clones.isEmpty {
             throw Registry.Failure("no local clone of any project's repositories under the roots")
         }
@@ -238,7 +269,15 @@ public enum Setup {
                 done.append(try write(file, target: tool.rawValue, spaces: spaces))
             }
         }
-        return done + (try write(clones, spaces: spaces))
+        done += try write(clones, spaces: spaces)
+        guard instructions else { return done }
+        let other: [(target: String, file: URL)] = scope == .global
+            ? all.flatMap { p in AgentInstructions.projectFiles.map { (p.project, URL(fileURLWithPath: p.clone).appendingPathComponent($0)) } }
+            : AgentTool.allCases.compactMap { tool in home.instructions(tool).map { (tool.rawValue, $0) } }
+        for (target, file) in other where try AgentInstructions.remove(from: file) {
+            done.append(.init(target: target, file: file.path, state: "removed"))
+        }
+        return done
     }
 
     /// The block into CLAUDE.md and AGENTS.md of every local clone of the project's repositories.

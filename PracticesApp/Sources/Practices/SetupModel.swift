@@ -19,15 +19,11 @@ final class SetupModel {
 
     @ObservationIgnored weak var app: RegistryModel?
 
-    /// `PRACTICES_AGENT_HOME` replaces the user's home for the agents' files: renders and dry runs
-    /// read and write there, not in `~/.claude*`.
-    nonisolated static var agentHome: AgentHome {
-        let base = ProcessInfo.processInfo.environment["PRACTICES_AGENT_HOME"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
-        return AgentHome(base: base ?? URL(fileURLWithPath: NSHomeDirectory()))
-    }
+    /// The scope the segments start at: blocks in both places (left by older versions) offer global.
+    var scope: InstructionScope? { status?.scope == .both ? .global : status?.scope }
 
     func refresh() async {
-        let home = Self.agentHome
+        let home = AgentHome()
         if let (s, n) = await run("проверить настройку", "status", { (try await Setup.status(registry: Registry(), home: home), try Setup.projectClones(registry: Registry()).count) }) {
             status = s
             projectClones = n
@@ -77,7 +73,7 @@ final class SetupModel {
     // MARK: Agents
 
     func setupAgents(_ tools: [AgentTool], scope: InstructionScope = .global, mcp: Bool = true, instructions: Bool = true) async {
-        let home = Self.agentHome
+        let home = AgentHome()
         agentWrites = await run("настроить агентов", "agents") {
             try Setup.agents(home: home, registry: Registry(), tools: tools, mcp: mcp, instructions: instructions, scope: scope)
         }

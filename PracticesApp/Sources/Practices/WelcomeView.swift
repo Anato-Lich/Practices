@@ -44,12 +44,12 @@ struct WelcomeView: View {
             StepCard(n: 3, title: "Агенты", text: "MCP-сервер и блок инструкций в найденных инструментах; то же, что practicesctl setup agents",
                      state: states[2], current: current == 2) {
                 let tools = (status?.tools ?? []).filter { $0.found && !unchecked.contains($0.tool) }.map(\.tool)
-                let scope = scope ?? status?.scope ?? .global
+                let scope = scope ?? setup.scope ?? .global
                 Button { Task { await setup.setupAgents(tools, scope: scope) } } label: { Text(verbatim: "Настроить агентов") }
                     .buttonStyle(ToolbarButtonStyle(prominent: true))
                     .disabled(tools.isEmpty || setup.busy.contains("agents") || scope == .projects && setup.projectClones == 0)
             } content: {
-                ScopeSegments(scope: Binding(get: { scope ?? status?.scope ?? .global }, set: { scope = $0 }), clones: setup.projectClones)
+                ScopeSegments(scope: Binding(get: { scope ?? setup.scope ?? .global }, set: { scope = $0 }), clones: setup.projectClones)
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(status?.tools ?? [], id: \.tool) { tool in agentRow(tool) }
                 }
@@ -98,8 +98,8 @@ struct WelcomeView: View {
     }
 
     private func agentRow(_ tool: SetupStatus.Tool) -> some View {
-        let home = SetupModel.agentHome
-        let global = (scope ?? registry.setup.status?.scope ?? .global) == .global
+        let home = AgentHome()
+        let global = (scope ?? registry.setup.scope ?? .global) == .global
         let where_ = [tilde(home.mcpConfig(tool.tool).path), global ? home.instructions(tool.tool).map { tilde($0.path) } : nil].compactMap { $0 }.joined(separator: " и ")
         let on = Binding(get: { tool.found && !unchecked.contains(tool.tool) },
                          set: { if $0 { unchecked.remove(tool.tool) } else { unchecked.insert(tool.tool) } })
@@ -274,7 +274,7 @@ struct CreateSpaceRow: View {
 struct AgentState: View {
     let tool: SetupStatus.Tool
     var body: some View {
-        let file = SetupModel.agentHome.instructions(tool.tool)
+        let file = AgentHome().instructions(tool.tool)
         let state = tool.instructions ?? "current"
         let (text, color): (String, Color) = !tool.mcp && state == "absent" ? ("не записан", Theme.Color.textMuted)
             : state.hasPrefix("outdated") ? ("устарел · есть новая версия", Theme.Color.warn)

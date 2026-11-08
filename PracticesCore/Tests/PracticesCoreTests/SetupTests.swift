@@ -46,6 +46,7 @@ import Foundation
     @Test func spacesAreNamedInTheBlock() throws {
         #expect(AgentInstructions.block(spaces: ["X-Keeper", "SphereTele"]).contains("Проекты пространств X-Keeper и SphereTele описаны"))
         #expect(AgentInstructions.block(spaces: ["A", "B", "C"]).contains("пространств A, B и C описаны"))
+        #expect(AgentInstructions.block(spaces: ["demo"]).contains("Проекты пространства demo описаны"))
         #expect(AgentInstructions.block(spaces: []).contains("Проекты ваших пространств описаны"))
         #expect(!AgentInstructions.block(spaces: []).contains("{{"))
         let file = TempHome().url.appendingPathComponent("CLAUDE.md")
@@ -79,6 +80,14 @@ import Foundation
         #expect(codex.contains("[mcp_servers.other]\ncommand = \"x\""))
         #expect(codex.components(separatedBy: "[mcp_servers.practices]").count == 2)
         #expect(AgentInstructions.state(of: home.instructions(.codex)!) == "current")
+    }
+
+    @Test func agentHomeFollowsEnvironment() {
+        let base = TempHome().url
+        setenv("PRACTICES_AGENT_HOME", base.path, 1)
+        defer { unsetenv("PRACTICES_AGENT_HOME") }
+        #expect(AgentHome().base.path == base.path)
+        #expect(AgentHome().mcpConfig(.claude).path == base.appendingPathComponent(".claude.json").path)
     }
 
     @Test func toolNotFoundIsSkipped() throws {
@@ -152,6 +161,26 @@ import Foundation
         }
         #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "current")
         #expect(try await Setup.status(registry: home.registry, home: agents).scope == .global)
+    }
+
+    @Test func writingOneScopeClearsTheOther() async throws {
+        let (home, agents, clones) = try catalogue()
+        let mine = clones[0].appendingPathComponent("CLAUDE.md")
+        _ = try Setup.agents(home: agents, registry: home.registry, scope: .projects)
+        try ("# Mine\n\n" + String(contentsOf: mine, encoding: .utf8)).write(to: mine, atomically: true, encoding: .utf8)
+        try AgentInstructions.write(to: agents.instructions(.claude)!)
+        #expect(try await Setup.status(registry: home.registry, home: agents).scope == .both)
+
+        let global = try Setup.agents(home: agents, registry: home.registry, scope: .global)
+        #expect(global.filter { $0.state == "removed" }.count == 4)
+        #expect(try String(contentsOf: mine, encoding: .utf8) == "# Mine\n")
+        #expect(!FileManager.default.fileExists(atPath: clones[1].appendingPathComponent("AGENTS.md").path))
+        #expect(try await Setup.status(registry: home.registry, home: agents).scope == .global)
+
+        let projects = try Setup.agents(home: agents, registry: home.registry, scope: .projects)
+        #expect(projects.filter { $0.state == "removed" }.map(\.target) == ["claude"])
+        #expect(AgentInstructions.state(of: agents.instructions(.claude)!) == "absent")
+        #expect(try await Setup.status(registry: home.registry, home: agents).scope == .projects)
     }
 
     @Test func scopeProjectsWithoutClonesFails() throws {
