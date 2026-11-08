@@ -47,3 +47,30 @@
 | accounting, outkeep | bff | нет в STRUCTURE, только вывод |
 | sentry | external | нет в STRUCTURE |
 | migrator | ops | нет в STRUCTURE |
+
+## 2026-11-08, второй проход
+- Роли переписаны чисто: в обоих пространствах pending были только 135 `service.yaml` с `+role:`;
+  роли сохранены, файлы сброшены `practicesctl discard`, роли записаны заново `practicesctl service
+  role` (строкой). Решения владельца: `ble-panels-tiles`, `tiles-service` → `infra`; `mes` — без
+  роли. Итог, не закоммичено: spheretele 51 файл, +51/−0; x-keeper 83 файла, +83/−0.
+- Нить по данным (4d4318b, решение 16): `ServiceMap.thread` — колонки с шагами ±2d и брокером на
+  ±(2d−1), ключ брокера `id@шаг`; тест `threadFollowsData` (писатель → топик → читатель, другой
+  топик не попадает, db по access, брокер в центре). Рендеры: `--service route-verdict-clean-stream`
+  (hyper-position → kafka → clean-stream → kafka → ble-panels-projector, clickhouse, nn-live;
+  route-verdict по http справа; ble-panels-api слева — он зовёт `/board`), `--service hyper-normalizer`.
+- Брокер на уровне проекта (9ece8d6, решение 17): рендеры `--project hyper-imu` вписанный и `--zoom 1.5`
+  (+ `--pin hyper-normalizer` — веер из трёх топиков).
+- Подпроекты в «Рамках» (7a4418f, решение 18): `--space x-keeper` — analytics ⊃ cabinet-analysis,
+  device-analysis; platform ⊃ auth; x-factory ⊃ erp, mes, scada.
+- README (3d422f9): демо из трёх проектов (shop, orders, analytics) в `~/Demo` как `PRACTICES_HOME`,
+  `--map --space demo --zoom 1.05` (80 %, связи сервис → сервис), `-recent ""` — чтобы в «Недавних»
+  не было настоящих имён; `sips -Z 1600`; `~/Demo` удалено.
+- Финал: `swift test` — 84 зелёные; Debug-рендеры всех уровней просмотрены; `./install.sh`, приложение
+  перезапущено. Не запушено.
+
+### Осталось
+- Легенда «Потока» x-keeper шире окна (17 проектов в одной строке) и обрезается слева.
+- При ≥ 80 % в «Рамках» линии к сервисам подпроекта идут от края внешней рамки через поле подрамки.
+- Нить при 3 шагах широкая (clean-stream вверх тянет весь hyper-imu через clickhouse); вписывается
+  по центру сервиса, края за экраном.
+- Подписи топиков на линиях нити у брокера с многими читателями местами наползают друг на друга.
