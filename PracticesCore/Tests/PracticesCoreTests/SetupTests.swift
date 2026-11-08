@@ -49,8 +49,8 @@ import Foundation
         #expect(AgentInstructions.block(spaces: []).contains("Проекты ваших пространств описаны"))
         #expect(!AgentInstructions.block(spaces: []).contains("{{"))
         let file = TempHome().url.appendingPathComponent("CLAUDE.md")
-        try "<!-- practices:begin v3 -->\nold\n<!-- practices:end -->\n".write(to: file, atomically: true, encoding: .utf8)
-        #expect(AgentInstructions.state(of: file) == "outdated(v3)")
+        try "<!-- practices:begin v4 -->\nold\n<!-- practices:end -->\n".write(to: file, atomically: true, encoding: .utf8)
+        #expect(AgentInstructions.state(of: file) == "outdated(v4)")
     }
 
     @Test func mcpRegistrationKeepsOtherServers() throws {
