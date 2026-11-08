@@ -407,6 +407,17 @@ struct TempHome {
         #expect((out["templates"] as! [[String: Any]]).map { $0["path"] as! String } == [".default.env", "compose/docker-compose.yml"])
         await #expect(throws: (any Error).self) { _ = try await MCPServer(registry: registry).call("get_conventions", ["space": "nope"]) }
     }
+
+    @Test func savedConventionsAreReadBackAndCommitted() async throws {
+        let home = TempHome()
+        let registry = home.registry
+        try await registry.add(Space(id: "sp", name: "Space"))
+        #expect(try await registry.commit("sp: conventions", [try registry.saveConventions("# Правила\n- одно\n", of: "sp")]))
+        #expect(registry.conventions(of: "sp") == "# Правила\n- одно\n")
+        #expect(await registry.pending().isEmpty)
+        #expect(try await registry.git(registry.dir(ofSpace: "sp"), ["log", "-1", "--format=%s"]).hasPrefix("sp: conventions"))
+        #expect(throws: (any Error).self) { try registry.saveConventions("x", of: "nope") }
+    }
 }
 
 @Suite struct SpaceGitTests {

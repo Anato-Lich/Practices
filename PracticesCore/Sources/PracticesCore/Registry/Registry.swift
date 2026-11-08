@@ -272,6 +272,13 @@ public struct Registry: Sendable {
         try? String(contentsOf: dir(ofSpace: space).appendingPathComponent("conventions.md"), encoding: .utf8)
     }
 
+    /// The owner's own edit of `conventions.md` (the app's «Править»); the caller commits it.
+    @discardableResult
+    public func saveConventions(_ text: String, of space: String) throws -> URL {
+        guard spaceIDs().contains(space) else { throw Failure("no space \(space)") }
+        return try write(text, to: dir(ofSpace: space).appendingPathComponent("conventions.md"))
+    }
+
     /// Files under the space's `templates/`, by relative path; files that are not UTF-8 text or
     /// are over 64 KiB are left out.
     public func templates(of space: String) -> [(path: String, text: String)] {
