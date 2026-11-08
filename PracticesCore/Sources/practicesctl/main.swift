@@ -471,15 +471,14 @@ case "service":
         break
     }
     if (3...4).contains(rest.count), rest[1] == "role" {
-        guard var service = try? registry.service(rest[2]) else { fail("no service \(rest[2])") }
+        guard let service = try? registry.service(rest[2]) else { fail("no service \(rest[2])") }
         guard rest.count == 4 else {
             let role = ServiceMap.role(of: service, in: try registry.catalogue())
             print(role.rawValue + (service.role == role.rawValue ? "" : "  (inferred)"))
             break
         }
         guard Service.Role(rawValue: rest[3]) != nil else { fail("roles: " + Service.Role.allCases.map(\.rawValue).joined(separator: ", "), 2) }
-        service.role = rest[3]
-        do { try registry.save(service) } catch { fail("practices: \(error)") }
+        do { try registry.setRole(rest[3], of: service.id) } catch { fail("practices: \(error)") }
         print("\(service.id): \(rest[3])  (not committed — `practicesctl pending`, then `accept`)")
         break
     }

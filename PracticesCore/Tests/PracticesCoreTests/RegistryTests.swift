@@ -114,6 +114,18 @@ struct TempHome {
         #expect(try roundTrip(placed))
     }
 
+    @Test func roleIsOneLineOfAHandWrittenCard() throws {
+        let home = TempHome()
+        try home.write("name: sp\n", "spaces/sp/space.yaml")
+        try home.write("name: pr\n", "spaces/sp/projects/pr/project.yaml")
+        let text = "id: x\nkind: http\ndescription: \"кавычки\"\nkeys:\n- name: A\n  secret: false\n"
+        try home.write(text, "spaces/sp/projects/pr/services/x/service.yaml")
+        let url = try home.registry.setRole("bff", of: "x")
+        #expect(try String(contentsOf: url, encoding: .utf8) == text.replacingOccurrences(of: "kind: http\n", with: "kind: http\nrole: bff\n"))
+        try home.registry.setRole("backend", of: "x")
+        #expect(try home.registry.service("x").role == "backend")
+    }
+
     @Test func minimalServiceDecodes() throws {
         let s = try YAMLDecoder().decode(Service.self, from: "id: x\nkeys: [A_TOKEN]\n")
         #expect(s.name == "x" && s.envs == ["prod"] && s.keys[0].secret && s.repo == nil && s.endpoints.isEmpty)

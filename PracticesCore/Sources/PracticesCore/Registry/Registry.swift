@@ -468,6 +468,18 @@ public struct Registry: Sendable {
         try write(Self.yaml(service), to: file("service.yaml", of: service.id))
     }
 
+    /// `role:` of a card, edited as a line so the rest of a hand-written file stays as it is:
+    /// an existing `role:` line replaced, else one put after `kind:` (or `id:`).
+    @discardableResult
+    public func setRole(_ role: String, of id: String) throws -> URL {
+        let url = try file("service.yaml", of: id)
+        var lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: "\n")
+        if let i = lines.firstIndex(where: { $0.hasPrefix("role:") }) { lines[i] = "role: \(role)" }
+        else if let i = lines.firstIndex(where: { $0.hasPrefix("kind:") }) ?? lines.firstIndex(where: { $0.hasPrefix("id:") }) { lines.insert("role: \(role)", at: i + 1) }
+        else { lines.insert("role: \(role)", at: 0) }
+        return try write(lines.joined(separator: "\n"), to: url)
+    }
+
     @discardableResult
     public func saveNotes(_ text: String, of id: String) throws -> URL {
         try write(text, to: file("notes.md", of: id))
