@@ -27,6 +27,11 @@ import Foundation
         #expect(AgentInstructions.state(of: file) == "current")
         #expect(try String(contentsOf: file, encoding: .utf8).contains("Проекты ваших пространств описаны"))
         #expect(try String(contentsOf: file, encoding: .utf8).contains("`get_conventions`"))
+        let v8 = AgentInstructions.block(spaces: [])
+        #expect(v8.hasPrefix("<!-- practices:begin v8 -->\n"))
+        #expect(v8.contains("`get_service` показывает роль сервиса (`role`)"))
+        #expect(v8.contains("только после\n  подтверждения пользователя."))
+        #expect(v8.split(separator: "\n").allSatisfy { $0.count <= 100 })
 
         try "# Mine\nkeep me\n\n<!-- practices:begin v0 -->\nold\n<!-- practices:end -->\nafter\n".write(to: file, atomically: true, encoding: .utf8)
         #expect(AgentInstructions.state(of: file) == "outdated(v0)")
